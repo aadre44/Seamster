@@ -1,9 +1,9 @@
 # PatternSnap
 
-Browser-based sewing pattern editor. Draft patterns on a 2D SVG canvas using lines and curves, with dimensions driven by body measurement formulas. Export as SVG or tiled print-ready PDF.
+Browser-based sewing pattern editor with AI-assisted pattern generation. Draft patterns on a 2D SVG canvas using lines and curves, with dimensions driven by body measurement formulas. Upload a garment photo and let the AI detect its style, then generate a starting pattern for you to refine. Export as SVG or tiled print-ready PDF.
 
-**Phase 1 — 2D editor (active)**
-**Phase 2 — AI photo-to-pattern (planned)**
+**Phase 1 — 2D editor ✅ complete**
+**Phase 2 — AI photo-to-pattern ✅ complete**
 
 ---
 
@@ -91,6 +91,29 @@ Snap priority: endpoint > midpoint > grid > angle.
 
 ---
 
+## Documentation
+
+Detailed technical docs live in [Docs/](Docs/):
+
+| File | Contents |
+|------|----------|
+| [Docs/architecture.md](Docs/architecture.md) | Stack, project structure, coordinate system, state management, API reference, file format |
+
+---
+
+## AI Assist (Phase 2)
+
+The **AI Assist** button in the header opens a two-step workflow:
+
+1. **Upload photo** — select a JPEG/PNG front-view photo of the skirt (back photo optional). The app calls `/api/analyze` which uses Claude's vision API to detect silhouette, waistband, closure, dart count, and details.
+2. **Review & generate** — confirm or correct the detected features and enter your measurements, then click "Generate Pattern". The app calls `/api/generate` which runs the Aldrich parametric engine and returns a `.psnap` file that loads directly into the editor.
+
+Supported silhouettes: **straight, pencil, a-line, circle, gathered, pleated, wrap**.
+
+Requires `ANTHROPIC_API_KEY` set in the backend environment.
+
+---
+
 ## Architecture
 
 ```
@@ -102,7 +125,8 @@ Seamster/
 │       │   ├── Toolbar.tsx         Left tool-button column (8 tools + 3 toggles + help)
 │       │   ├── HelpPanel.tsx       Tool reference modal (? button)
 │       │   ├── PropertiesPanel.tsx Right sidebar — element and piece editing
-│       │   └── MeasurementPanel.tsx Body measurements with range validation
+│       │   ├── MeasurementPanel.tsx Body measurements with range validation
+│       │   └── AIAssistModal.tsx   Phase 2: photo upload + feature review + generate workflow
 │       ├── context/
 │       │   └── EditorContext.tsx   Redux-style reducer; ~30 action types; 50-level undo stack
 │       ├── snapping/
@@ -120,8 +144,16 @@ Seamster/
     └── app/
         ├── main.py                 FastAPI app, CORS config
         ├── api/export.py           POST /api/export/pdf — returns tiled PDF binary
-        ├── api/analyze.py          Phase 2: POST /api/analyze (Claude vision)
-        ├── api/generate.py         Phase 2: POST /api/generate (parametric engine)
+        ├── api/analyze.py          POST /api/analyze — Claude vision → SkirtFeatures JSON
+        ├── api/generate.py         POST /api/generate — parametric engine → .psnap JSON
+        ├── patterns/
+        │   ├── geometry.py         Point, offset_polygon, cubic/quadratic bezier
+        │   ├── skirts.py           Aldrich straight skirt base block (PieceSpec + DartSpec)
+        │   ├── modifiers.py        Silhouette modifiers (pencil, a-line, circle, wrap, etc.)
+        │   └── engine.py           generate_pattern() → full .psnap JSON dict
+        ├── vision/
+        │   ├── analyzer.py         Claude API call + JSON parse + retry logic
+        │   └── prompts.py          System + user prompt templates
         └── export/pdf_tiler.py     reportlab tiled PDF with registration marks
 ```
 

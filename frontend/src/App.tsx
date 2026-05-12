@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { EditorProvider, useEditor } from './context/EditorContext'
 import Canvas from './components/Canvas'
 import Toolbar from './components/Toolbar'
 import PropertiesPanel from './components/PropertiesPanel'
 import MeasurementPanel from './components/MeasurementPanel'
+import AIAssistModal from './components/AIAssistModal'
 import { downloadSVG } from './export/svgExport'
 
 function StatusBar() {
@@ -98,13 +99,23 @@ function FileButtons() {
 }
 
 function Editor() {
+  const [showAI, setShowAI] = useState(false)
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
+      {showAI && <AIAssistModal onClose={() => setShowAI(false)} />}
+
       {/* Top header */}
       <header className="flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200 shrink-0">
         <h1 className="text-sm font-semibold text-gray-900 tracking-tight">PatternSnap</h1>
         <span className="text-gray-300 text-sm">|</span>
-        <span className="text-xs text-gray-500">Phase 1 — Pattern Editor</span>
+        <span className="text-xs text-gray-500">Pattern Editor</span>
+        <button
+          onClick={() => setShowAI(true)}
+          className="ml-3 flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-violet-600 text-white rounded-full hover:bg-violet-700 transition-colors"
+        >
+          <span>✦</span> AI Assist
+        </button>
         <div className="ml-auto flex items-center gap-2">
           <FileButtons />
         </div>
