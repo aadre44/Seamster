@@ -98,6 +98,23 @@ Detailed technical docs live in [Docs/](Docs/):
 | File | Contents |
 |------|----------|
 | [Docs/architecture.md](Docs/architecture.md) | Stack, project structure, coordinate system, state management, API reference, file format |
+| [Docs/architecture-map.md](Docs/architecture-map.md) | Full architecture map — all 37 modules, edges, data flows, tech stack, key files reference |
+| [Docs/architecture-map.html](Docs/architecture-map.html) | Interactive node-graph — hover/click modules, animate data flows, drag to rearrange (open in browser) |
+
+---
+
+## Sewing Instructions
+
+After generating a pattern with AI Assist, an **Instructions** button appears in the header. Click it to open the step-by-step sewing guide in a slide-out panel.
+
+- Instructions are generated automatically in the background when a pattern loads — the panel shows a loading skeleton, then populates with sections.
+- Sections follow construction order: **Fabric Preparation → Cutting & Marking → Interfacing & Stabilising → Construction → Closures → Waistband / Collar / Sleeves (conditional) → Hem & Finishing → Pressing & Quality Check**.
+- Each step references the exact piece names from the canvas.
+- Steps include collapsible **Technique** callouts (named sewing methods with explanations) and **Tip** callouts (common beginner mistakes to avoid).
+- The **Regenerate** button in the panel header fires a fresh API call to produce a new set of instructions.
+- Instructions are scoped to the specific garment — a trouser pattern produces a completely different guide from a skirt.
+
+Requires `ANTHROPIC_API_KEY` set in the backend environment. Instructions call `POST /api/instructions` which uses the same Claude model as pattern analysis.
 
 ---
 
@@ -108,7 +125,46 @@ The **AI Assist** button in the header opens a two-step workflow:
 1. **Upload photo** — select a JPEG/PNG front-view photo of the skirt (back photo optional). The app calls `/api/analyze` which uses Claude's vision API to detect silhouette, waistband, closure, dart count, and details.
 2. **Review & generate** — confirm or correct the detected features and enter your measurements, then click "Generate Pattern". The app calls `/api/generate` which runs the Aldrich parametric engine and returns a `.psnap` file that loads directly into the editor.
 
-Supported silhouettes: **straight, pencil, a-line, circle, gathered, pleated, wrap**.
+Supported garment types and fit styles:
+
+| Type | Fit styles |
+|------|-----------|
+| **Skirt** | straight, pencil, a-line, flared, circle, gathered, pleated, wrap, trumpet, mermaid, tulip, tiered |
+| **Shirt / Blouse** | slim, fitted, regular, relaxed, boxy, oversized, athletic, longline |
+| **Trousers / Pants** | skinny, slim, cigarette, fitted, regular, relaxed, wide_leg, flared, bootcut, palazzo, jogger |
+| **Dress** | shift, sheath, a-line, fit-and-flare, wrap, bodycon, empire |
+| **Jacket / Blazer** | fitted, slim, regular, relaxed, boxy, oversized, moto, bomber, military, denim, anorak, varsity |
+
+Jacket axes beyond silhouette:
+
+| Axis | Options |
+|------|---------|
+| **collar_type** | `notch_lapel` (default), `peak_lapel` (taller), `shawl_collar` (wider), `band_collar` (narrow stand), `no_collar` (omit piece) |
+| **breast_style** | `single_breasted` (default), `double_breasted` (wider facing + extended front width) |
+| **length_category** | `waist_length` (40 cm), `cropped` (45 cm), `hip_length` (60 cm), `below_hip` (72 cm), `knee` |
+
+Jacket detail pieces generated on demand:
+
+| Piece(s) | Triggered by |
+|----------|-------------|
+| Back Yoke + Back Panel | `back_yoke`, `yoke`, `western_yoke` |
+| Collar | `collar` (height/width driven by `collar_type`) |
+| Front Facing | `lapels`, `facing`, `lining_visible`, lapel details, or button-front closure (width driven by `breast_style`) |
+| Patch Pocket | `patch_pockets` |
+| Welt Strip + Pocket Bag | `welt_pockets` |
+| Breast Pocket Welt + Bag | `breast_pocket`, `chest_pocket`, `chest_welt` |
+| In-Seam Pocket Bag | `in_seam_pockets`, `slash_pockets`, `side_pockets` |
+| Woven Cuff | `cuffs`, `button_cuff`, `snap_cuff`, `woven_cuff` |
+| Sleeve Placket | `sleeve_placket`, `cuff_vent` |
+| Cuff Band (rib knit) | `cuff_band`, `ribbed_cuffs`, `knit_cuffs`, or bomber/varsity silhouette |
+| Hem Band (rib knit) | `hem_band`, `ribbed_hem`, `knit_hem`, or bomber/varsity silhouette |
+| Hood Panel | `hood` |
+| Belt Strap | `belt`, `belt_strap`, `self_belt` |
+| Epaulet Tab | `epaulets`, `epaulet_tab`, `shoulder_tab` |
+| Back Lining + Front Lining | `lining_visible` |
+| Upper Sleeve + Under Sleeve | `two_piece_sleeve`, `tailored_sleeve`, or fitted/slim/moto/military silhouette (auto) |
+
+Optional detail pieces for other garments: side pocket bag, back welt pocket, kick-pleat facing, ruffle/tier strip.
 
 Requires `ANTHROPIC_API_KEY` set in the backend environment.
 
@@ -126,7 +182,8 @@ Seamster/
 │       │   ├── HelpPanel.tsx       Tool reference modal (? button)
 │       │   ├── PropertiesPanel.tsx Right sidebar — element and piece editing
 │       │   ├── MeasurementPanel.tsx Body measurements with range validation
-│       │   └── AIAssistModal.tsx   Phase 2: photo upload + feature review + generate workflow
+│       │   ├── AIAssistModal.tsx   Phase 2: photo upload + feature review + generate workflow
+│       │   └── InstructionsPanel.tsx Sewing instructions drawer — sections, steps, techniques, tips
 │       ├── context/
 │       │   └── EditorContext.tsx   Redux-style reducer; ~30 action types; 50-level undo stack
 │       ├── snapping/
@@ -146,11 +203,17 @@ Seamster/
         ├── api/export.py           POST /api/export/pdf — returns tiled PDF binary
         ├── api/analyze.py          POST /api/analyze — Claude vision → SkirtFeatures JSON
         ├── api/generate.py         POST /api/generate — parametric engine → .psnap JSON
+        ├── api/instructions.py     POST /api/instructions — features+pieces → sewing instructions JSON
         ├── patterns/
         │   ├── geometry.py         Point, offset_polygon, cubic/quadratic bezier
-        │   ├── skirts.py           Aldrich straight skirt base block (PieceSpec + DartSpec)
-        │   ├── modifiers.py        Silhouette modifiers (pencil, a-line, circle, wrap, etc.)
-        │   └── engine.py           generate_pattern() → full .psnap JSON dict
+        │   ├── skirts.py           Skirt block: 12 silhouettes, 6 lengths, 4 optional pieces (PieceSpec + DartSpec)
+        │   ├── shirts.py           Shirt/blouse block: 8 fit styles, 13 necklines, 9 sleeve types
+        │   ├── trousers.py         Trouser/pants block: 11 fit styles, 4 rise styles, 5 lengths, 8 optional pieces
+        │   ├── dresses.py          Dress block: 7 silhouettes, 10 necklines, 6 sleeve types, 6 optional pieces
+        │   ├── jackets.py          Jacket/blazer block: 12 fit styles, 5 lengths, 5 sleeve types, 2 collar-type axes, 2 breast-style options, 16 conditional pieces incl. belt_strap, epaulet_tab, two-piece sleeve, hood, lining
+        │   ├── modifiers.py        Legacy silhouette modifiers (used by skirt tests only)
+        │   ├── engine.py           generate_pattern() → full .psnap JSON dict
+        │   └── instruction_generator.py  Claude API call → structured sewing instructions JSON
         ├── vision/
         │   ├── analyzer.py         Claude API call + JSON parse + retry logic
         │   └── prompts.py          System + user prompt templates
@@ -174,6 +237,8 @@ Seamster/
 - `zoom`, `pan` — viewport state
 - `showGrid`, `snapEnabled`, `showSeamAllowance` — toggles
 - `undoStack`, `redoStack` — 50-level snapshots
+- `instructions` / `instructionsLoading` — sewing instructions state (null until generated)
+- `lastFeatures` / `lastMeasurements` — the inputs used for the last generate call (used to regenerate instructions)
 
 ### File format (`.psnap`)
 
@@ -185,7 +250,7 @@ JSON with top-level keys: `version`, `elements`, `pieces`, `measurements`.
 
 ### Prerequisites
 
-- Python 3.12+, Node.js 18+
+- Python 3.11+, Node.js 18+
 - Anthropic API key (Phase 2 only)
 
 ### Quick start
@@ -204,11 +269,11 @@ npm run dev       # http://localhost:5173
 
 # Backend (separate terminal, needed for PDF export)
 cd backend
-python -m venv venv
-venv\Scripts\activate         # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload # http://localhost:8000
+uv sync --group dev           # creates .venv and installs all deps
+uv run uvicorn app.main:app --reload --port 8000  # http://localhost:8000
 ```
+
+> **uv** is the package manager for the backend. Install it once with `pip install uv` or from [astral.sh/uv](https://astral.sh/uv). It replaces `python -m venv` + `pip` with a single fast command.
 
 ### Running tests
 
@@ -219,7 +284,7 @@ npm run test
 
 # Backend
 cd backend
-pytest
+uv run pytest
 ```
 
 ---

@@ -1,12 +1,13 @@
 /**
- * Phase 2 AI Assist workflow — three steps inside a modal:
- *   Step 1: Upload garment photo(s) → POST /api/analyze
+ * Phase 2 AI Assist workflow — modal with three steps:
+ *   Step 1: Select garment type + upload photo(s) → POST /api/analyze
  *   Step 2: Review / correct detected features
- *   Step 3: Generate pattern → POST /api/generate → load into editor
+ *   Step 3: Generating pattern → POST /api/generate → load into editor
  */
 import { useState, useRef } from 'react'
 import { useEditor } from '../context/EditorContext'
-import type { SkirtFeatures, Measurements } from '../types'
+import type { GarmentFeatures, GarmentType, Measurements, WaistbandType } from '../types'
+import { GARMENT_TYPES } from '../types'
 
 const API = 'http://localhost:8000/api'
 
@@ -60,19 +61,68 @@ function NumberField({ value, onChange, min, max, step = 0.5 }: {
   )
 }
 
+// ── Dev mode: fixture JSON extractor ─────────────────────────────────────────
+
+/**
+ * Extract the first complete JSON object from a string.
+ * Handles files like example4.txt that concatenate two JSON objects
+ * (the analysis response followed by the generated pattern).
+ */
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') depth++
+    if (ch === '}') { depth--; if (depth === 0) return text.slice(start, i + 1) }
+  }
+  return null
+}
+
+function parseFixtureFeatures(text: string): GarmentFeatures {
+  // Try full text first (single-object files), then first-object extraction
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    const first = extractFirstJsonObject(text)
+    if (!first) throw new Error('No valid JSON object found in the pasted text.')
+    parsed = JSON.parse(first)
+  }
+  const obj = parsed as Record<string, unknown>
+  if (!obj.garment_type)
+    throw new Error('This JSON does not look like an analysis response — missing garment_type.')
+  if (!obj.silhouette || !obj.closure)
+    throw new Error('Missing required fields (silhouette, closure). Paste the analysis JSON, not the pattern JSON.')
+  return obj as unknown as GarmentFeatures
+}
+
 // ── Step 1: Upload ────────────────────────────────────────────────────────────
+
+type UploadMode = 'photo' | 'fixture'
 
 function UploadStep({
   onAnalyzed,
   onClose,
 }: {
-  onAnalyzed: (f: SkirtFeatures) => void
+  onAnalyzed: (f: GarmentFeatures) => void
   onClose: () => void
 }) {
   const frontRef = useRef<HTMLInputElement>(null)
   const backRef = useRef<HTMLInputElement>(null)
+  const fixtureFileRef = useRef<HTMLInputElement>(null)
+  const [mode, setMode] = useState<UploadMode>('photo')
+  const [garmentType, setGarmentType] = useState<GarmentType>('skirt')
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [backFile, setBackFile] = useState<File | null>(null)
+  const [fixtureText, setFixtureText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -81,6 +131,7 @@ function UploadStep({
     setLoading(true); setError('')
     try {
       const fd = new FormData()
+      fd.append('garment_type', garmentType)
       fd.append('front_image', frontFile)
       if (backFile) fd.append('back_image', backFile)
 
@@ -89,7 +140,7 @@ function UploadStep({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.detail ?? `Server error ${res.status}`)
       }
-      const features: SkirtFeatures = await res.json()
+      const features: GarmentFeatures = await res.json()
       onAnalyzed(features)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
@@ -98,58 +149,157 @@ function UploadStep({
     }
   }
 
+  const handleFixtureFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => setFixtureText((e.target?.result as string) ?? '')
+    reader.readAsText(file)
+  }
+
+  const handleLoadFixture = () => {
+    setError('')
+    try {
+      const features = parseFixtureFeatures(fixtureText)
+      onAnalyzed(features)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-600">
-        Upload a photo of the skirt you want to replicate. The AI will detect its style
-        and create a starting pattern for you to refine.
-      </p>
-
-      {/* Front photo */}
-      <div>
-        <Label>Front photo (required)</Label>
-        <div
-          onClick={() => frontRef.current?.click()}
-          className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
-            ${frontFile ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+      {/* Mode toggle */}
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+        <button
+          onClick={() => { setMode('photo'); setError('') }}
+          className={`flex-1 py-1.5 font-medium transition-colors ${
+            mode === 'photo'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          }`}
         >
-          {frontFile ? (
-            <span className="text-xs text-blue-700 font-medium">{frontFile.name}</span>
-          ) : (
-            <span className="text-xs text-gray-500">Click to select JPEG or PNG (max 10 MB)</span>
-          )}
-        </div>
-        <input
-          ref={frontRef}
-          type="file"
-          accept="image/jpeg,image/png"
-          className="hidden"
-          onChange={e => setFrontFile(e.target.files?.[0] ?? null)}
-        />
+          Photo upload
+        </button>
+        <button
+          onClick={() => { setMode('fixture'); setError('') }}
+          className={`flex-1 py-1.5 font-medium transition-colors ${
+            mode === 'fixture'
+              ? 'bg-amber-500 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Dev — load saved analysis
+        </button>
       </div>
 
-      {/* Back photo */}
-      <div>
-        <Label>Back photo (optional — improves accuracy)</Label>
-        <div
-          onClick={() => backRef.current?.click()}
-          className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
-            ${backFile ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-        >
-          {backFile ? (
-            <span className="text-xs text-blue-700 font-medium">{backFile.name}</span>
-          ) : (
-            <span className="text-xs text-gray-500">Click to select JPEG or PNG (optional)</span>
-          )}
-        </div>
-        <input
-          ref={backRef}
-          type="file"
-          accept="image/jpeg,image/png"
-          className="hidden"
-          onChange={e => setBackFile(e.target.files?.[0] ?? null)}
-        />
-      </div>
+      {mode === 'photo' && (
+        <>
+          {/* Garment type selector */}
+          <div>
+            <Label>Garment type</Label>
+            <Select
+              value={garmentType}
+              onChange={v => setGarmentType(v as GarmentType)}
+              options={GARMENT_TYPES}
+            />
+          </div>
+
+          <p className="text-xs text-gray-600">
+            Upload a photo of the {garmentType} you want to replicate. The AI will detect its
+            style and create a starting pattern for you to refine.
+          </p>
+
+          {/* Front photo */}
+          <div>
+            <Label>Front photo (required)</Label>
+            <div
+              onClick={() => frontRef.current?.click()}
+              className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
+                ${frontFile ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+            >
+              {frontFile ? (
+                <span className="text-xs text-blue-700 font-medium">{frontFile.name}</span>
+              ) : (
+                <span className="text-xs text-gray-500">Click to select JPEG or PNG (max 10 MB)</span>
+              )}
+            </div>
+            <input
+              ref={frontRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              onChange={e => setFrontFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
+          {/* Back photo */}
+          <div>
+            <Label>Back photo (optional — improves accuracy)</Label>
+            <div
+              onClick={() => backRef.current?.click()}
+              className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
+                ${backFile ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+            >
+              {backFile ? (
+                <span className="text-xs text-blue-700 font-medium">{backFile.name}</span>
+              ) : (
+                <span className="text-xs text-gray-500">Click to select JPEG or PNG (optional)</span>
+              )}
+            </div>
+            <input
+              ref={backRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              onChange={e => setBackFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+        </>
+      )}
+
+      {mode === 'fixture' && (
+        <>
+          <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-xs text-amber-800">
+            Paste or load a saved analysis response to skip the LLM call. Accepts the full
+            contents of files like <code>example4.txt</code> — the features JSON is extracted
+            automatically even if the file also contains a generated pattern.
+          </div>
+
+          {/* File picker */}
+          <div>
+            <Label>Load from file</Label>
+            <div
+              onClick={() => fixtureFileRef.current?.click()}
+              className="border-2 border-dashed border-amber-300 rounded-lg p-3 text-center cursor-pointer hover:border-amber-400 transition-colors"
+            >
+              <span className="text-xs text-amber-700">
+                {fixtureText ? 'File loaded — or click to replace' : 'Click to select .txt or .json'}
+              </span>
+            </div>
+            <input
+              ref={fixtureFileRef}
+              type="file"
+              accept=".txt,.json"
+              className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (f) handleFixtureFile(f)
+              }}
+            />
+          </div>
+
+          {/* Paste area */}
+          <div>
+            <Label>Or paste JSON directly</Label>
+            <textarea
+              value={fixtureText}
+              onChange={e => setFixtureText(e.target.value)}
+              rows={8}
+              placeholder={'{\n  "garment_type": "shirt",\n  "silhouette": "fitted",\n  ...\n}'}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-amber-400"
+            />
+          </div>
+        </>
+      )}
 
       {error && (
         <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
@@ -160,18 +310,29 @@ function UploadStep({
           className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">
           Cancel
         </button>
-        <button
-          onClick={handleAnalyze}
-          disabled={loading || !frontFile}
-          className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {loading ? (
-            <>
-              <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Analysing your skirt…
-            </>
-          ) : 'Analyse Photo'}
-        </button>
+
+        {mode === 'photo' ? (
+          <button
+            onClick={handleAnalyze}
+            disabled={loading || !frontFile}
+            className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loading ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Analysing your {garmentType}…
+              </>
+            ) : 'Analyse Photo'}
+          </button>
+        ) : (
+          <button
+            onClick={handleLoadFixture}
+            disabled={!fixtureText.trim()}
+            className="px-4 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Load Analysis
+          </button>
+        )}
       </div>
     </div>
   )
@@ -179,11 +340,60 @@ function UploadStep({
 
 // ── Step 2: Review ────────────────────────────────────────────────────────────
 
-const SILHOUETTES = ['straight', 'a_line', 'pencil', 'circle', 'gathered', 'pleated', 'wrap']
-const LENGTH_CATS = ['mini', 'above_knee', 'knee', 'midi', 'maxi']
 const WAISTBAND_TYPES = ['straight', 'contoured', 'elastic', 'facing', 'yoke']
 const CLOSURE_TYPES = ['center_back_zip', 'side_zip', 'button_fly', 'hook_and_eye', 'none']
 const CLOSURE_POSITIONS = ['center_back', 'left_side', 'right_side', 'center_front']
+
+type MeasurementField = { key: string; label: string; min: number; max: number }
+
+const MEASUREMENT_FIELDS: Record<string, MeasurementField[]> = {
+  skirt: [
+    { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
+    { key: 'hip_cm', label: 'Hip', min: 60, max: 180 },
+    { key: 'waist_to_hip_cm', label: 'Waist to hip', min: 10, max: 35 },
+    { key: 'length_cm', label: 'Length', min: 20, max: 150 },
+    { key: 'seam_allowance_cm', label: 'Seam allowance', min: 0.5, max: 5 },
+  ],
+  shirt: [
+    { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
+    { key: 'hip_cm', label: 'Hip', min: 60, max: 180 },
+    { key: 'chest_cm', label: 'Chest/Bust', min: 60, max: 200 },
+    { key: 'shoulder_width_cm', label: 'Shoulder width', min: 25, max: 70 },
+    { key: 'arm_length_cm', label: 'Arm length', min: 40, max: 90 },
+    { key: 'length_cm', label: 'Body length', min: 20, max: 150 },
+    { key: 'seam_allowance_cm', label: 'Seam allowance', min: 0.5, max: 5 },
+  ],
+  pants: [
+    { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
+    { key: 'hip_cm', label: 'Hip', min: 60, max: 180 },
+    { key: 'waist_to_hip_cm', label: 'Waist to hip', min: 10, max: 35 },
+    { key: 'rise_cm', label: 'Rise', min: 15, max: 45 },
+    { key: 'inseam_cm', label: 'Inseam', min: 40, max: 110 },
+    { key: 'seam_allowance_cm', label: 'Seam allowance', min: 0.5, max: 5 },
+  ],
+}
+MEASUREMENT_FIELDS['blouse'] = MEASUREMENT_FIELDS['shirt']
+MEASUREMENT_FIELDS['trousers'] = MEASUREMENT_FIELDS['pants']
+MEASUREMENT_FIELDS['dress'] = [
+  { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
+  { key: 'hip_cm', label: 'Hip', min: 60, max: 180 },
+  { key: 'waist_to_hip_cm', label: 'Waist to hip', min: 10, max: 35 },
+  { key: 'chest_cm', label: 'Chest/Bust', min: 60, max: 200 },
+  { key: 'shoulder_width_cm', label: 'Shoulder width', min: 25, max: 70 },
+  { key: 'arm_length_cm', label: 'Arm length', min: 40, max: 90 },
+  { key: 'length_cm', label: 'Body length', min: 20, max: 160 },
+  { key: 'seam_allowance_cm', label: 'Seam allowance', min: 0.5, max: 5 },
+]
+MEASUREMENT_FIELDS['jacket'] = [
+  { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
+  { key: 'hip_cm', label: 'Hip', min: 60, max: 180 },
+  { key: 'chest_cm', label: 'Chest/Bust', min: 60, max: 200 },
+  { key: 'shoulder_width_cm', label: 'Shoulder width', min: 25, max: 70 },
+  { key: 'arm_length_cm', label: 'Arm length', min: 40, max: 90 },
+  { key: 'length_cm', label: 'Body length', min: 20, max: 120 },
+  { key: 'seam_allowance_cm', label: 'Seam allowance', min: 0.5, max: 5 },
+]
+MEASUREMENT_FIELDS['blazer'] = MEASUREMENT_FIELDS['jacket']
 
 function ReviewStep({
   features,
@@ -191,22 +401,43 @@ function ReviewStep({
   onGenerate,
   onBack,
 }: {
-  features: SkirtFeatures
+  features: GarmentFeatures
   measurements: Measurements
-  onGenerate: (f: SkirtFeatures, m: Measurements) => void
+  onGenerate: (f: GarmentFeatures, m: Measurements) => void
   onBack: () => void
 }) {
-  const [f, setF] = useState<SkirtFeatures>(features)
+  const [f, setF] = useState<GarmentFeatures>(features)
   const [m, setM] = useState<Measurements>(measurements)
 
   const lowConfidence = f.confidence < 0.5
+  const isPatternSupported = ['skirt', 'shirt', 'blouse', 'pants', 'trousers', 'dress', 'jacket', 'blazer'].includes(f.garment_type)
 
   return (
     <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-1">
+      {/* Garment type badge */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-500">Garment type:</span>
+        <span className="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 capitalize">
+          {f.garment_type}
+        </span>
+        {!isPatternSupported && (
+          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">
+            measurements-only pattern
+          </span>
+        )}
+      </div>
+
       {lowConfidence && (
         <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-xs text-amber-800">
           <strong>Low confidence ({Math.round(f.confidence * 100)}%)</strong> — the AI wasn't sure
           about some features. Please review each field carefully before generating.
+        </div>
+      )}
+
+      {!isPatternSupported && (
+        <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-xs text-blue-800">
+          Automated pattern blocks for <strong>{f.garment_type}</strong> are coming soon.
+          Generating now will load your measurements into an empty canvas for manual drafting.
         </div>
       )}
 
@@ -218,66 +449,100 @@ function ReviewStep({
         {/* Silhouette */}
         <div>
           <Label>Silhouette</Label>
-          <Select value={f.silhouette} onChange={v => setF(p => ({ ...p, silhouette: v as SkirtFeatures['silhouette'] }))} options={SILHOUETTES} />
+          <input
+            type="text"
+            value={f.silhouette}
+            onChange={e => setF(p => ({ ...p, silhouette: e.target.value }))}
+            className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+          />
         </div>
 
         {/* Length category */}
         <div>
           <Label>Length</Label>
-          <Select value={f.length_category} onChange={v => setF(p => ({ ...p, length_category: v as SkirtFeatures['length_category'] }))} options={LENGTH_CATS} />
-        </div>
-
-        {/* Waistband type */}
-        <div>
-          <Label>Waistband type</Label>
-          <Select value={f.waistband.type} onChange={v => setF(p => ({ ...p, waistband: { ...p.waistband, type: v as SkirtFeatures['waistband']['type'] } }))} options={WAISTBAND_TYPES} />
-        </div>
-
-        {/* Waistband width */}
-        <div>
-          <Label>Waistband width (cm)</Label>
-          <NumberField value={f.waistband.width_cm_estimate} min={1} max={15}
-            onChange={v => setF(p => ({ ...p, waistband: { ...p.waistband, width_cm_estimate: v } }))} />
+          <input
+            type="text"
+            value={f.length_category}
+            onChange={e => setF(p => ({ ...p, length_category: e.target.value }))}
+            className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+          />
         </div>
 
         {/* Closure type */}
         <div>
           <Label>Closure type</Label>
-          <Select value={f.closure.type} onChange={v => setF(p => ({ ...p, closure: { ...p.closure, type: v as SkirtFeatures['closure']['type'] } }))} options={CLOSURE_TYPES} />
+          <Select
+            value={f.closure.type}
+            onChange={v => setF(p => ({ ...p, closure: { ...p.closure, type: v as GarmentFeatures['closure']['type'] } }))}
+            options={CLOSURE_TYPES}
+          />
         </div>
 
         {/* Closure position */}
         <div>
           <Label>Closure position</Label>
-          <Select value={f.closure.position} onChange={v => setF(p => ({ ...p, closure: { ...p.closure, position: v as SkirtFeatures['closure']['position'] } }))} options={CLOSURE_POSITIONS} />
+          <Select
+            value={f.closure.position}
+            onChange={v => setF(p => ({ ...p, closure: { ...p.closure, position: v as GarmentFeatures['closure']['position'] } }))}
+            options={CLOSURE_POSITIONS}
+          />
         </div>
 
-        {/* Darts — front */}
-        <div>
-          <Label>Front darts (0–4)</Label>
-          <NumberField value={f.darts.front} min={0} max={4} step={1}
-            onChange={v => setF(p => ({ ...p, darts: { ...p.darts, front: Math.round(v) } }))} />
-        </div>
+        {/* Waistband — only if detected */}
+        {f.waistband && (
+          <>
+            <div>
+              <Label>Waistband type</Label>
+              <Select
+                value={f.waistband.type}
+                onChange={v => setF(p => ({ ...p, waistband: { ...p.waistband!, type: v as WaistbandType } }))}
+                options={WAISTBAND_TYPES}
+              />
+            </div>
+            <div>
+              <Label>Waistband width (cm)</Label>
+              <NumberField
+                value={f.waistband.width_cm_estimate}
+                min={1}
+                max={15}
+                onChange={v => setF(p => ({ ...p, waistband: { ...p.waistband!, width_cm_estimate: v } }))}
+              />
+            </div>
+          </>
+        )}
 
-        {/* Darts — back */}
-        <div>
-          <Label>Back darts (0–4)</Label>
-          <NumberField value={f.darts.back} min={0} max={4} step={1}
-            onChange={v => setF(p => ({ ...p, darts: { ...p.darts, back: Math.round(v) } }))} />
-        </div>
+        {/* Darts — only if detected */}
+        {f.darts && (
+          <>
+            <div>
+              <Label>Front darts (0–4)</Label>
+              <NumberField
+                value={f.darts.front}
+                min={0}
+                max={4}
+                step={1}
+                onChange={v => setF(p => ({ ...p, darts: { ...p.darts!, front: Math.round(v) } }))}
+              />
+            </div>
+            <div>
+              <Label>Back darts (0–4)</Label>
+              <NumberField
+                value={f.darts.back}
+                min={0}
+                max={4}
+                step={1}
+                onChange={v => setF(p => ({ ...p, darts: { ...p.darts!, back: Math.round(v) } }))}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Measurements */}
       <div className="border-t border-gray-200 pt-3">
         <p className="text-xs font-semibold text-gray-700 mb-2">Your measurements (cm)</p>
         <div className="grid grid-cols-2 gap-3">
-          {[
-            { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
-            { key: 'hip_cm', label: 'Hip', min: 60, max: 180 },
-            { key: 'waist_to_hip_cm', label: 'Waist to hip', min: 10, max: 35 },
-            { key: 'length_cm', label: 'Skirt length', min: 20, max: 150 },
-            { key: 'seam_allowance_cm', label: 'Seam allowance', min: 0.5, max: 5 },
-          ].map(({ key, label, min, max }) => (
+          {(MEASUREMENT_FIELDS[f.garment_type] ?? MEASUREMENT_FIELDS['skirt']).map(({ key, label, min, max }) => (
             <div key={key}>
               <Label>{label}</Label>
               <NumberField
@@ -298,11 +563,30 @@ function ReviewStep({
         </button>
         <button onClick={() => onGenerate(f, m)}
           className="px-4 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700">
-          Generate Pattern
+          {isPatternSupported ? 'Generate Pattern' : 'Load Measurements'}
         </button>
       </div>
     </div>
   )
+}
+
+// ── Length category → cm mapping ─────────────────────────────────────────────
+
+const LENGTH_CATEGORY_CM: Record<string, number> = {
+  // Skirts / dresses
+  micro: 35, mini: 45, above_knee: 52, knee: 58, midi: 80, maxi: 110,
+  // Trousers / pants
+  full_length: 100, ankle: 95, cropped: 85, capri: 75,
+  // Tops
+  hip_length: 65, tunic: 75,
+  // Shorts
+  short: 35, mid_thigh: 42,
+  // Coats / jackets
+  below_hip: 70,
+}
+
+function lengthCategoryToCm(category: string): number {
+  return LENGTH_CATEGORY_CM[category] ?? 65
 }
 
 // ── Main modal ────────────────────────────────────────────────────────────────
@@ -310,26 +594,36 @@ function ReviewStep({
 export default function AIAssistModal({ onClose }: Props) {
   const { state, dispatch } = useEditor()
   const [step, setStep] = useState<Step>('upload')
-  const [features, setFeatures] = useState<SkirtFeatures | null>(null)
+  const [features, setFeatures] = useState<GarmentFeatures | null>(null)
   const [genError, setGenError] = useState('')
 
-  // Pre-fill measurements from current editor state
-  const currentMeasurements: Measurements = {
+  const baseMeasurements: Measurements = {
     waist_cm: state.measurements['waist'] ?? 76,
     hip_cm: state.measurements['hip'] ?? 94,
     waist_to_hip_cm: state.measurements['waistToHip'] ?? 21,
-    length_cm: state.measurements['skirtLength'] ?? 65,
+    length_cm: state.measurements['garmentLength'] ?? state.measurements['skirtLength'] ?? 65,
     seam_allowance_cm: 1.5,
     hem_allowance_cm: 3.0,
     waistband_width_cm: 3.0,
+    // Shirt-specific (seeded from canvas measurement panel if available)
+    chest_cm: state.measurements['bust'] || undefined,
+    shoulder_width_cm: state.measurements['shoulder'] || undefined,
+    arm_length_cm: state.measurements['sleeveLength'] || undefined,
+    // Pants-specific
+    inseam_cm: state.measurements['inseam'] || undefined,
+    rise_cm: undefined,  // no canvas panel key; backend defaults to H/4
   }
 
-  const handleAnalyzed = (f: SkirtFeatures) => {
+  const handleAnalyzed = (f: GarmentFeatures) => {
     setFeatures(f)
+    // If the canvas has no length set yet, seed it from the AI-detected length category
+    if (!state.measurements['garmentLength'] && !state.measurements['skirtLength']) {
+      baseMeasurements.length_cm = lengthCategoryToCm(f.length_category)
+    }
     setStep('review')
   }
 
-  const handleGenerate = async (f: SkirtFeatures, m: Measurements) => {
+  const handleGenerate = async (f: GarmentFeatures, m: Measurements) => {
     setStep('generating')
     setGenError('')
     try {
@@ -343,7 +637,7 @@ export default function AIAssistModal({ onClose }: Props) {
         throw new Error(body.detail ?? `Server error ${res.status}`)
       }
       const psnap = await res.json()
-      if (!psnap.elements || !Array.isArray(psnap.elements)) throw new Error('Invalid pattern data')
+      if (!Array.isArray(psnap.elements)) throw new Error('Invalid pattern data')
 
       const hasContent = state.elements.length > 0 || state.pieces.length > 0
       if (hasContent && !window.confirm('Loading the generated pattern will replace the current canvas. Continue?')) {
@@ -357,6 +651,9 @@ export default function AIAssistModal({ onClose }: Props) {
         pieces: psnap.pieces ?? [],
         measurements: psnap.measurements ?? {},
       })
+
+      // Cache features/measurements so the Instructions panel can generate on demand
+      dispatch({ type: 'SET_INSTRUCTIONS', instructions: null, loading: false, features: f, measurements: m })
       onClose()
     } catch (e: unknown) {
       setGenError(e instanceof Error ? e.message : String(e))
@@ -365,7 +662,6 @@ export default function AIAssistModal({ onClose }: Props) {
   }
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -376,7 +672,7 @@ export default function AIAssistModal({ onClose }: Props) {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">AI Pattern Assistant</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              {step === 'upload' && 'Step 1 of 2 — Upload garment photo'}
+              {step === 'upload' && 'Step 1 of 2 — Select type & upload photo'}
               {step === 'review' && 'Step 2 of 2 — Review detected features'}
               {step === 'generating' && 'Generating your pattern…'}
             </p>
@@ -389,14 +685,14 @@ export default function AIAssistModal({ onClose }: Props) {
           {step === 'upload' && (
             <UploadStep onAnalyzed={handleAnalyzed} onClose={onClose} />
           )}
-          {(step === 'review') && features && (
+          {step === 'review' && features && (
             <>
               {genError && (
                 <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{genError}</div>
               )}
               <ReviewStep
                 features={features}
-                measurements={currentMeasurements}
+                measurements={baseMeasurements}
                 onGenerate={handleGenerate}
                 onBack={() => setStep('upload')}
               />

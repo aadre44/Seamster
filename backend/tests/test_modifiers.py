@@ -177,10 +177,13 @@ def test_psnap_elements_have_required_fields():
     for elem in psnap["elements"]:
         assert "id" in elem
         assert "type" in elem
-        assert elem["type"] in ("line", "grain-line")
+        assert elem["type"] in ("line", "curve", "grain-line")
         if elem["type"] == "line":
             assert "start" in elem and "end" in elem
             assert "isFold" in elem
+        if elem["type"] == "curve":
+            assert "start" in elem and "end" in elem
+            assert "cp1" in elem and "cp2" in elem
 
 
 def test_psnap_pieces_have_required_fields():

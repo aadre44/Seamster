@@ -3,14 +3,17 @@ import { useEditor } from '../context/EditorContext'
 import { evaluateFormula } from '../utils/formulaEval'
 import { transformPieceElements } from '../utils/pieceTransforms'
 import { throughPointToCP } from './Canvas'
-import type { LineElement, CurveElement, PatternPiece, Point } from '../types'
+import { toDisplay, fromDisplay, unitLabel } from '../utils/units'
+import type { LineElement, CurveElement, PatternPiece, Point, UnitSystem } from '../types'
 
 export default function PropertiesPanel() {
   const { state, dispatch } = useEditor()
+  const unit = state.unitSystem
+  const ul = unitLabel(unit)
 
   if (state.selectedPieceId) {
     const piece = state.pieces.find(p => p.id === state.selectedPieceId)
-    if (piece) return <PieceProps piece={piece} />
+    if (piece) return <PieceProps piece={piece} unit={unit} />
   }
 
   const selected = state.elements.filter(el => state.selectedIds.includes(el.id))
@@ -24,28 +27,31 @@ export default function PropertiesPanel() {
 
   const el = selected[0]
 
+  const fmtPt = (p: Point) =>
+    `(${toDisplay(p.x, unit).toFixed(2)}, ${toDisplay(p.y, unit).toFixed(2)}) ${ul}`
+
   return (
     <div className="p-3 text-xs text-gray-700 space-y-2">
       <div className="font-semibold text-gray-900 capitalize">{el.type}</div>
 
       {el.type === 'line' && (
-        <LineProps el={el} measurements={state.measurements} dispatch={dispatch} />
+        <LineProps el={el} measurements={state.measurements} dispatch={dispatch} unit={unit} />
       )}
 
       {el.type === 'curve' && (
-        <CurveProps el={el} dispatch={dispatch} />
+        <CurveProps el={el} dispatch={dispatch} unit={unit} />
       )}
 
       {el.type === 'grain-line' && (
         <>
-          <Row label="Start" value={`(${el.start.x.toFixed(2)}, ${el.start.y.toFixed(2)}) cm`} />
-          <Row label="End" value={`(${el.end.x.toFixed(2)}, ${el.end.y.toFixed(2)}) cm`} />
+          <Row label="Start" value={fmtPt(el.start)} />
+          <Row label="End"   value={fmtPt(el.end)} />
         </>
       )}
 
       {el.type === 'notch' && (
         <>
-          <Row label="Position" value={`(${el.position.x.toFixed(2)}, ${el.position.y.toFixed(2)}) cm`} />
+          <Row label="Position" value={fmtPt(el.position)} />
           <Row label="Angle" value={`${el.angle.toFixed(1)}°`} />
         </>
       )}
@@ -54,22 +60,25 @@ export default function PropertiesPanel() {
 }
 
 // ── Editable number coordinate row ────────────────────────────────────────────
+// value and onCommit are always in cm; display/input convert to the active unit.
 
-function CoordRow({ label, value, onCommit }: {
+function CoordRow({ label, value, onCommit, unit }: {
   label: string
-  value: number
-  onCommit: (v: number) => void
+  value: number       // cm
+  onCommit: (v: number) => void  // receives cm
+  unit: UnitSystem
 }) {
-  const [raw, setRaw] = useState(value.toFixed(3))
+  const displayVal = toDisplay(value, unit)
+  const [raw, setRaw] = useState(displayVal.toFixed(3))
   const [active, setActive] = useState(false)
 
   useEffect(() => {
-    if (!active) setRaw(value.toFixed(3))
-  }, [value, active])
+    if (!active) setRaw(toDisplay(value, unit).toFixed(3))
+  }, [value, unit, active])
 
   const commit = () => {
     const v = parseFloat(raw)
-    if (!isNaN(v)) onCommit(v)
+    if (!isNaN(v)) onCommit(fromDisplay(v, unit))
     setActive(false)
   }
 
@@ -78,7 +87,7 @@ function CoordRow({ label, value, onCommit }: {
       <span className="text-gray-500 shrink-0">{label}</span>
       <input
         type="number"
-        step={0.1}
+        step={unit === 'imperial' ? 0.01 : 0.1}
         value={raw}
         onChange={e => { setActive(true); setRaw(e.target.value) }}
         onBlur={commit}
@@ -91,13 +100,15 @@ function CoordRow({ label, value, onCommit }: {
 
 // ── Line properties ───────────────────────────────────────────────────────────
 
-function LineProps({ el, measurements, dispatch }: {
+function LineProps({ el, measurements, dispatch, unit }: {
   el: LineElement
   measurements: Record<string, number>
   dispatch: React.Dispatch<any>
+  unit: UnitSystem
 }) {
   const [formulaInput, setFormulaInput] = useState(el.formula ?? '')
   const [formulaError, setFormulaError] = useState<string | null>(null)
+  const ul = unitLabel(unit)
 
   useEffect(() => { setFormulaInput(el.formula ?? ''); setFormulaError(null) }, [el.id, el.formula])
 
@@ -134,21 +145,24 @@ function LineProps({ el, measurements, dispatch }: {
   const evalPreview = formulaInput ? evaluateFormula(formulaInput, measurements) : null
 
   const moveStart = (field: 'x' | 'y', v: number) => {
-    const newStart: Point = { ...el.start, [field]: v }
-    dispatch({ type: 'UPDATE_ELEMENT', element: { ...el, start: newStart } })
+    dispatch({ type: 'UPDATE_ELEMENT', element: { ...el, start: { ...el.start, [field]: v } } })
   }
   const moveEnd = (field: 'x' | 'y', v: number) => {
-    const newEnd: Point = { ...el.end, [field]: v }
-    dispatch({ type: 'UPDATE_ELEMENT', element: { ...el, end: newEnd } })
+    dispatch({ type: 'UPDATE_ELEMENT', element: { ...el, end: { ...el.end, [field]: v } } })
   }
 
   return (
     <>
-      <CoordRow label="Start X" value={el.start.x} onCommit={v => moveStart('x', v)} />
-      <CoordRow label="Start Y" value={el.start.y} onCommit={v => moveStart('y', v)} />
-      <CoordRow label="End X"   value={el.end.x}   onCommit={v => moveEnd('x', v)} />
-      <CoordRow label="End Y"   value={el.end.y}   onCommit={v => moveEnd('y', v)} />
-      <Row label="Length" value={`${length.toFixed(2)} cm`} />
+      <CoordRow label={`Start X (${ul})`} value={el.start.x} onCommit={v => moveStart('x', v)} unit={unit} />
+      <CoordRow label={`Start Y (${ul})`} value={el.start.y} onCommit={v => moveStart('y', v)} unit={unit} />
+      <CoordRow label={`End X (${ul})`}   value={el.end.x}   onCommit={v => moveEnd('x', v)}   unit={unit} />
+      <CoordRow label={`End Y (${ul})`}   value={el.end.y}   onCommit={v => moveEnd('y', v)}    unit={unit} />
+      <CoordRow label={`Length (${ul})`} value={length} unit={unit} onCommit={newLenCm => {
+        if (newLenCm <= 0 || length < 0.001) return
+        const dx = el.end.x - el.start.x, dy = el.end.y - el.start.y
+        const ratio = newLenCm / length
+        dispatch({ type: 'UPDATE_ELEMENT', element: { ...el, end: { x: el.start.x + dx * ratio, y: el.start.y + dy * ratio } } })
+      }} />
 
       <div className="flex items-center justify-between pt-0.5">
         <span className="text-gray-500">Fold line</span>
@@ -161,7 +175,7 @@ function LineProps({ el, measurements, dispatch }: {
       </div>
 
       <div className="pt-1">
-        <label className="block text-[10px] text-gray-500 mb-0.5">Formula (e.g. hip / 2 + 1)</label>
+        <label className="block text-[10px] text-gray-500 mb-0.5">Formula (e.g. hip / 2 + 1) — always in cm</label>
         <input
           type="text"
           value={formulaInput}
@@ -173,7 +187,9 @@ function LineProps({ el, measurements, dispatch }: {
           placeholder="e.g. hip / 2 + 1"
         />
         {evalPreview && evalPreview.value !== null && !formulaError && (
-          <p className="text-[10px] text-indigo-600 mt-0.5">= {evalPreview.value} cm</p>
+          <p className="text-[10px] text-indigo-600 mt-0.5">
+            = {toDisplay(evalPreview.value, unit).toFixed(2)} {ul}
+          </p>
         )}
         {formulaError && (
           <p className="text-[10px] text-red-500 mt-0.5">{formulaError}</p>
@@ -203,8 +219,9 @@ function curveLength(el: CurveElement): number {
   return len
 }
 
-function CurveProps({ el, dispatch }: { el: CurveElement; dispatch: React.Dispatch<any> }) {
+function CurveProps({ el, dispatch, unit }: { el: CurveElement; dispatch: React.Dispatch<any>; unit: UnitSystem }) {
   const len = curveLength(el)
+  const ul = unitLabel(unit)
 
   // Through-point at t=0.5 (what the curve passes through at its midpoint)
   const throughPt = sampleBezier(el.start, el.cp1, el.cp2, el.end, 0.5)
@@ -257,15 +274,23 @@ function CurveProps({ el, dispatch }: { el: CurveElement; dispatch: React.Dispat
 
   return (
     <>
-      <CoordRow label="Start X" value={el.start.x} onCommit={v => moveStart('x', v)} />
-      <CoordRow label="Start Y" value={el.start.y} onCommit={v => moveStart('y', v)} />
-      <CoordRow label="End X"   value={el.end.x}   onCommit={v => moveEnd('x', v)} />
-      <CoordRow label="End Y"   value={el.end.y}   onCommit={v => moveEnd('y', v)} />
-      <Row label="Chord" value={`${chordLen.toFixed(2)} cm`} />
-      <Row label="Arc length" value={`${len.toFixed(2)} cm`} />
+      <CoordRow label={`Start X (${ul})`} value={el.start.x} onCommit={v => moveStart('x', v)} unit={unit} />
+      <CoordRow label={`Start Y (${ul})`} value={el.start.y} onCommit={v => moveStart('y', v)} unit={unit} />
+      <CoordRow label={`End X (${ul})`}   value={el.end.x}   onCommit={v => moveEnd('x', v)}   unit={unit} />
+      <CoordRow label={`End Y (${ul})`}   value={el.end.y}   onCommit={v => moveEnd('y', v)}   unit={unit} />
+      <Row label={`Chord (${ul})`} value={`${toDisplay(chordLen, unit).toFixed(2)} ${ul}`} />
+      <CoordRow label={`Arc length (${ul})`} value={len} unit={unit} onCommit={newLenCm => {
+        if (newLenCm <= 0 || len < 0.001) return
+        const ratio = newLenCm / len
+        dispatch({ type: 'UPDATE_ELEMENT', element: { ...el,
+          cp1: { x: el.start.x + (el.cp1.x - el.start.x) * ratio, y: el.start.y + (el.cp1.y - el.start.y) * ratio },
+          cp2: { x: el.start.x + (el.cp2.x - el.start.x) * ratio, y: el.start.y + (el.cp2.y - el.start.y) * ratio },
+          end: { x: el.start.x + (el.end.x - el.start.x) * ratio, y: el.start.y + (el.end.y - el.start.y) * ratio },
+        } })
+      }} />
       {chordLen > 0.001 && (
         <>
-          <CoordRow label="Arc height" value={archHeight} onCommit={setArchHeight} />
+          <CoordRow label={`Arc height (${ul})`} value={archHeight} onCommit={setArchHeight} unit={unit} />
           <p className="text-[10px] text-gray-400 leading-snug">
             Arc height: perpendicular offset from the chord midpoint.
             Positive = left of chord direction.
@@ -278,18 +303,21 @@ function CurveProps({ el, dispatch }: { el: CurveElement; dispatch: React.Dispat
 
 // ── Piece properties ──────────────────────────────────────────────────────────
 
-function PieceProps({ piece }: { piece: PatternPiece }) {
+function PieceProps({ piece, unit }: { piece: PatternPiece; unit: UnitSystem }) {
   const { state, dispatch } = useEditor()
+  const ul = unitLabel(unit)
   const [name, setName] = useState(piece.name)
-  const [seamInput, setSeamInput] = useState(String(piece.seamAllowance))
+  const [seamInput, setSeamInput] = useState(String(toDisplay(piece.seamAllowance, unit)))
   const [customAngle, setCustomAngle] = useState('0')
 
   useEffect(() => { setName(piece.name) }, [piece.id, piece.name])
-  useEffect(() => { setSeamInput(String(piece.seamAllowance)) }, [piece.id, piece.seamAllowance])
+  useEffect(() => {
+    setSeamInput(String(toDisplay(piece.seamAllowance, unit)))
+  }, [piece.id, piece.seamAllowance, unit])
 
   const commitSeam = () => {
     const v = parseFloat(seamInput)
-    if (!isNaN(v) && v >= 0) dispatch({ type: 'UPDATE_PIECE', piece: { ...piece, seamAllowance: v } })
+    if (!isNaN(v) && v >= 0) dispatch({ type: 'UPDATE_PIECE', piece: { ...piece, seamAllowance: fromDisplay(v, unit) } })
   }
   const commitName = () => {
     if (name.trim()) dispatch({ type: 'UPDATE_PIECE', piece: { ...piece, name: name.trim() } })
@@ -327,8 +355,8 @@ function PieceProps({ piece }: { piece: PatternPiece }) {
       </div>
 
       <div>
-        <label className="block text-[10px] text-gray-500 mb-0.5">Seam allowance (cm)</label>
-        <input type="number" min={0} step={0.25} value={seamInput}
+        <label className="block text-[10px] text-gray-500 mb-0.5">Seam allowance ({ul})</label>
+        <input type="number" min={0} step={unit === 'imperial' ? 0.0625 : 0.25} value={seamInput}
           onChange={e => setSeamInput(e.target.value)}
           onBlur={commitSeam}
           onKeyDown={e => { if (e.key === 'Enter') commitSeam() }}

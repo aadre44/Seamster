@@ -1,10 +1,9 @@
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.models.features import SkirtFeatures
-from app.vision.analyzer import analyze_skirt
+from app.models.features import GarmentFeatures, GarmentType
+from app.vision.analyzer import analyze_garment
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -12,11 +11,12 @@ router = APIRouter()
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-@router.post("/analyze", response_model=SkirtFeatures)
+@router.post("/analyze", response_model=GarmentFeatures)
 async def analyze(
-    front_image: UploadFile = File(..., description="Front-view photo of the skirt"),
+    garment_type: GarmentType = Form(default=GarmentType.SKIRT),
+    front_image: UploadFile = File(..., description="Front-view photo of the garment"),
     back_image: UploadFile | None = File(default=None, description="Optional back-view photo"),
-) -> SkirtFeatures:
+) -> GarmentFeatures:
     for img in [front_image, back_image]:
         if img is None:
             continue
@@ -31,11 +31,11 @@ async def analyze(
     back_bytes = back_image._data if back_image else None
 
     try:
-        features = await analyze_skirt(front_bytes, back_bytes)
+        features = await analyze_garment(garment_type, front_bytes, back_bytes)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Vision analysis failed")
-        raise HTTPException(status_code=502, detail="Analysis service unavailable. Please try again.") from exc
+        raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
 
     return features

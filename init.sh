@@ -10,15 +10,14 @@ echo "=== PatternSnap — Dev Environment Init ==="
 echo "[backend] Setting up Python environment..."
 cd "$ROOT_DIR/backend"
 
-if [ ! -d "venv" ]; then
-  python3 -m venv venv
+# Ensure uv is available
+if ! command -v uv &>/dev/null; then
+  echo "[backend] uv not found — installing via pip..."
+  pip install -q uv
 fi
 
-# Activate venv (works on both Unix and Git Bash on Windows)
-source venv/bin/activate 2>/dev/null || source venv/Scripts/activate
-
-pip install -q --upgrade pip
-pip install -q -r requirements.txt
+# Install all dependencies (creates .venv automatically)
+uv sync --group dev
 
 # Copy .env if not present
 if [ ! -f ".env" ]; then
@@ -27,7 +26,7 @@ if [ ! -f ".env" ]; then
 fi
 
 echo "[backend] Starting FastAPI on http://localhost:8000 ..."
-uvicorn app.main:app --reload --port 8000 &
+uv run uvicorn app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 
 # ── Frontend ─────────────────────────────────────────────────────────────────

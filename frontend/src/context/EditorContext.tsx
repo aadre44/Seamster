@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
-import type { CanvasElement, EditorState, PatternPiece, ToolType } from '../types'
+import type { CanvasElement, EditorState, GarmentFeatures, Measurements, PatternPiece, SewingInstructions, ToolType, UnitSystem } from '../types'
 import { mirrorPiece } from '../utils/pieceTransforms'
 
 type Action =
@@ -8,6 +8,7 @@ type Action =
   | { type: 'TOGGLE_GRID' }
   | { type: 'TOGGLE_SNAP' }
   | { type: 'TOGGLE_SEAM_ALLOWANCE' }
+  | { type: 'SET_UNIT_SYSTEM'; unit: UnitSystem }
   | { type: 'SET_ACTIVE_TOOL'; tool: ToolType }
   | { type: 'ADD_ELEMENT'; element: CanvasElement }
   | { type: 'UPDATE_ELEMENT'; element: CanvasElement }
@@ -23,7 +24,8 @@ type Action =
   | { type: 'LIVE_UPDATE_ELEMENTS'; elements: CanvasElement[] }
   | { type: 'REMOVE_SIDE_FROM_PIECE'; pieceId: string; elementId: string }
   | { type: 'MIRROR_PIECE'; pieceId: string; op: 'flipH' | 'flipV' }
-  | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number> }
+  | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
+  | { type: 'SET_INSTRUCTIONS'; instructions: SewingInstructions | null; loading: boolean; features?: GarmentFeatures; measurements?: Measurements }
   | { type: 'PUSH_UNDO' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
@@ -42,8 +44,13 @@ const initialState: EditorState = {
   showGrid: true,
   snapEnabled: true,
   showSeamAllowance: true,
+  unitSystem: 'metric',
   undoStack: [],
   redoStack: [],
+  instructions: null,
+  instructionsLoading: false,
+  lastFeatures: null,
+  lastMeasurements: null,
 }
 
 function reducer(state: EditorState, action: Action): EditorState {
@@ -62,6 +69,9 @@ function reducer(state: EditorState, action: Action): EditorState {
 
     case 'TOGGLE_SEAM_ALLOWANCE':
       return { ...state, showSeamAllowance: !state.showSeamAllowance }
+
+    case 'SET_UNIT_SYSTEM':
+      return { ...state, unitSystem: action.unit }
 
     case 'SET_ACTIVE_TOOL':
       return { ...state, activeTool: action.tool, selectedIds: [], selectedPieceId: null }
@@ -169,8 +179,20 @@ function reducer(state: EditorState, action: Action): EditorState {
         elements: action.elements,
         pieces: action.pieces,
         measurements: action.measurements,
+        instructions: action.instructions ?? null,
+        lastFeatures: action.lastFeatures ?? null,
+        lastMeasurements: action.lastMeasurements ?? null,
         undoStack: [],
         redoStack: [],
+      }
+
+    case 'SET_INSTRUCTIONS':
+      return {
+        ...state,
+        instructions: action.instructions,
+        instructionsLoading: action.loading,
+        ...(action.features !== undefined ? { lastFeatures: action.features } : {}),
+        ...(action.measurements !== undefined ? { lastMeasurements: action.measurements } : {}),
       }
 
     case 'PUSH_UNDO': {

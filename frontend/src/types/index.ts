@@ -62,6 +62,8 @@ export interface PatternPiece {
 
 export type ToolType = 'select' | 'line' | 'curve' | 'seam-allowance' | 'grain-line' | 'notch' | 'point' | 'eraser'
 
+export type UnitSystem = 'metric' | 'imperial'
+
 export interface EditorState {
   elements: CanvasElement[]
   pieces: PatternPiece[]
@@ -74,20 +76,29 @@ export interface EditorState {
   showGrid: boolean
   snapEnabled: boolean
   showSeamAllowance: boolean
+  unitSystem: UnitSystem // all internal values always in cm; this controls display only
   undoStack: CanvasElement[][]
   redoStack: CanvasElement[][]
+  instructions: SewingInstructions | null
+  instructionsLoading: boolean
+  lastFeatures: GarmentFeatures | null
+  lastMeasurements: Measurements | null
 }
 
-// ── Phase 2: AI types (used later) ──────────────────────────────────────────
+// ── Phase 2: AI types ────────────────────────────────────────────────────────
 
-export type Silhouette = 'straight' | 'a_line' | 'pencil' | 'circle' | 'gathered' | 'pleated' | 'wrap'
-export type LengthCategory = 'mini' | 'above_knee' | 'knee' | 'midi' | 'maxi'
+export type GarmentType =
+  | 'skirt' | 'dress' | 'trousers' | 'pants' | 'shirt'
+  | 'blouse' | 'jacket' | 'blazer' | 'bodice' | 'coat' | 'shorts'
+
+export const GARMENT_TYPES: GarmentType[] = [
+  'skirt', 'dress', 'trousers', 'pants', 'shirt',
+  'blouse', 'jacket', 'blazer', 'bodice', 'coat', 'shorts',
+]
+
 export type WaistbandType = 'straight' | 'contoured' | 'elastic' | 'facing' | 'yoke'
 export type ClosureType = 'center_back_zip' | 'side_zip' | 'button_fly' | 'hook_and_eye' | 'none'
 export type ClosurePosition = 'center_back' | 'left_side' | 'right_side' | 'center_front'
-export type SkirtDetail =
-  | 'kick_pleat' | 'back_vent' | 'side_slits' | 'patch_pockets'
-  | 'welt_pockets' | 'belt_loops' | 'lining_visible' | 'topstitching'
 
 export interface WaistbandFeature {
   type: WaistbandType
@@ -104,6 +115,24 @@ export interface DartFeature {
   back: number
 }
 
+export interface GarmentFeatures {
+  garment_type: GarmentType
+  silhouette: string
+  length_category: string
+  closure: ClosureFeature
+  waistband?: WaistbandFeature
+  darts?: DartFeature
+  details: string[]
+  confidence: number
+  notes: string
+}
+
+// Kept for backward compatibility
+export type Silhouette = 'straight' | 'a_line' | 'pencil' | 'circle' | 'gathered' | 'pleated' | 'wrap'
+export type LengthCategory = 'mini' | 'above_knee' | 'knee' | 'midi' | 'maxi'
+export type SkirtDetail =
+  | 'kick_pleat' | 'back_vent' | 'side_slits' | 'patch_pockets'
+  | 'welt_pockets' | 'belt_loops' | 'lining_visible' | 'topstitching'
 export interface SkirtFeatures {
   silhouette: Silhouette
   length_category: LengthCategory
@@ -123,9 +152,35 @@ export interface Measurements {
   waistband_width_cm?: number
   seam_allowance_cm?: number
   hem_allowance_cm?: number
+  // Shirt / blouse specific
+  chest_cm?: number
+  shoulder_width_cm?: number
+  arm_length_cm?: number
+  // Trouser / pants specific
+  inseam_cm?: number
+  rise_cm?: number
 }
 
 export type PaperSize = 'a4' | 'letter'
 export type ExportFormat = 'pdf_tiled' | 'pdf_single' | 'svg'
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5
+
+// ── Sewing Instructions ──────────────────────────────────────────────────────
+
+export interface InstructionStep {
+  number: number
+  instruction: string
+  technique?: string
+  tip?: string
+}
+
+export interface InstructionSection {
+  title: string
+  steps: InstructionStep[]
+}
+
+export interface SewingInstructions {
+  garment_summary: string
+  sections: InstructionSection[]
+}

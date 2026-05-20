@@ -2,14 +2,21 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+# Load .env for local dev — override=False means system env vars always win
+load_dotenv(override=False)
 from fastapi.middleware.cors import CORSMiddleware
 
 import app.db_models  # noqa: F401 — register ORM models with Base.metadata
+from app.models.features import GarmentType
 from app.api.analyze import router as analyze_router
 from app.api.export import router as export_router
 from app.api.generate import router as generate_router
+from app.api.instructions import router as instructions_router
 from app.api.patterns import router as patterns_router
+from app.api.templates import router as templates_router
 from app.database import Base, engine
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -37,7 +44,9 @@ app.add_middleware(
 app.include_router(analyze_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(generate_router, prefix="/api")
+app.include_router(instructions_router, prefix="/api")
 app.include_router(patterns_router, prefix="/api")
+app.include_router(templates_router, prefix="/api")
 
 
 @app.get("/api/health")
@@ -45,8 +54,14 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/garment-types")
+def garment_types() -> dict:
+    return {"types": [t.value for t in GarmentType]}
+
+
 @app.get("/api/skirt-types")
 def skirt_types() -> dict:
+    """Kept for backward compatibility."""
     return {
         "silhouettes": ["straight", "pencil", "a_line", "circle", "gathered", "pleated", "wrap"],
         "waistband_types": ["straight", "contoured", "elastic", "facing", "yoke"],

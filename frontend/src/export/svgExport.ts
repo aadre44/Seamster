@@ -1,4 +1,4 @@
-import type { CanvasElement, PatternPiece, Point } from '../types'
+import type { CanvasElement, PatternPiece, Point, SewingInstructions } from '../types'
 
 // ── Geometry helpers (mirrors Canvas.tsx — keep in sync) ─────────────────────
 
@@ -68,9 +68,90 @@ function offsetPolygon(pts: Point[], foldEdge: boolean[], d: number): Point[] {
   })
 }
 
+// ── Instructions text renderer ────────────────────────────────────────────────
+
+function wrapText(text: string, maxChars: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let current = ''
+  for (const word of words) {
+    if (!current) { current = word }
+    else if (current.length + 1 + word.length <= maxChars) { current += ' ' + word }
+    else { lines.push(current); current = word }
+  }
+  if (current) lines.push(current)
+  return lines.length ? lines : ['']
+}
+
+function buildInstructionsSVG(instructions: SewingInstructions, startY: number, leftX: number, width: number): { svgLines: string[], totalHeight: number } {
+  const svgLines: string[] = []
+  const MAX_CHARS = Math.floor(width / 0.22)
+  const INDENT = 1.2
+  let y = startY
+
+  svgLines.push(`<text x="${leftX}" y="${y}" font-size="0.8" font-weight="bold" fill="#1a1a1a">Sewing Instructions</text>`)
+  y += 0.6
+
+  if (instructions.garment_summary) {
+    svgLines.push(`<text x="${leftX}" y="${y}" font-size="0.45" font-style="italic" fill="#555">${escapeXml(instructions.garment_summary)}</text>`)
+    y += 0.7
+  }
+
+  svgLines.push(`<line x1="${leftX}" y1="${y}" x2="${leftX + width}" y2="${y}" stroke="#ccc" stroke-width="0.05"/>`)
+  y += 0.6
+
+  let stepNum = 1
+  for (const section of instructions.sections) {
+    svgLines.push(`<text x="${leftX}" y="${y}" font-size="0.6" font-weight="bold" fill="#1a44a0">${escapeXml(section.title)}</text>`)
+    y += 0.8
+
+    for (const step of section.steps) {
+      const instrLines = wrapText(step.instruction, MAX_CHARS - 4)
+      const techLines = step.technique ? wrapText(step.technique, MAX_CHARS - 6) : []
+      const tipLines = step.tip ? wrapText(step.tip, MAX_CHARS - 6) : []
+
+      // Step bubble
+      svgLines.push(`<circle cx="${leftX + 0.3}" cy="${y - 0.2}" r="0.28" fill="#2d6cf5"/>`)
+      svgLines.push(`<text x="${leftX + 0.3}" y="${y - 0.12}" font-size="0.25" font-weight="bold" fill="white" text-anchor="middle">${stepNum}</text>`)
+
+      for (const line of instrLines) {
+        svgLines.push(`<text x="${leftX + INDENT}" y="${y}" font-size="0.38" fill="#1a1a1a">${escapeXml(line)}</text>`)
+        y += 0.5
+      }
+
+      if (techLines.length) {
+        y += 0.1
+        svgLines.push(`<text x="${leftX + INDENT}" y="${y}" font-size="0.32" font-weight="bold" fill="#1a44a0">Technique:</text>`)
+        y += 0.42
+        for (const line of techLines) {
+          svgLines.push(`<text x="${leftX + INDENT + 0.3}" y="${y}" font-size="0.32" fill="#1a44a0">${escapeXml(line)}</text>`)
+          y += 0.42
+        }
+      }
+
+      if (tipLines.length) {
+        y += 0.1
+        svgLines.push(`<text x="${leftX + INDENT}" y="${y}" font-size="0.32" font-weight="bold" fill="#8b5e00">Tip:</text>`)
+        y += 0.42
+        for (const line of tipLines) {
+          svgLines.push(`<text x="${leftX + INDENT + 0.3}" y="${y}" font-size="0.32" fill="#8b5e00">${escapeXml(line)}</text>`)
+          y += 0.42
+        }
+      }
+
+      stepNum++
+      y += 0.5
+    }
+    y += 0.4
+  }
+
+  return { svgLines, totalHeight: y - startY }
+}
+
+
 // ── Main export function ──────────────────────────────────────────────────────
 
-export function exportSVG(elements: CanvasElement[], pieces: PatternPiece[]): string {
+export function exportSVG(elements: CanvasElement[], pieces: PatternPiece[], instructions?: SewingInstructions): string {
   const PAD = 2 // cm padding around content
   const elMap = new Map(elements.map(e => [e.id, e]))
 
@@ -175,6 +256,20 @@ export function exportSVG(elements: CanvasElement[], pieces: PatternPiece[]): st
   lines.push(`<rect x="${sx}" y="${sy}" width="5" height="5" fill="none" stroke="#999" stroke-width="0.04" stroke-dasharray="0.2 0.1"/>`)
   lines.push(`<text x="${(sx + 2.5).toFixed(2)}" y="${(sy + 2.5).toFixed(2)}" font-size="0.4" text-anchor="middle" dominant-baseline="middle" fill="#999">5 cm test square</text>`)
 
+  // ── Instructions block (below test square) ──────────────────────────────
+  let finalHeight = vh
+  if (instructions) {
+    const instStartY = sy + TEST_SQ + PAD
+    const { svgLines, totalHeight } = buildInstructionsSVG(instructions, instStartY, vx + PAD / 2, vw - PAD)
+    lines.push(...svgLines)
+    finalHeight = instStartY - vy + totalHeight + PAD
+  }
+
+  // Re-open svg tag with updated height if instructions were added
+  if (instructions) {
+    lines[1] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx.toFixed(2)} ${vy.toFixed(2)} ${vw.toFixed(2)} ${finalHeight.toFixed(2)}" width="${vw}cm" height="${finalHeight.toFixed(2)}cm">`
+  }
+
   lines.push(`</svg>`)
   return lines.join('\n')
 }
@@ -183,8 +278,8 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-export function downloadSVG(elements: CanvasElement[], pieces: PatternPiece[]): void {
-  const svg = exportSVG(elements, pieces)
+export function downloadSVG(elements: CanvasElement[], pieces: PatternPiece[], instructions?: SewingInstructions): void {
+  const svg = exportSVG(elements, pieces, instructions)
   const blob = new Blob([svg], { type: 'image/svg+xml' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

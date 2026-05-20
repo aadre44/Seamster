@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 
-from app.models.features import SkirtFeatures
+from app.models.features import GarmentFeatures
 from app.models.measurements import Measurements
 from app.patterns.geometry import Point
 from app.patterns.skirts import PieceSpec
@@ -31,7 +31,7 @@ def _adjust_hem(spec: PieceSpec, new_ss_hem_x: float) -> PieceSpec:
 
 def apply_silhouette(
     base_pieces: dict[str, PieceSpec],
-    features: SkirtFeatures,
+    features: GarmentFeatures,
     measurements: Measurements,
 ) -> dict[str, PieceSpec]:
     """Dispatch to the appropriate silhouette modifier and return updated pieces."""
@@ -125,7 +125,7 @@ def _wrap(pieces: dict[str, PieceSpec], m: Measurements) -> dict[str, PieceSpec]
 
 def apply_feature_modifiers(
     pieces: dict[str, PieceSpec],
-    features: SkirtFeatures,
+    features: GarmentFeatures,
     measurements: Measurements,
 ) -> dict[str, PieceSpec]:
     """Apply waistband, closure, and other feature-level adjustments."""

@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PatternSnap — Architecture Map</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+  /* ── Top bar ── */
+  #topbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#1a1d27;border-bottom:1px solid #2d3148;flex-shrink:0}
+  #topbar h1{font-size:14px;font-weight:700;color:#a78bfa;letter-spacing:.03em}
+  #topbar span{font-size:11px;color:#64748b}
+  #searchbox{margin-left:auto;padding:4px 10px;border:1px solid #374151;border-radius:6px;background:#111827;color:#e2e8f0;font-size:12px;width:180px;outline:none}
+  #searchbox::placeholder{color:#4b5563}
+  #searchbox:focus{border-color:#a78bfa}
+
+  /* ── Main layout ── */
+  #main{display:flex;flex:1;overflow:hidden}
+  #graph-area{flex:1;position:relative;overflow:hidden;background:#0f1117}
+  svg#graph{width:100%;height:100%;cursor:default}
+
+  /* ── Right sidebar ── */
+  #sidebar{width:280px;flex-shrink:0;background:#1a1d27;border-left:1px solid #2d3148;display:flex;flex-direction:column;overflow:hidden}
+  #sidebar-header{padding:10px 12px 8px;font-size:11px;font-weight:600;color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid #2d3148;flex-shrink:0}
+  #flows-section{padding:8px 12px;border-bottom:1px solid #2d3148;flex-shrink:0}
+  #flows-section h3{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:6px}
+  .flow-btn{display:block;width:100%;text-align:left;padding:5px 8px;border-radius:5px;font-size:11px;cursor:pointer;background:none;border:1px solid transparent;color:#94a3b8;transition:.15s}
+  .flow-btn:hover{background:#252840;border-color:#4f46e5;color:#c4b5fd}
+  .flow-btn.active{background:#312e81;border-color:#6d28d9;color:#e9d5ff}
+  #detail-section{flex:1;overflow-y:auto;padding:10px 12px}
+  #detail-section h3{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:8px}
+  #detail-placeholder{font-size:11px;color:#4b5563;font-style:italic;padding:4px 0}
+  #detail-card{display:none}
+  #detail-card .mod-label{font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:2px}
+  #detail-card .mod-file{font-size:10px;color:#64748b;font-family:monospace;margin-bottom:8px;display:flex;align-items:center;gap:4px}
+  .copy-btn{padding:2px 6px;border-radius:3px;font-size:9px;border:1px solid #374151;background:#111827;color:#94a3b8;cursor:pointer;white-space:nowrap}
+  .copy-btn:hover{border-color:#a78bfa;color:#c4b5fd}
+  .copy-btn.copied{border-color:#34d399;color:#34d399}
+  .detail-row{margin-bottom:8px}
+  .detail-row label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;display:block;margin-bottom:2px}
+  .detail-row p{font-size:11px;color:#cbd5e1;line-height:1.5}
+  .layer-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+
+  /* ── Legend ── */
+  #legend{display:flex;align-items:center;gap:14px;padding:5px 14px;background:#1a1d27;border-top:1px solid #2d3148;flex-shrink:0;font-size:10px;flex-wrap:wrap}
+  #legend span{color:#64748b;margin-right:4px}
+  .leg-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .leg-item{display:flex;align-items:center;color:#94a3b8}
+
+  /* ── SVG node / edge styles ── */
+  .node rect{rx:6;stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));cursor:pointer;transition:filter .15s}
+  .node:hover rect{filter:drop-shadow(0 0 8px rgba(167,139,250,.6))}
+  .node text{font-size:11px;font-weight:600;fill:#f1f5f9;pointer-events:none;user-select:none}
+  .node text.sub{font-size:9px;fill:#94a3b8;font-weight:400}
+  .node.faded rect{opacity:.22}
+  .node.faded text{opacity:.22}
+  .node.highlighted rect{filter:drop-shadow(0 0 10px rgba(167,139,250,.85))}
+  .node.selected rect{stroke-width:2.5!important;filter:drop-shadow(0 0 12px rgba(196,181,253,1))}
+
+  .edge{fill:none;stroke-width:1.2;marker-end:url(#arrow);opacity:.45;transition:opacity .15s,stroke-width .15s}
+  .edge.faded{opacity:.06}
+  .edge.highlighted{opacity:.9;stroke-width:2}
+  .edge.flow-lit{opacity:1;stroke-width:2.5}
+
+  .flow-path{fill:none;stroke-width:3;opacity:0;stroke-dasharray:8 6;pointer-events:none}
+  .flow-path.animating{opacity:.9;animation:dash 1.4s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-56}}
+
+  /* ── Layer labels ── */
+  .layer-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;fill:#374151;user-select:none}
+
+  /* ── Scrollbar ── */
+  #detail-section::-webkit-scrollbar{width:4px}
+  #detail-section::-webkit-scrollbar-track{background:transparent}
+  #detail-section::-webkit-scrollbar-thumb{background:#374151;border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>PatternSnap</h1>
+  <span>Architecture Map · 2026-05-13</span>
+  <input id="searchbox" type="text" placeholder="Search modules…">
+</div>
+
+<div id="main">
+  <div id="graph-area">
+    <svg id="graph" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#6b7280"/>
+        </marker>
+        <marker id="arrow-flow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#a78bfa"/>
+        </marker>
+      </defs>
+      <g id="layers-bg"></g>
+      <g id="edges-group"></g>
+      <g id="flow-paths-group"></g>
+      <g id="nodes-group"></g>
+    </svg>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-header">PatternSnap Modules</div>
+
+    <div id="flows-section">
+      <h3>Data Flows</h3>
+      <button class="flow-btn" data-flow="ai-gen">AI Pattern Generation</button>
+      <button class="flow-btn" data-flow="manual">Manual Drawing</button>
+      <button class="flow-btn" data-flow="export">Save / Export</button>
+      <button class="flow-btn" data-flow="db-save">Pattern Persistence</button>
+      <button class="flow-btn" data-flow="template">Template Learning</button>
+    </div>
+
+    <div id="detail-section">
+      <h3>Module Detail</h3>
+      <div id="detail-placeholder">Hover or click a node to inspect it.</div>
+      <div id="detail-card">
+        <div class="mod-label" id="dc-label"></div>
+        <div class="mod-file">
+          <span id="dc-file"></span>
+          <button class="copy-btn" id="dc-copy">copy path</button>
+        </div>
+        <div style="margin-bottom:6px"><span class="layer-badge" id="dc-badge"></span></div>
+        <div class="detail-row"><label>Role</label><p id="dc-role"></p></div>
+        <div class="detail-row"><label>Inputs</label><p id="dc-inputs"></p></div>
+        <div class="detail-row"><label>Outputs</label><p id="dc-outputs"></p></div>
+        <div class="detail-row"><label>Depends on</label><p id="dc-deps"></p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="legend">
+  <span>Layers:</span>
+  <div class="leg-item"><span class="leg-dot" style="background:#4f8ef7"></span>Frontend</div>
+  <div class="leg-item"><span class="leg-dot" style="background:#ed8936"></span>Shared</div>
+  <div class="leg-item"><span class="leg-dot" style="background:#48bb78"></span>Backend</div>
+  <div class="leg-item"><span class="leg-dot" style="background:#9f7aea"></span>Infra</div>
+  <div class="leg-item"><span class="leg-dot" style="background:#718096"></span>External</div>
+  <span style="margin-left:12px">Edges: → calls / imports · dashed = flow highlight</span>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LAYER_COLORS = {
+  frontend: '#4f8ef7',
+  shared:   '#ed8936',
+  backend:  '#48bb78',
+  infra:    '#9f7aea',
+  external: '#718096',
+};
+
+const MODULES = [
+  // ── EXTERNAL ──
+  { id:'anthropic-api', label:'Anthropic Claude API', sub:'vision + text', layer:'external', file:'(external service)',
+    role:'Analyses garment photos and generates parametric piece formulas via Claude Vision and text models.',
+    inputs:'Base64 image bytes, system+user prompts, model ID.',
+    outputs:'JSON responses: GarmentFeatures or PieceTemplate formulas.',
+    deps:'—' },
+  { id:'reportlab', label:'ReportLab', sub:'pdf library', layer:'external', file:'(external library)',
+    role:'Renders multi-page printable PDFs with scaling and crosshair registration marks.',
+    inputs:'Drawing commands from pdf_tiler.py.',
+    outputs:'PDF bytes.',
+    deps:'—' },
+  { id:'sqlite-db', label:'SQLite DB', sub:'patternsnap.db', layer:'infra', file:'backend/patternsnap.db',
+    role:'Embedded relational database storing the patterns table created by SQLAlchemy on first start.',
+    inputs:'SQL writes from patterns-router.',
+    outputs:'Pattern rows returned to patterns-router.',
+    deps:'—' },
+  { id:'learned-json', label:'learned.json', sub:'template cache', layer:'infra', file:'backend/app/patterns/templates/learned.json',
+    role:'JSON file persisting LLM-generated piece templates between server restarts; grows automatically.',
+    inputs:'Writes from learned-pieces on add() and record_use().',
+    outputs:'Templates read by learned-pieces on startup.',
+    deps:'—' },
+
+  // ── BACKEND ──
+  { id:'fastapi-app', label:'FastAPI App', sub:'main.py', layer:'backend', file:'backend/app/main.py',
+    role:'Creates the FastAPI ASGI app, loads .env, registers CORS middleware, mounts all routers under /api, and creates DB tables via lifespan.',
+    inputs:'HTTP requests; environment variables.',
+    outputs:'ASGI application; /api/health and /api/garment-types endpoints.',
+    deps:'All routers, database, features-model' },
+  { id:'analyze-router', label:'Analyze Router', sub:'/api/analyze', layer:'backend', file:'backend/app/api/analyze.py',
+    role:'Handles POST /api/analyze — validates uploaded images (type + size limit), delegates to vision analyzer, returns GarmentFeatures.',
+    inputs:'multipart/form-data: garment_type, front_image, back_image?.',
+    outputs:'GarmentFeatures JSON (200) or 400/422/502.',
+    deps:'vision-analyzer, features-model' },
+  { id:'generate-router', label:'Generate Router', sub:'/api/generate', layer:'backend', file:'backend/app/api/generate.py',
+    role:'Handles POST /api/generate — accepts confirmed GarmentFeatures + Measurements, calls the pattern engine, returns the .psnap JSON document.',
+    inputs:'JSON body { features, measurements }.',
+    outputs:'.psnap JSON (200) or 500.',
+    deps:'pattern-engine, features-model, measurements-model' },
+  { id:'export-router', label:'Export Router', sub:'/api/export/pdf', layer:'backend', file:'backend/app/api/export.py',
+    role:'Handles POST /api/export/pdf — passes elements + pieces to the PDF tiler and returns the binary PDF.',
+    inputs:'JSON body { elements, pieces, paper_size, single_page }.',
+    outputs:'application/pdf binary attachment.',
+    deps:'pdf-tiler' },
+  { id:'patterns-router', label:'Patterns Router', sub:'/api/patterns', layer:'backend', file:'backend/app/api/patterns.py',
+    role:'Full CRUD REST resource for saved patterns: create, list (filtered + paginated), get, update, delete.',
+    inputs:'HTTP CRUD requests; SQLAlchemy DB session (dependency injection).',
+    outputs:'PatternResponse / PatternListItem JSON.',
+    deps:'database, pattern-orm, pattern-schemas' },
+  { id:'templates-router', label:'Templates Router', sub:'/api/templates', layer:'backend', file:'backend/app/api/templates.py',
+    role:'Developer endpoints for inspecting and deleting learned piece templates: GET /api/templates, GET /{id}, DELETE /{id}.',
+    inputs:'HTTP requests.',
+    outputs:'Template JSON or 404.',
+    deps:'learned-pieces' },
+  { id:'vision-analyzer', label:'Vision Analyzer', sub:'analyzer.py', layer:'backend', file:'backend/app/vision/analyzer.py',
+    role:'Calls Claude Vision with base64 images, parses JSON response into GarmentFeatures, infers missing pocket details from free-text notes, retries on overload (3s/8s/15s schedule).',
+    inputs:'garment_type, front_bytes, back_bytes?.',
+    outputs:'GarmentFeatures Pydantic model.',
+    deps:'vision-prompts, features-model, anthropic-api' },
+  { id:'vision-prompts', label:'Vision Prompts', sub:'prompts.py', layer:'backend', file:'backend/app/vision/prompts.py',
+    role:'Builds per-garment-type system prompts from a vocabulary dictionary listing allowed silhouette, length, closure, detail, sleeve, and neckline values.',
+    inputs:'garment_type: GarmentType.',
+    outputs:'system_prompt string, user_prompt string.',
+    deps:'features-model' },
+  { id:'pattern-engine', label:'Pattern Engine', sub:'engine.py', layer:'backend', file:'backend/app/patterns/engine.py',
+    role:'Top-level orchestrator: dispatches to the garment builder, applies silhouette modifiers, serialises PieceSpec objects to .psnap JSON (elements + pieces), generates waistband, and calls LLM fallback for unsupported details.',
+    inputs:'features: GarmentFeatures, measurements: Measurements.',
+    outputs:'.psnap dict { version, elements, pieces, measurements }.',
+    deps:'skirts-builder, shirts-builder, trousers-builder, silhouette-modifiers, geometry, llm-fallback, features-model, measurements-model' },
+  { id:'skirts-builder', label:'Skirts Builder', sub:'skirts.py', layer:'backend', file:'backend/app/patterns/skirts.py',
+    role:'Generates parametric skirt blocks for 12+ silhouettes with optional pockets, kick pleat, side slits, and ruffle tier as PieceSpec objects.',
+    inputs:'Measurements, fit style, length, closure type, pocket flags.',
+    outputs:'dict[str, PieceSpec].',
+    deps:'geometry, measurements-model' },
+  { id:'shirts-builder', label:'Shirts Builder', sub:'shirts.py', layer:'backend', file:'backend/app/patterns/shirts.py',
+    role:'Generates parametric shirt/blouse blocks: front body, back body, sleeve (±cuff), collar (multiple styles), button placket; adjusts chest ease by fit style.',
+    inputs:'Measurements, chest ease, fit style, sleeve length, neckline, feature flags.',
+    outputs:'dict[str, PieceSpec].',
+    deps:'geometry, measurements-model' },
+  { id:'trousers-builder', label:'Trousers Builder', sub:'trousers.py', layer:'backend', file:'backend/app/patterns/trousers.py',
+    role:'Generates parametric trouser/pants blocks: front + back leg panels (with crotch curve), fly shield, waistband, pockets, cuff band; parameterised by fit, rise, and length.',
+    inputs:'Measurements, fit style, rise style, length, closure, pocket/feature flags.',
+    outputs:'dict[str, PieceSpec].',
+    deps:'geometry, measurements-model' },
+  { id:'silhouette-modifiers', label:'Silhouette Modifiers', sub:'modifiers.py', layer:'backend', file:'backend/app/patterns/modifiers.py',
+    role:'Post-processes base block PieceSpecs to reshape hem/outline for a specific silhouette: pencil (taper), a-line (flare +5 cm), circle (2× width), wrap (flare + 15 cm waist extension).',
+    inputs:'base_pieces: dict[str, PieceSpec], features, measurements.',
+    outputs:'Modified dict[str, PieceSpec].',
+    deps:'geometry, features-model, measurements-model' },
+  { id:'geometry', label:'Geometry', sub:'geometry.py', layer:'backend', file:'backend/app/patterns/geometry.py',
+    role:'Pure 2D primitives used by all pattern builders: Point (arithmetic, lerp, perp, dot), CurveSegment, polygon offset (miter join), cubic/quadratic Bézier sampling and arc-length.',
+    inputs:'Coordinate arguments.',
+    outputs:'Point, CurveSegment, sampled polylines, arc lengths.',
+    deps:'—' },
+  { id:'llm-fallback', label:'LLM Fallback', sub:'llm_fallback.py', layer:'backend', file:'backend/app/patterns/llm_fallback.py',
+    role:'Detects detail strings the parametric engine cannot handle, checks the learned store first, then calls Claude synchronously with a parametric-formula prompt; saves each new template for future reuse.',
+    inputs:'unsupported_details list, features, measurements.',
+    outputs:'list[PieceSpec] (novel pieces).',
+    deps:'learned-pieces, features-model, measurements-model, anthropic-api' },
+  { id:'learned-pieces', label:'Learned Pieces', sub:'learned_pieces.py', layer:'backend', file:'backend/app/patterns/learned_pieces.py',
+    role:'JSON-backed TemplateStore singleton; persists LLM-generated piece formulas to learned.json; evaluates formula strings safely (validated allowlist, no injection) to produce PieceSpec objects.',
+    inputs:'detail, garment_type, measurements.',
+    outputs:'PieceTemplate (lookup) or PieceSpec (after applying template).',
+    deps:'geometry, measurements-model, learned-json' },
+  { id:'features-model', label:'Features Model', sub:'models/features.py', layer:'backend', file:'backend/app/models/features.py',
+    role:'Pydantic definitions: GarmentType enum (11 values), WaistbandFeature, ClosureFeature, DartFeature, GarmentFeatures (returned by vision + consumed by engine).',
+    inputs:'Imported — no runtime behaviour.',
+    outputs:'Validated Pydantic model instances.',
+    deps:'—' },
+  { id:'measurements-model', label:'Measurements Model', sub:'models/measurements.py', layer:'backend', file:'backend/app/models/measurements.py',
+    role:'Pydantic Measurements model with required fields (waist, hip, waist-to-hip, length) and optional shirt/trouser-specific fields; validates plausible cm ranges.',
+    inputs:'Imported — no runtime behaviour.',
+    outputs:'Validated Measurements instance.',
+    deps:'—' },
+  { id:'pattern-schemas', label:'Pattern Schemas', sub:'schemas/pattern.py', layer:'backend', file:'backend/app/schemas/pattern.py',
+    role:'Pydantic schemas for the patterns CRUD API: PatternCreate, PatternUpdate, PatternResponse, PatternListItem, and nested GeometrySchema / PieceSchema / ElementSchema.',
+    inputs:'Imported — no runtime behaviour.',
+    outputs:'Validated API request/response objects.',
+    deps:'—' },
+  { id:'database', label:'Database', sub:'database.py', layer:'backend', file:'backend/app/database.py',
+    role:'Creates the SQLAlchemy engine (SQLite by default, URL from DATABASE_URL env var), SessionLocal factory, Base declarative class, and get_db() dependency.',
+    inputs:'DATABASE_URL env var.',
+    outputs:'engine, SessionLocal, Base, get_db.',
+    deps:'sqlite-db' },
+  { id:'pattern-orm', label:'Pattern ORM', sub:'db_models.py', layer:'backend', file:'backend/app/db_models.py',
+    role:'SQLAlchemy ORM model for the patterns table: UUID PK, name, garment_type, denormalised metadata (piece_count, waist_cm, hip_cm), timestamps, geometry JSON column.',
+    inputs:'Registers with Base.metadata at import time.',
+    outputs:'Pattern ORM class mapped to patterns table.',
+    deps:'database' },
+  { id:'pdf-tiler', label:'PDF Tiler', sub:'export/pdf_tiler.py', layer:'backend', file:'backend/app/export/pdf_tiler.py',
+    role:'Tiles a pattern across printable PDF pages using ReportLab; supports A4/Letter, configurable overlap, alignment crosshairs, and single-page (fit) mode.',
+    inputs:'elements list, pieces list, paper_size, single_page.',
+    outputs:'PDF bytes.',
+    deps:'reportlab' },
+
+  // ── FRONTEND ──
+  { id:'app-shell', label:'App Shell', sub:'App.tsx', layer:'frontend', file:'frontend/src/App.tsx',
+    role:'Root layout: header, toolbar, canvas, right sidebar; owns file save/open/export buttons; conditionally renders the AI Assist modal.',
+    inputs:'No external inputs at mount; driven by EditorContext state.',
+    outputs:'Calls /api/export/pdf; calls downloadSVG; dispatches LOAD_STATE on file open.',
+    deps:'EditorContext, Canvas, Toolbar, AIAssistModal, PropertiesPanel, MeasurementPanel, svgExport' },
+  { id:'editor-context', label:'Editor Context', sub:'EditorContext.tsx', layer:'frontend', file:'frontend/src/context/EditorContext.tsx',
+    role:'Single-source-of-truth state store (useReducer) for elements, pieces, measurements, selection, active tool, zoom/pan, and 50-level undo/redo stack.',
+    inputs:'Action objects dispatched by any consumer.',
+    outputs:'{ state: EditorState, dispatch } via React context.',
+    deps:'types, pieceTransforms' },
+  { id:'pattern-context', label:'Pattern Context', sub:'PatternContext.tsx', layer:'frontend', file:'frontend/src/context/PatternContext.tsx',
+    role:'Lightweight state machine for the AI wizard flow: wizard step, raw images, detected/confirmed features, generated SVG; kept separate from EditorContext.',
+    inputs:'Wizard-step actions.',
+    outputs:'{ state: PatternState, dispatch } via React context.',
+    deps:'types' },
+  { id:'canvas', label:'Canvas', sub:'Canvas.tsx', layer:'frontend', file:'frontend/src/components/Canvas.tsx',
+    role:'SVG drawing surface; handles all tool modes (select, line, curve, grain-line, notch, eraser), drag/resize/rotate, seam-allowance visualisation, piece hit-testing, and keyboard shortcuts.',
+    inputs:'EditorContext state; DOM pointer and keyboard events.',
+    outputs:'Dispatches ADD_ELEMENT, UPDATE_ELEMENT, DELETE_ELEMENTS, ADD_PIECE, SELECT_PIECE, PUSH_UNDO etc.',
+    deps:'editor-context, snap-engine, piece-transforms, types' },
+  { id:'toolbar', label:'Toolbar', sub:'Toolbar.tsx', layer:'frontend', file:'frontend/src/components/Toolbar.tsx',
+    role:'Vertical strip of tool buttons; dispatches SET_ACTIVE_TOOL, TOGGLE_GRID, TOGGLE_SNAP, TOGGLE_SEAM_ALLOWANCE, SET_UNIT_SYSTEM.',
+    inputs:'Reads activeTool, showGrid, snapEnabled from EditorContext.',
+    outputs:'Dispatches tool-selection and toggle actions.',
+    deps:'editor-context' },
+  { id:'ai-assist-modal', label:'AI Assist Modal', sub:'AIAssistModal.tsx', layer:'frontend', file:'frontend/src/components/AIAssistModal.tsx',
+    role:'3-step modal wizard: upload photo → review detected features → generate pattern. Calls backend analyze + generate endpoints then loads result into canvas.',
+    inputs:'onClose callback; reads EditorContext measurements for defaults; user-uploaded Files.',
+    outputs:'POST /api/analyze; POST /api/generate; dispatches LOAD_STATE to EditorContext.',
+    deps:'editor-context, analyze-router, generate-router, types' },
+  { id:'properties-panel', label:'Properties Panel', sub:'PropertiesPanel.tsx', layer:'frontend', file:'frontend/src/components/PropertiesPanel.tsx',
+    role:'Right-sidebar section: shows and edits properties of the selected element (coords, formula, fold) or piece (name, cut qty, seam allowance, mirror ops).',
+    inputs:'selectedIds, selectedPieceId, elements, pieces from EditorContext.',
+    outputs:'Dispatches UPDATE_ELEMENT, UPDATE_PIECE, MIRROR_PIECE, REMOVE_SIDE_FROM_PIECE.',
+    deps:'editor-context, formula-eval, units, piece-transforms' },
+  { id:'measurement-panel', label:'Measurement Panel', sub:'MeasurementPanel.tsx', layer:'frontend', file:'frontend/src/components/MeasurementPanel.tsx',
+    role:'Right-sidebar section with numeric inputs for body measurements; values stored in EditorContext and seeded into the AI Assist modal.',
+    inputs:'state.measurements, state.unitSystem from EditorContext.',
+    outputs:'Dispatches SET_MEASUREMENT, SET_UNIT_SYSTEM.',
+    deps:'editor-context, units' },
+  { id:'svg-export', label:'SVG Export', sub:'export/svgExport.ts', layer:'frontend', file:'frontend/src/export/svgExport.ts',
+    role:'Client-side SVG builder: serialises elements and pieces into a standalone SVG string (fills, seam allowances, grain-line arrows, labels, 5 cm calibration square), triggers browser download.',
+    inputs:'elements: CanvasElement[], pieces: PatternPiece[].',
+    outputs:'SVG string; browser <a> download side-effect.',
+    deps:'types' },
+
+  // ── SHARED (frontend) ──
+  { id:'types', label:'Types', sub:'types/index.ts', layer:'shared', file:'frontend/src/types/index.ts',
+    role:'Canonical TypeScript interface definitions: CanvasElement (discriminated union), PatternPiece, EditorState, GarmentFeatures, Measurements, WizardStep, and related enums.',
+    inputs:'Imported — no runtime behaviour.',
+    outputs:'Type contracts consumed by all frontend modules.',
+    deps:'—' },
+  { id:'snap-engine', label:'Snap Engine', sub:'snapping/snapEngine.ts', layer:'shared', file:'frontend/src/snapping/snapEngine.ts',
+    role:'Computes the nearest snap target (grid point, element endpoint, midpoint, or intersection) for a given canvas coordinate; returns snapped point + visual cue.',
+    inputs:'Mouse canvas-space point, EditorState (elements, zoom, snap settings).',
+    outputs:'SnapResult { point, type, color }.',
+    deps:'types' },
+  { id:'units', label:'Units', sub:'utils/units.ts', layer:'shared', file:'frontend/src/utils/units.ts',
+    role:'Converts between metric (cm) and imperial (inches) for display; all internal values always stored in cm.',
+    inputs:'value: number, unit: UnitSystem.',
+    outputs:'Converted numbers and unit label strings.',
+    deps:'types' },
+  { id:'formula-eval', label:'Formula Eval', sub:'utils/formulaEval.ts', layer:'shared', file:'frontend/src/utils/formulaEval.ts',
+    role:'Evaluates constraint formula strings on line/curve elements (e.g. "waist / 4") against the current measurement dictionary to produce computed lengths.',
+    inputs:'Formula string, measurements dictionary.',
+    outputs:'Evaluated numeric result.',
+    deps:'—' },
+  { id:'piece-transforms', label:'Piece Transforms', sub:'utils/pieceTransforms.ts', layer:'shared', file:'frontend/src/utils/pieceTransforms.ts',
+    role:'Geometric operations on pattern pieces: mirror (flip-H / flip-V), translate, and clone — producing new element arrays and a new PatternPiece object.',
+    inputs:'PatternPiece, CanvasElement[], operation type.',
+    outputs:'{ newElements, newPiece }.',
+    deps:'types' },
+];
+
+const EDGES = [
+  // frontend → context
+  { from:'app-shell', to:'editor-context', label:'reads/dispatches' },
+  { from:'app-shell', to:'canvas', label:'renders' },
+  { from:'app-shell', to:'toolbar', label:'renders' },
+  { from:'app-shell', to:'ai-assist-modal', label:'renders' },
+  { from:'app-shell', to:'properties-panel', label:'renders' },
+  { from:'app-shell', to:'measurement-panel', label:'renders' },
+  { from:'app-shell', to:'svg-export', label:'calls' },
+  { from:'app-shell', to:'export-router', label:'calls (PDF)' },
+  { from:'canvas', to:'editor-context', label:'reads/dispatches' },
+  { from:'canvas', to:'snap-engine', label:'calls' },
+  { from:'canvas', to:'piece-transforms', label:'calls' },
+  { from:'toolbar', to:'editor-context', label:'dispatches' },
+  { from:'ai-assist-modal', to:'editor-context', label:'reads/dispatches' },
+  { from:'ai-assist-modal', to:'analyze-router', label:'POST /api/analyze' },
+  { from:'ai-assist-modal', to:'generate-router', label:'POST /api/generate' },
+  { from:'properties-panel', to:'editor-context', label:'reads/dispatches' },
+  { from:'properties-panel', to:'formula-eval', label:'calls' },
+  { from:'properties-panel', to:'units', label:'calls' },
+  { from:'properties-panel', to:'piece-transforms', label:'calls' },
+  { from:'measurement-panel', to:'editor-context', label:'reads/dispatches' },
+  { from:'measurement-panel', to:'units', label:'calls' },
+  // backend routing
+  { from:'fastapi-app', to:'analyze-router', label:'mounts' },
+  { from:'fastapi-app', to:'generate-router', label:'mounts' },
+  { from:'fastapi-app', to:'export-router', label:'mounts' },
+  { from:'fastapi-app', to:'patterns-router', label:'mounts' },
+  { from:'fastapi-app', to:'templates-router', label:'mounts' },
+  { from:'fastapi-app', to:'database', label:'imports' },
+  { from:'analyze-router', to:'vision-analyzer', label:'calls' },
+  { from:'generate-router', to:'pattern-engine', label:'calls' },
+  { from:'export-router', to:'pdf-tiler', label:'calls' },
+  { from:'patterns-router', to:'database', label:'reads' },
+  { from:'patterns-router', to:'pattern-orm', label:'reads/writes' },
+  { from:'patterns-router', to:'pattern-schemas', label:'validates' },
+  { from:'templates-router', to:'learned-pieces', label:'calls' },
+  // vision
+  { from:'vision-analyzer', to:'vision-prompts', label:'calls' },
+  { from:'vision-analyzer', to:'features-model', label:'validates' },
+  { from:'vision-analyzer', to:'anthropic-api', label:'calls (vision)' },
+  // pattern generation
+  { from:'pattern-engine', to:'skirts-builder', label:'calls' },
+  { from:'pattern-engine', to:'shirts-builder', label:'calls' },
+  { from:'pattern-engine', to:'trousers-builder', label:'calls' },
+  { from:'pattern-engine', to:'silhouette-modifiers', label:'calls' },
+  { from:'pattern-engine', to:'geometry', label:'uses' },
+  { from:'pattern-engine', to:'llm-fallback', label:'calls' },
+  { from:'skirts-builder', to:'geometry', label:'uses' },
+  { from:'shirts-builder', to:'geometry', label:'uses' },
+  { from:'trousers-builder', to:'geometry', label:'uses' },
+  { from:'silhouette-modifiers', to:'geometry', label:'uses' },
+  { from:'llm-fallback', to:'learned-pieces', label:'calls' },
+  { from:'llm-fallback', to:'anthropic-api', label:'calls (text)' },
+  { from:'learned-pieces', to:'geometry', label:'uses' },
+  { from:'learned-pieces', to:'learned-json', label:'reads/writes' },
+  // data / infra
+  { from:'database', to:'sqlite-db', label:'connects' },
+  { from:'pattern-orm', to:'database', label:'registers' },
+  { from:'pdf-tiler', to:'reportlab', label:'calls' },
+];
+
+// Flow definitions — sequences of module IDs
+const FLOWS = {
+  'ai-gen': {
+    label:'AI Pattern Generation',
+    color:'#a78bfa',
+    steps:['ai-assist-modal','analyze-router','vision-analyzer','vision-prompts','anthropic-api',
+           'vision-analyzer','analyze-router','ai-assist-modal',
+           'ai-assist-modal','generate-router','pattern-engine','skirts-builder','geometry',
+           'silhouette-modifiers','pattern-engine','llm-fallback','learned-pieces','pattern-engine',
+           'generate-router','ai-assist-modal','editor-context','canvas'],
+    edgePairs:[
+      ['ai-assist-modal','analyze-router'],['analyze-router','vision-analyzer'],
+      ['vision-analyzer','vision-prompts'],['vision-analyzer','anthropic-api'],
+      ['ai-assist-modal','generate-router'],['generate-router','pattern-engine'],
+      ['pattern-engine','skirts-builder'],['pattern-engine','silhouette-modifiers'],
+      ['pattern-engine','geometry'],['pattern-engine','llm-fallback'],
+      ['llm-fallback','learned-pieces'],['llm-fallback','anthropic-api'],
+      ['ai-assist-modal','editor-context'],
+    ]
+  },
+  'manual': {
+    label:'Manual Drawing',
+    color:'#34d399',
+    steps:['toolbar','editor-context','canvas','snap-engine','canvas','editor-context'],
+    edgePairs:[
+      ['toolbar','editor-context'],['canvas','editor-context'],['canvas','snap-engine'],
+    ]
+  },
+  'export': {
+    label:'Save / Export',
+    color:'#f59e0b',
+    steps:['app-shell','svg-export','app-shell','export-router','pdf-tiler','reportlab'],
+    edgePairs:[
+      ['app-shell','svg-export'],['app-shell','export-router'],
+      ['export-router','pdf-tiler'],['pdf-tiler','reportlab'],
+    ]
+  },
+  'db-save': {
+    label:'Pattern Persistence',
+    color:'#60a5fa',
+    steps:['patterns-router','pattern-schemas','patterns-router','database','sqlite-db'],
+    edgePairs:[
+      ['patterns-router','pattern-schemas'],['patterns-router','database'],
+      ['patterns-router','pattern-orm'],['database','sqlite-db'],
+    ]
+  },
+  'template': {
+    label:'Template Learning',
+    color:'#fb923c',
+    steps:['pattern-engine','llm-fallback','learned-pieces','learned-json','llm-fallback','anthropic-api'],
+    edgePairs:[
+      ['pattern-engine','llm-fallback'],['llm-fallback','learned-pieces'],
+      ['learned-pieces','learned-json'],['llm-fallback','anthropic-api'],
+    ]
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAYOUT
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Rows keyed by layer, ordered top-to-bottom
+const LAYER_ORDER = ['external','infra','backend','shared','frontend'];
+
+// Fixed positions (x, y in SVG units) — layout is manually tuned for readability
+const NODE_W = 148, NODE_H = 42, PAD_X = 24, PAD_Y = 20;
+
+const POSITIONS = {
+  // ── EXTERNAL (row y=40) ──
+  'anthropic-api': { x:320, y:40 },
+  'reportlab':     { x:520, y:40 },
+  // ── INFRA (row y=130) ──
+  'sqlite-db':     { x:820, y:130 },
+  'learned-json':  { x:620, y:130 },
+  // ── BACKEND — data models (row y=230) ──
+  'features-model':    { x:20,  y:230 },
+  'measurements-model':{ x:188, y:230 },
+  'pattern-schemas':   { x:356, y:230 },
+  'database':          { x:524, y:230 },
+  'pattern-orm':       { x:692, y:230 },
+  // ── BACKEND — geometry (row y=320) ──
+  'geometry':          { x:20,  y:320 },
+  'silhouette-modifiers':{ x:188, y:320 },
+  'skirts-builder':    { x:356, y:320 },
+  'shirts-builder':    { x:524, y:320 },
+  'trousers-builder':  { x:692, y:320 },
+  // ── BACKEND — engine / AI (row y=410) ──
+  'learned-pieces':    { x:20,  y:410 },
+  'llm-fallback':      { x:188, y:410 },
+  'pattern-engine':    { x:356, y:410 },
+  'vision-prompts':    { x:524, y:410 },
+  'vision-analyzer':   { x:692, y:410 },
+  // ── BACKEND — API (row y=500) ──
+  'analyze-router':    { x:20,  y:500 },
+  'generate-router':   { x:188, y:500 },
+  'export-router':     { x:356, y:500 },
+  'patterns-router':   { x:524, y:500 },
+  'templates-router':  { x:692, y:500 },
+  // ── BACKEND — app (row y=590) ──
+  'fastapi-app':       { x:270, y:590 },
+  'pdf-tiler':         { x:524, y:590 },
+  // ── SHARED (row y=680) ──
+  'types':             { x:20,  y:680 },
+  'snap-engine':       { x:188, y:680 },
+  'units':             { x:356, y:680 },
+  'formula-eval':      { x:524, y:680 },
+  'piece-transforms':  { x:692, y:680 },
+  // ── FRONTEND — components (row y=780) ──
+  'canvas':            { x:20,  y:780 },
+  'toolbar':           { x:188, y:780 },
+  'ai-assist-modal':   { x:356, y:780 },
+  'properties-panel':  { x:524, y:780 },
+  'measurement-panel': { x:692, y:780 },
+  // ── FRONTEND — app & context (row y=870) ──
+  'app-shell':         { x:188, y:870 },
+  'editor-context':    { x:356, y:870 },
+  'pattern-context':   { x:524, y:870 },
+  'svg-export':        { x:692, y:870 },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SVG_W = 860, SVG_H = 950;
+const svg = document.getElementById('graph');
+const edgesGroup = document.getElementById('edges-group');
+const flowGroup  = document.getElementById('flow-paths-group');
+const nodesGroup = document.getElementById('nodes-group');
+
+// Set viewBox
+svg.setAttribute('viewBox', `0 0 ${SVG_W} ${SVG_H}`);
+
+// Layer background bands
+const layerBands = {
+  external: { y:30,  h:80,  label:'External' },
+  infra:    { y:118, h:78,  label:'Infrastructure' },
+  backend:  { y:205, h:430, label:'Backend' },
+  shared:   { y:665, h:72,  label:'Shared (Frontend Utils)' },
+  frontend: { y:762, h:148, label:'Frontend' },
+};
+const bgGroup = document.getElementById('layers-bg');
+Object.entries(layerBands).forEach(([layer, { y, h, label }]) => {
+  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('x', '0'); rect.setAttribute('y', String(y));
+  rect.setAttribute('width', String(SVG_W)); rect.setAttribute('height', String(h));
+  const col = LAYER_COLORS[layer];
+  rect.setAttribute('fill', col + '08');
+  rect.setAttribute('stroke', col + '18');
+  rect.setAttribute('stroke-width', '1');
+  bgGroup.appendChild(rect);
+
+  const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt.setAttribute('x', String(SVG_W - 6));
+  txt.setAttribute('y', String(y + 14));
+  txt.setAttribute('text-anchor', 'end');
+  txt.setAttribute('class', 'layer-label');
+  txt.setAttribute('fill', col + '55');
+  txt.textContent = label;
+  bgGroup.appendChild(txt);
+});
+
+// Build node map
+const nodeMap = {};
+MODULES.forEach(m => { nodeMap[m.id] = m; });
+
+// Draw edges
+const edgeEls = {};
+EDGES.forEach(edge => {
+  const fp = POSITIONS[edge.from], tp = POSITIONS[edge.to];
+  if (!fp || !tp) return;
+
+  const fx = fp.x + NODE_W / 2, fy = fp.y + NODE_H / 2;
+  const tx = tp.x + NODE_W / 2, ty = tp.y + NODE_H / 2;
+
+  // Cubic bezier: control points offset vertically
+  const dy = ty - fy;
+  const cx1 = fx, cy1 = fy + dy * 0.45;
+  const cx2 = tx, cy2 = ty - dy * 0.45;
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  const d = `M ${fx} ${fy} C ${cx1} ${cy1} ${cx2} ${cy2} ${tx} ${ty}`;
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'edge');
+  const col = LAYER_COLORS[nodeMap[edge.from]?.layer || 'backend'];
+  path.setAttribute('stroke', col);
+  path.setAttribute('data-from', edge.from);
+  path.setAttribute('data-to', edge.to);
+  edgesGroup.appendChild(path);
+  const key = edge.from + '→' + edge.to;
+  edgeEls[key] = path;
+});
+
+// Draw nodes
+const nodeEls = {};
+const dragging = { id:null, ox:0, oy:0, mx:0, my:0 };
+
+MODULES.forEach(m => {
+  const pos = POSITIONS[m.id];
+  if (!pos) return;
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class', 'node');
+  g.setAttribute('data-id', m.id);
+  g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+
+  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('width', String(NODE_W));
+  rect.setAttribute('height', String(NODE_H));
+  rect.setAttribute('rx', '6');
+  const col = LAYER_COLORS[m.layer];
+  rect.setAttribute('fill', col + '22');
+  rect.setAttribute('stroke', col);
+  g.appendChild(rect);
+
+  const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+  label.setAttribute('x', String(NODE_W / 2));
+  label.setAttribute('y', '16');
+  label.setAttribute('text-anchor', 'middle');
+  label.setAttribute('dominant-baseline', 'middle');
+  label.textContent = m.label;
+  g.appendChild(label);
+
+  const sub = document.createElementNS('http://www.w3.org/2000/svg','text');
+  sub.setAttribute('class', 'sub');
+  sub.setAttribute('x', String(NODE_W / 2));
+  sub.setAttribute('y', '31');
+  sub.setAttribute('text-anchor', 'middle');
+  sub.setAttribute('dominant-baseline', 'middle');
+  sub.textContent = m.sub || '';
+  g.appendChild(sub);
+
+  nodesGroup.appendChild(g);
+  nodeEls[m.id] = { g, pos: { ...pos } };
+
+  // Drag
+  g.addEventListener('mousedown', e => {
+    dragging.id = m.id;
+    dragging.ox = pos.x; dragging.oy = pos.y;
+    const pt = svgPoint(e);
+    dragging.mx = pt.x - pos.x; dragging.my = pt.y - pos.y;
+    e.stopPropagation();
+  });
+
+  g.addEventListener('mouseenter', () => highlightNeighbours(m.id));
+  g.addEventListener('mouseleave', clearHighlight);
+  g.addEventListener('click', e => { e.stopPropagation(); selectNode(m.id); });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAG
+// ─────────────────────────────────────────────────────────────────────────────
+
+function svgPoint(e) {
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+svg.addEventListener('mousemove', e => {
+  if (!dragging.id) return;
+  const pt = svgPoint(e);
+  const nx = pt.x - dragging.mx;
+  const ny = pt.y - dragging.my;
+  POSITIONS[dragging.id].x = nx;
+  POSITIONS[dragging.id].y = ny;
+  nodeEls[dragging.id].g.setAttribute('transform', `translate(${nx},${ny})`);
+  refreshEdges();
+});
+
+svg.addEventListener('mouseup', () => { dragging.id = null; });
+
+function refreshEdges() {
+  EDGES.forEach(edge => {
+    const key = edge.from + '→' + edge.to;
+    const path = edgeEls[key];
+    if (!path) return;
+    const fp = POSITIONS[edge.from], tp = POSITIONS[edge.to];
+    if (!fp || !tp) return;
+    const fx = fp.x + NODE_W/2, fy = fp.y + NODE_H/2;
+    const tx = tp.x + NODE_W/2, ty = tp.y + NODE_H/2;
+    const dy = ty - fy;
+    path.setAttribute('d', `M ${fx} ${fy} C ${fx} ${fy+dy*.45} ${tx} ${ty-dy*.45} ${tx} ${ty}`);
+  });
+  // Refresh active flow paths too
+  if (activeFlow) showFlow(activeFlow);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOVER — highlight neighbours
+// ─────────────────────────────────────────────────────────────────────────────
+
+let hovered = null;
+
+function highlightNeighbours(id) {
+  if (activeFlow) return; // don't override flow highlight
+  hovered = id;
+  const connected = new Set([id]);
+  EDGES.forEach(e => { if (e.from === id) connected.add(e.to); if (e.to === id) connected.add(e.from); });
+
+  Object.entries(nodeEls).forEach(([nid, { g }]) => {
+    g.classList.toggle('highlighted', nid === id);
+    g.classList.toggle('faded', !connected.has(nid));
+  });
+  Object.entries(edgeEls).forEach(([key, path]) => {
+    const [f, t] = key.split('→');
+    path.classList.toggle('highlighted', f === id || t === id);
+    path.classList.toggle('faded', f !== id && t !== id);
+  });
+}
+
+function clearHighlight() {
+  if (activeFlow) return;
+  hovered = null;
+  Object.values(nodeEls).forEach(({ g }) => { g.classList.remove('highlighted','faded'); });
+  Object.values(edgeEls).forEach(path => { path.classList.remove('highlighted','faded'); });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLICK — show module detail
+// ─────────────────────────────────────────────────────────────────────────────
+
+let selectedId = null;
+
+function selectNode(id) {
+  // Deselect
+  if (selectedId && nodeEls[selectedId]) nodeEls[selectedId].g.classList.remove('selected');
+  if (selectedId === id) { selectedId = null; hideDetail(); return; }
+  selectedId = id;
+  nodeEls[id].g.classList.add('selected');
+  showDetail(id);
+}
+
+function showDetail(id) {
+  const m = nodeMap[id];
+  if (!m) return;
+  document.getElementById('detail-placeholder').style.display = 'none';
+  const card = document.getElementById('detail-card');
+  card.style.display = 'block';
+  document.getElementById('dc-label').textContent = m.label;
+  document.getElementById('dc-file').textContent = m.file;
+  const badge = document.getElementById('dc-badge');
+  badge.textContent = m.layer;
+  badge.style.background = LAYER_COLORS[m.layer] + '33';
+  badge.style.color = LAYER_COLORS[m.layer];
+  document.getElementById('dc-role').textContent = m.role;
+  document.getElementById('dc-inputs').textContent = m.inputs;
+  document.getElementById('dc-outputs').textContent = m.outputs;
+  document.getElementById('dc-deps').textContent = m.deps;
+}
+
+function hideDetail() {
+  document.getElementById('detail-placeholder').style.display = '';
+  document.getElementById('detail-card').style.display = 'none';
+}
+
+// Copy path button
+document.getElementById('dc-copy').addEventListener('click', () => {
+  const text = document.getElementById('dc-file').textContent;
+  navigator.clipboard?.writeText(text).catch(() => {});
+  const btn = document.getElementById('dc-copy');
+  btn.textContent = 'copied!';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = 'copy path'; btn.classList.remove('copied'); }, 1500);
+});
+
+svg.addEventListener('click', () => {
+  if (selectedId && nodeEls[selectedId]) nodeEls[selectedId].g.classList.remove('selected');
+  selectedId = null;
+  hideDetail();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOW HIGHLIGHT
+// ─────────────────────────────────────────────────────────────────────────────
+
+let activeFlow = null;
+const flowPathEls = {}; // flow id → array of SVG paths
+
+function showFlow(flowId) {
+  clearFlowPaths();
+  const flow = FLOWS[flowId];
+  if (!flow) return;
+
+  const involvedNodes = new Set(flow.edgePairs.flat());
+  const involvedEdges = new Set(flow.edgePairs.map(([f,t]) => f+'→'+t));
+
+  // Dim everything else
+  Object.entries(nodeEls).forEach(([id, { g }]) => {
+    g.classList.toggle('faded', !involvedNodes.has(id));
+    g.classList.remove('highlighted','selected');
+  });
+  Object.entries(edgeEls).forEach(([key, path]) => {
+    path.classList.toggle('faded', !involvedEdges.has(key));
+    path.classList.remove('highlighted');
+    path.classList.toggle('flow-lit', involvedEdges.has(key));
+  });
+
+  // Draw animated flow paths
+  const paths = [];
+  flow.edgePairs.forEach(([f, t]) => {
+    const fp = POSITIONS[f], tp = POSITIONS[t];
+    if (!fp || !tp) return;
+    const fx = fp.x + NODE_W/2, fy = fp.y + NODE_H/2;
+    const tx = tp.x + NODE_W/2, ty = tp.y + NODE_H/2;
+    const dy = ty - fy;
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d', `M ${fx} ${fy} C ${fx} ${fy+dy*.45} ${tx} ${ty-dy*.45} ${tx} ${ty}`);
+    p.setAttribute('class', 'flow-path animating');
+    p.setAttribute('stroke', flow.color);
+    p.setAttribute('marker-end', 'url(#arrow-flow)');
+    flowGroup.appendChild(p);
+    paths.push(p);
+  });
+  flowPathEls[flowId] = paths;
+}
+
+function clearFlowPaths() {
+  Object.values(flowPathEls).forEach(arr => arr.forEach(p => p.remove()));
+  Object.keys(flowPathEls).forEach(k => delete flowPathEls[k]);
+  Object.entries(edgeEls).forEach(([, path]) => path.classList.remove('flow-lit','faded'));
+  Object.entries(nodeEls).forEach(([, { g }]) => g.classList.remove('faded','highlighted'));
+}
+
+document.querySelectorAll('.flow-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const fid = btn.dataset.flow;
+    if (activeFlow === fid) {
+      // Toggle off
+      activeFlow = null;
+      clearFlowPaths();
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+      return;
+    }
+    activeFlow = fid;
+    document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    showFlow(fid);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCH
+// ─────────────────────────────────────────────────────────────────────────────
+
+document.getElementById('searchbox').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  if (!q) { clearHighlight(); clearFlowPaths(); activeFlow = null;
+    document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+    return;
+  }
+  const matched = new Set(MODULES.filter(m =>
+    m.label.toLowerCase().includes(q) || m.id.includes(q) || (m.sub||'').toLowerCase().includes(q)
+  ).map(m => m.id));
+
+  Object.entries(nodeEls).forEach(([id, { g }]) => {
+    g.classList.toggle('faded', !matched.has(id));
+    g.classList.toggle('highlighted', matched.has(id));
+  });
+  Object.entries(edgeEls).forEach(([key, path]) => {
+    const [f, t] = key.split('→');
+    path.classList.toggle('faded', !matched.has(f) && !matched.has(t));
+  });
+});
+
+</script>
+</body>
+</html>

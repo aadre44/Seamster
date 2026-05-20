@@ -8,3 +8,6 @@ venv/
 backend/venv/
 *.egg-info/
 .DS_Store
+/harness
+.agents/
+.claude/

@@ -317,6 +317,34 @@ function ContextMenuItem({
   )
 }
 
+// ── Dimension edit input ──────────────────────────────────────────────────────
+
+function DimEditInput({
+  id, initialValue, onApply, onCancel,
+}: {
+  id: string; initialValue: string
+  onApply: (id: string, val: string) => void; onCancel: () => void
+}) {
+  const [value, setValue] = useState(initialValue)
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
+  return (
+    <input
+      ref={ref}
+      type="number" min="0.1" step="0.1"
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); onApply(id, value) }
+        if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+      }}
+      onBlur={() => onApply(id, value)}
+      className="w-20 text-center text-xs border-2 border-blue-500 rounded-full px-2 py-1 shadow-lg bg-white font-mono outline-none"
+      onClick={e => e.stopPropagation()}
+    />
+  )
+}
+
 // ── Canvas ───────────────────────────────────────────────────────────────────
 
 export default function Canvas() {
@@ -391,13 +419,7 @@ export default function Canvas() {
   }, [loadPattern])
 
   // Dimension label inline editor
-  type DimEdit = { id: string; value: string }
-  const [editingDim, _setEditingDim] = useState<DimEdit | null>(null)
-  const editingDimRef = useRef<DimEdit | null>(null)
-  const setEditingDim = useCallback((d: DimEdit | null) => {
-    editingDimRef.current = d
-    _setEditingDim(d)
-  }, [])
+  const [editingDim, setEditingDim] = useState<{ id: string; value: string } | null>(null)
 
   // Seam-allowance dialog
   const [seamDialog, setSeamDialog] = useState<{ pieceId: string; amount: string } | null>(null)
@@ -411,22 +433,21 @@ export default function Canvas() {
     setSeamDialog(null)
   }
 
-  const applyDimension = useCallback(() => {
-    const dim = editingDimRef.current
-    if (!dim) return
-    const newLen = parseFloat(dim.value)
-    if (isNaN(newLen) || newLen <= 0) { setEditingDim(null); return }
-    const el = elementsRef.current.find(e => e.id === dim.id)
-    if (!el) { setEditingDim(null); return }
+  const applyDimension = useCallback((id: string, valueStr: string) => {
+    setEditingDim(null)
+    const newLen = parseFloat(valueStr)
+    if (isNaN(newLen) || newLen <= 0) return
+    const el = elementsRef.current.find(e => e.id === id)
+    if (!el) return
     if (el.type === 'line') {
       const dx = el.end.x - el.start.x, dy = el.end.y - el.start.y
       const oldLen = Math.hypot(dx, dy)
-      if (oldLen < 0.001) { setEditingDim(null); return }
+      if (oldLen < 0.001) return
       const ratio = newLen / oldLen
       dispatch({ type: 'UPDATE_ELEMENT', element: { ...el, end: { x: el.start.x + dx * ratio, y: el.start.y + dy * ratio } } })
     } else if (el.type === 'curve') {
       const oldLen = bezierArcLength(el.start, el.cp1, el.cp2, el.end)
-      if (oldLen < 0.001) { setEditingDim(null); return }
+      if (oldLen < 0.001) return
       const ratio = newLen / oldLen
       dispatch({ type: 'UPDATE_ELEMENT', element: { ...el,
         cp1: { x: el.start.x + (el.cp1.x - el.start.x) * ratio, y: el.start.y + (el.cp1.y - el.start.y) * ratio },
@@ -434,8 +455,7 @@ export default function Canvas() {
         end: { x: el.start.x + (el.end.x - el.start.x) * ratio, y: el.start.y + (el.end.y - el.start.y) * ratio },
       } })
     }
-    setEditingDim(null)
-  }, [dispatch, setEditingDim])
+  }, [dispatch])
 
   // Piece transform helpers
   const flipPiece = useCallback((pieceId: string, op: 'flipH' | 'flipV') => {
@@ -506,6 +526,11 @@ export default function Canvas() {
   const isDraggingElements = useRef(false)
   const draggedElementsOrigin = useRef<Map<string, { x: number; y: number }>>(new Map())
   const [boxSelect, setBoxSelect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+
+  // Endpoint drag — drag just the start or end of a selected free segment
+  const isDraggingEndpoint = useRef(false)
+  const endpointDragId = useRef<string | null>(null)
+  const endpointDragWhich = useRef<'start' | 'end' | null>(null)
 
   // ── Resize observer ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1136,6 +1161,35 @@ export default function Canvas() {
       return
     }
 
+    // Endpoint drag — move just the start or end point of a selected segment
+    if (isDraggingEndpoint.current && endpointDragId.current) {
+      const sr = getSnap(e.clientX, e.clientY)
+      const pt = sr.point
+      const el = elementsRef.current.find(e => e.id === endpointDragId.current!)
+      if (el && (el.type === 'line' || el.type === 'curve')) {
+        let updated: CanvasElement
+        if (endpointDragWhich.current === 'start') {
+          if (el.type === 'line') {
+            updated = { ...el, start: pt }
+          } else {
+            const dx = pt.x - el.start.x, dy = pt.y - el.start.y
+            updated = { ...el, start: pt, cp1: { x: el.cp1.x + dx, y: el.cp1.y + dy } }
+          }
+        } else {
+          if (el.type === 'line') {
+            updated = { ...el, end: pt }
+          } else {
+            const dx = pt.x - el.end.x, dy = pt.y - el.end.y
+            updated = { ...el, end: pt, cp2: { x: el.cp2.x + dx, y: el.cp2.y + dy } }
+          }
+        }
+        dispatch({ type: 'LIVE_UPDATE_ELEMENTS', elements: [updated] })
+        setSnapInfo(sr)
+        setCursorPoint(pt)
+      }
+      return
+    }
+
     if (activeTool === 'line') {
       const sr = getSnap(e.clientX, e.clientY)
       setCursorPoint(sr.point)
@@ -1236,6 +1290,14 @@ export default function Canvas() {
       return
     }
 
+    if (isDraggingEndpoint.current) {
+      isDraggingEndpoint.current = false
+      endpointDragId.current = null
+      endpointDragWhich.current = null
+      dispatch({ type: 'PUSH_UNDO' })
+      return
+    }
+
     // Grain-line: mouseup commits the grain line
     if (activeTool === 'grain-line' && grainLineStart.current) {
       const sr = getSnap(e.clientX, e.clientY)
@@ -1327,14 +1389,17 @@ export default function Canvas() {
         const len = Math.hypot(dx, dy)
         if (len < 0.001) return null
         const nx = dx / len, ny = dy / len
-        const AW = 0.4 / scale   // arrowhead arm length in cm (4px at zoom=1)
-        const AF = 0.18 / scale  // arrowhead flare in cm
-        // Arrowhead at end: arms pointing back from end
+        const AW = 0.5 / scale   // arrowhead arm length in cm
+        const AF = 0.22 / scale  // arrowhead flare in cm
+        // Grain lines are always green — distinct from seam lines regardless of selection
+        const grainColor = isSelected ? '#15803d' : '#16a34a'
+        const grainSw = (isSelected ? 2.5 : 2) / scale
+        // Arrowhead at end
         const ae = [
           { x: el.end.x - nx * AW + ny * AF, y: el.end.y - ny * AW - nx * AF },
           { x: el.end.x - nx * AW - ny * AF, y: el.end.y - ny * AW + nx * AF },
         ]
-        // Arrowhead at start: arms pointing back from start (i.e., away from end)
+        // Arrowhead at start
         const as_ = [
           { x: el.start.x + nx * AW + ny * AF, y: el.start.y + ny * AW - nx * AF },
           { x: el.start.x + nx * AW - ny * AF, y: el.start.y + ny * AW + nx * AF },
@@ -1343,15 +1408,15 @@ export default function Canvas() {
         return (
           <g key={el.id} onContextMenu={onElContextMenu} style={{ cursor: elPieceId ? 'pointer' : undefined }}>
             <line x1={el.start.x} y1={el.start.y} x2={el.end.x} y2={el.end.y}
-              stroke={stroke} strokeWidth={sw} />
-            <line x1={ae[0].x} y1={ae[0].y} x2={el.end.x} y2={el.end.y} stroke={stroke} strokeWidth={sw} />
-            <line x1={ae[1].x} y1={ae[1].y} x2={el.end.x} y2={el.end.y} stroke={stroke} strokeWidth={sw} />
-            <line x1={as_[0].x} y1={as_[0].y} x2={el.start.x} y2={el.start.y} stroke={stroke} strokeWidth={sw} />
-            <line x1={as_[1].x} y1={as_[1].y} x2={el.start.x} y2={el.start.y} stroke={stroke} strokeWidth={sw} />
-            <text x={mid.x} y={mid.y - 0.25 / scale}
+              stroke={grainColor} strokeWidth={grainSw} strokeDasharray={`${0.6 / scale} ${0.3 / scale}`} />
+            <line x1={ae[0].x} y1={ae[0].y} x2={el.end.x} y2={el.end.y} stroke={grainColor} strokeWidth={grainSw} />
+            <line x1={ae[1].x} y1={ae[1].y} x2={el.end.x} y2={el.end.y} stroke={grainColor} strokeWidth={grainSw} />
+            <line x1={as_[0].x} y1={as_[0].y} x2={el.start.x} y2={el.start.y} stroke={grainColor} strokeWidth={grainSw} />
+            <line x1={as_[1].x} y1={as_[1].y} x2={el.start.x} y2={el.start.y} stroke={grainColor} strokeWidth={grainSw} />
+            <text x={mid.x} y={mid.y - 0.3 / scale}
               textAnchor="middle" dominantBaseline="auto"
               fontSize={0.45 / scale}
-              fill={stroke}
+              fill={grainColor}
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >Grain</text>
           </g>
@@ -1470,6 +1535,12 @@ export default function Canvas() {
                         for (const id of piece.elementIds) {
                           const el = elements.find(el => el.id === id)
                           if (el) snap.set(id, el)
+                        }
+                        // Also include grain lines, notches etc. linked to this piece via pieceId
+                        for (const el of elements) {
+                          if (!snap.has(el.id) && 'pieceId' in el && (el as any).pieceId === piece.id) {
+                            snap.set(el.id, el)
+                          }
                         }
                         pieceElementsSnapshot.current = snap
                       } else if (isSeamTool) {
@@ -1597,6 +1668,38 @@ export default function Canvas() {
 
           {/* Pattern elements */}
           {renderElements()}
+
+          {/* Endpoint handles for selected line/curve segments (select tool only) */}
+          {activeTool === 'select' && state.selectedIds.map(id => {
+            const el = elements.find(e => e.id === id)
+            if (!el || (el.type !== 'line' && el.type !== 'curve')) return null
+            return (
+              <g key={`ep-${id}`}>
+                <circle cx={el.start.x} cy={el.start.y} r={5 / scale}
+                  fill="white" stroke="#6366f1" strokeWidth={1.5 / scale}
+                  style={{ cursor: 'crosshair' }}
+                  onMouseDown={e => {
+                    if (e.button !== 0 || spaceDown.current) return
+                    e.stopPropagation()
+                    isDraggingEndpoint.current = true
+                    endpointDragId.current = id
+                    endpointDragWhich.current = 'start'
+                  }}
+                />
+                <circle cx={el.end.x} cy={el.end.y} r={5 / scale}
+                  fill="white" stroke="#6366f1" strokeWidth={1.5 / scale}
+                  style={{ cursor: 'crosshair' }}
+                  onMouseDown={e => {
+                    if (e.button !== 0 || spaceDown.current) return
+                    e.stopPropagation()
+                    isDraggingEndpoint.current = true
+                    endpointDragId.current = id
+                    endpointDragWhich.current = 'end'
+                  }}
+                />
+              </g>
+            )
+          })}
 
           {/* Curve-tool: phase placing-end — line from start to cursor */}
           {activeTool === 'curve' && curvePhase.current === 'placing-end' && curveStart.current && cursorPoint && (
@@ -1799,18 +1902,11 @@ export default function Canvas() {
               style={{ position: 'absolute', left: sx, top: sy, transform: 'translate(-50%,-50%)', zIndex: 110 }}
               onMouseDown={e => e.stopPropagation()}
             >
-              <input
-                type="number" min="0.1" step="0.1"
-                value={editingDim!.value}
-                onChange={e => setEditingDim({ id: el.id, value: e.target.value })}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); applyDimension() }
-                  if (e.key === 'Escape') { e.preventDefault(); editingDimRef.current = null; _setEditingDim(null) }
-                }}
-                onBlur={applyDimension}
-                className="w-20 text-center text-xs border-2 border-blue-500 rounded-full px-2 py-1 shadow-lg bg-white font-mono outline-none"
-                autoFocus
-                onClick={e => e.stopPropagation()}
+              <DimEditInput
+                id={el.id}
+                initialValue={editingDim!.value}
+                onApply={applyDimension}
+                onCancel={() => setEditingDim(null)}
               />
             </div>
           )

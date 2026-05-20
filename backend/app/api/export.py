@@ -16,6 +16,7 @@ class ExportPDFRequest(BaseModel):
     pieces: list[dict[str, Any]] = []
     paper_size: str = "a4"
     single_page: bool = False
+    instructions: dict[str, Any] | None = None
 
 
 @router.post("/export/pdf")
@@ -25,6 +26,7 @@ def export_pdf(req: ExportPDFRequest):
         pieces=req.pieces,
         paper_size=req.paper_size,
         single_page=req.single_page,
+        instructions=req.instructions,
     )
     filename = "pattern-single.pdf" if req.single_page else f"pattern-{req.paper_size}.pdf"
     return Response(

@@ -1,1 +1,0 @@
-Curve Generation is not working correctly. Also add the ability to see the dimensions of the sizes over the respective side in a way that is not distracting but still informational. If you click that dimension you can edit the dimension by typing in a new dimension. Additionally 

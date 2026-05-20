@@ -1,12 +1,12 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
-import type { SkirtFeatures, Measurements, WizardStep } from '../types'
+import type { GarmentFeatures, Measurements, WizardStep } from '../types'
 
 interface PatternState {
   step: WizardStep
   frontImage: File | null
   backImage: File | null
-  detectedFeatures: SkirtFeatures | null
-  confirmedFeatures: SkirtFeatures | null
+  detectedFeatures: GarmentFeatures | null
+  confirmedFeatures: GarmentFeatures | null
   measurements: Measurements | null
   patternSvg: string | null
   error: string | null
@@ -15,8 +15,8 @@ interface PatternState {
 type Action =
   | { type: 'SET_STEP'; step: WizardStep }
   | { type: 'SET_IMAGES'; front: File; back?: File }
-  | { type: 'SET_DETECTED_FEATURES'; features: SkirtFeatures }
-  | { type: 'SET_CONFIRMED_FEATURES'; features: SkirtFeatures }
+  | { type: 'SET_DETECTED_FEATURES'; features: GarmentFeatures }
+  | { type: 'SET_CONFIRMED_FEATURES'; features: GarmentFeatures }
   | { type: 'SET_MEASUREMENTS'; measurements: Measurements }
   | { type: 'SET_PATTERN_SVG'; svg: string }
   | { type: 'SET_ERROR'; error: string }

@@ -1,0 +1,760 @@
+{
+  "pieces": [
+    {
+      "id": "chest_pocket-shirt-v1",
+      "trigger_detail": "chest_pocket",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Left Chest Patch Pocket",
+      "description": "Single rectangular patch pocket positioned on the left chest of the boxy T-shirt, with a finished top hem and seam allowance on remaining three sides for topstitching onto the garment.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 0.14 + seam_allowance_cm * 2",
+      "width_formula": "chest_cm * 0.13 + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-12T22:19:46.810533+00:00",
+      "times_used": 5
+    },
+    {
+      "id": "patch_pockets-shirt-v1",
+      "trigger_detail": "patch_pockets",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Left Chest Patch Pocket",
+      "description": "Single patch pocket for the left chest of the boxy T-shirt; includes seam allowance on all sides and a fold-over hem allowance at the top opening.",
+      "geometry": "rectangle",
+      "length_formula": "(chest_cm * 0.13) + seam_allowance_cm + 3",
+      "width_formula": "(chest_cm * 0.13) + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-12T22:19:53.521954+00:00",
+      "times_used": 5
+    },
+    {
+      "id": "topstitching-shirt-v1",
+      "trigger_detail": "topstitching",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Chest Patch Pocket",
+      "description": "Single left chest patch pocket with seam allowance on all sides; includes allowance at top for folded hem before topstitching.",
+      "geometry": "rectangle",
+      "length_formula": "(chest_cm * 0.14) + seam_allowance_cm + 2.5",
+      "width_formula": "(chest_cm * 0.14) + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-12T22:20:07.810519+00:00",
+      "times_used": 5
+    },
+    {
+      "id": "topstitching_part1-shirt-v1",
+      "trigger_detail": "topstitching",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Rib Neckband",
+      "description": "Crew neckline ribbed band cut from rib knit fabric; folded double and seamed into a loop before attaching to the neck opening.",
+      "geometry": "rectangle",
+      "length_formula": "(chest_cm * 0.62) + seam_allowance_cm * 2",
+      "width_formula": "4.0 * 2 + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-12T22:20:07.813527+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "topstitching_part2-shirt-v1",
+      "trigger_detail": "topstitching",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Hem Facing Strip - Bottom",
+      "description": "Internal facing strip for the bottom hem to stabilize topstitching on the straight hem of the boxy tee.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 2 + seam_allowance_cm * 2",
+      "width_formula": "3.5 + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-12T22:20:07.816528+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "belt_loops-pants-v1",
+      "trigger_detail": "belt_loops",
+      "garment_types": [
+        "pants"
+      ],
+      "name": "Belt Loop",
+      "description": "Narrow rectangular belt loop strip to be folded, pressed, and stitched vertically around the waistband of the cargo trousers; cut 7 pieces to distribute evenly around the waist.",
+      "geometry": "rectangle",
+      "length_formula": "8 + seam_allowance_cm * 2",
+      "width_formula": "3.5 + seam_allowance_cm * 2",
+      "cut_qty": 7,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T15:43:00.082311+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "welt_pockets-skirt-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Welt Pocket Welt",
+      "description": "Narrow rectangular welt strip that forms the visible lip of each welt pocket opening on the skirt.",
+      "geometry": "rectangle",
+      "length_formula": "16 + seam_allowance_cm * 2",
+      "width_formula": "2.5 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:47:53.668470+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "welt_pockets_part1-skirt-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Welt Pocket Facing",
+      "description": "Rectangular facing piece sewn behind the welt opening to finish the inside of each welt pocket slit.",
+      "geometry": "rectangle",
+      "length_formula": "16 + seam_allowance_cm * 2",
+      "width_formula": "5 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:47:53.680218+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "welt_pockets_part2-skirt-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Welt Pocket Bag",
+      "description": "Rectangular pocket bag piece that hangs behind the welt opening to form the interior pouch of each welt pocket.",
+      "geometry": "rectangle",
+      "length_formula": "16 + seam_allowance_cm * 2",
+      "width_formula": "max(18, waist_to_hip_cm * 0.6) + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:47:53.681325+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "ruffle-skirt-v1",
+      "trigger_detail": "ruffle",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Ruffle Tier 1",
+      "description": "First ruffle tier attached below the waist band; gathered to fit the hip circumference with 2x fullness.",
+      "geometry": "rectangle",
+      "length_formula": "(length_cm / 3) + seam_allowance_cm * 2",
+      "width_formula": "hip_cm * 2 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-13T16:48:06.591278+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "ruffle_part1-skirt-v1",
+      "trigger_detail": "ruffle",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Ruffle Tier 2",
+      "description": "Second ruffle tier attached below Tier 1; gathered to fit the hem of Tier 1 with 2x fullness and slightly wider drop.",
+      "geometry": "rectangle",
+      "length_formula": "(length_cm / 3) + seam_allowance_cm * 2",
+      "width_formula": "(hip_cm * 2 + seam_allowance_cm * 2) * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-13T16:48:06.593349+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "ruffle_part2-skirt-v1",
+      "trigger_detail": "ruffle",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Ruffle Tier 3",
+      "description": "Bottom ruffle tier attached below Tier 2; gathered with 2x fullness to create maximum volume at the hem.",
+      "geometry": "rectangle",
+      "length_formula": "(length_cm / 3) + seam_allowance_cm",
+      "width_formula": "(hip_cm * 2 + seam_allowance_cm * 2) * 4",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-13T16:48:06.594358+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "kick_pleat-skirt-v1",
+      "trigger_detail": "kick_pleat",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Kick Pleat Underlay",
+      "description": "Rectangular underlay panel sewn behind the kick pleat opening at the hem of the circle skirt to allow walking ease.",
+      "geometry": "rectangle",
+      "length_formula": "(length_cm * 0.4) + (seam_allowance_cm * 2)",
+      "width_formula": "16 + (seam_allowance_cm * 2)",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:48:16.550054+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "patch_pockets-skirt-v1",
+      "trigger_detail": "patch_pockets",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Patch Pocket",
+      "description": "Rectangular patch pocket to be sewn onto the front of the circle skirt, sized proportionally to the skirt length.",
+      "geometry": "rectangle",
+      "length_formula": "length_cm * 0.28 + seam_allowance_cm * 2",
+      "width_formula": "length_cm * 0.25 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:48:22.379070+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "side_pockets-trousers-v1",
+      "trigger_detail": "side_pockets",
+      "garment_types": [
+        "trousers"
+      ],
+      "name": "Side Pocket Bag Front",
+      "description": "The front pocket bag piece that sits against the body, shaped as a rectangle representing the pocket opening and depth for a side-seam pocket on wide-leg trousers.",
+      "geometry": "rectangle",
+      "length_formula": "waist_to_hip_cm + 18",
+      "width_formula": "hip_cm / 4 * 0.55",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:50:14.524710+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "side_pockets_part1-trousers-v1",
+      "trigger_detail": "side_pockets",
+      "garment_types": [
+        "trousers"
+      ],
+      "name": "Side Pocket Bag Back",
+      "description": "The back pocket bag piece that faces away from the body, slightly wider than the front piece to allow the pocket to sit flat against the trouser side seam.",
+      "geometry": "rectangle",
+      "length_formula": "waist_to_hip_cm + 18",
+      "width_formula": "hip_cm / 4 * 0.6",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:50:14.525714+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "side_pockets_part2-trousers-v1",
+      "trigger_detail": "side_pockets",
+      "garment_types": [
+        "trousers"
+      ],
+      "name": "Pocket Facing",
+      "description": "A narrow rectangular facing strip applied to the pocket opening edge of the trouser front to reinforce the side-seam pocket mouth.",
+      "geometry": "rectangle",
+      "length_formula": "waist_to_hip_cm * 0.65",
+      "width_formula": "5 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:50:14.527710+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "welt_pockets-trousers-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "trousers"
+      ],
+      "name": "Welt Pocket Welt",
+      "description": "Narrow rectangular welt strip that forms the visible lip of each welt pocket on the trouser front.",
+      "geometry": "rectangle",
+      "length_formula": "16 + seam_allowance_cm * 2",
+      "width_formula": "2.5 * 2 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:50:25.881314+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "welt_pockets_part1-trousers-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "trousers"
+      ],
+      "name": "Welt Pocket Bag",
+      "description": "Rectangular pocket bag piece that sits behind the welt opening and forms the interior pocket pouch.",
+      "geometry": "rectangle",
+      "length_formula": "16 + seam_allowance_cm * 2",
+      "width_formula": "18 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:50:25.885231+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "welt_pockets_part2-trousers-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "trousers"
+      ],
+      "name": "Welt Pocket Facing",
+      "description": "Facing strip sewn to the trouser front behind the welt opening to reinforce the pocket mouth and finish the upper bag edge.",
+      "geometry": "rectangle",
+      "length_formula": "16 + seam_allowance_cm * 2",
+      "width_formula": "4 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T16:50:25.888228+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "spaghetti_straps-shirt-v1",
+      "trigger_detail": "spaghetti_straps",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Spaghetti Strap",
+      "description": "Narrow self-fabric strap cut long enough to span from front bodice over the shoulder to the back bodice with ease, sewn in pairs and turned right-side out.",
+      "geometry": "rectangle",
+      "length_formula": "shoulder_width_cm * 0.6 + 30",
+      "width_formula": "4",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T19:05:29.712194+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "ribbed_collar-shirt-v1",
+      "trigger_detail": "ribbed_collar",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Ribbed Collar",
+      "description": "A narrow ribbed neckband strip that encircles the crew neckline of the sleeveless fitted tank top; sewn as a loop and attached to the neckline edge.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 0.72",
+      "width_formula": "(3 + seam_allowance_cm) * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-13T19:10:48.213486+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "topstitching-skirt-v1",
+      "trigger_detail": "topstitching",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Front Patch Pocket Bag",
+      "description": "Large cargo-style patch pocket for the front hip area of the straight skirt, cut twice for two pockets.",
+      "geometry": "rectangle",
+      "length_formula": "22 + seam_allowance_cm * 2",
+      "width_formula": "hip_cm / 4 * 0.56 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T19:12:06.690411+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "topstitching_part1-skirt-v1",
+      "trigger_detail": "topstitching",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Front Patch Pocket Flap",
+      "description": "Button-down or decorative flap for each front patch pocket, cut twice to match the two pocket bags.",
+      "geometry": "rectangle",
+      "length_formula": "6.5 + seam_allowance_cm * 2",
+      "width_formula": "hip_cm / 4 * 0.56 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T19:12:06.710993+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "topstitching_part2-skirt-v1",
+      "trigger_detail": "topstitching",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Waistband",
+      "description": "Interfaced waistband sitting at low-to-natural waist with seam allowance included, cut on fold for a clean top edge.",
+      "geometry": "rectangle",
+      "length_formula": "waist_cm + 4 + seam_allowance_cm * 2",
+      "width_formula": "4 * 2 + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-13T19:12:06.713190+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "cargo_pocket-skirt-v1",
+      "trigger_detail": "cargo_pocket",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Cargo Pocket Bag",
+      "description": "Flat patch pocket bag applied to the front panel at hip level; cut two for left and right sides.",
+      "geometry": "rectangle",
+      "length_formula": "22 + seam_allowance_cm * 2",
+      "width_formula": "hip_cm / 4 * 0.56 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T21:58:18.290575+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "cargo_pocket_part1-skirt-v1",
+      "trigger_detail": "cargo_pocket",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Cargo Pocket Flap",
+      "description": "Structured flap piece sewn above each pocket bag opening; interface for stiffness and topstitch to front panel.",
+      "geometry": "rectangle",
+      "length_formula": "6.5 + seam_allowance_cm * 2",
+      "width_formula": "hip_cm / 4 * 0.56 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T21:58:18.301108+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "yoke-shirt-v1",
+      "trigger_detail": "yoke",
+      "garment_types": [
+        "shirt"
+      ],
+      "name": "Back Yoke",
+      "description": "Horizontal yoke piece that sits across the upper back of the shirt, joining the back body panel to the shoulder seams.",
+      "geometry": "rectangle",
+      "length_formula": "shoulder_width_cm + 4",
+      "width_formula": "(chest_cm * 0.15) + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-13T22:02:28.070064+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "patch_pockets-jacket-v1",
+      "trigger_detail": "patch_pockets",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Patch Pocket",
+      "description": "Rectangular patch pocket for the front of a boxy jacket, cut twice for left and right placement.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 0.155 + seam_allowance_cm * 2",
+      "width_formula": "chest_cm * 0.13 * 1.5 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:06:39.287561+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "welt_pockets-jacket-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Welt Strip",
+      "description": "Narrow welt strip that frames the welt pocket opening on the moto jacket front.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 0.13 + seam_allowance_cm * 2",
+      "width_formula": "3 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:06:47.041484+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "welt_pockets_part1-jacket-v1",
+      "trigger_detail": "welt_pockets",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Welt Pocket Bag",
+      "description": "Pocket bag piece sewn behind the welt opening to form the interior pocket on the moto jacket.",
+      "geometry": "rectangle",
+      "length_formula": "18 + seam_allowance_cm * 2",
+      "width_formula": "chest_cm * 0.13 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:06:47.046467+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "breast_pocket-jacket-v1",
+      "trigger_detail": "breast_pocket",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Breast Pocket",
+      "description": "Patch pocket placed on the left chest of the moto jacket, sized proportionally to the chest measurement.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 0.155 + seam_allowance_cm * 2",
+      "width_formula": "chest_cm * 0.13 + seam_allowance_cm * 2",
+      "cut_qty": 1,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:06:52.647900+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "sleeve_placket-jacket-v1",
+      "trigger_detail": "sleeve_placket",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Sleeve Placket",
+      "description": "Rectangular placket strip applied to the sleeve opening of the moto jacket, finished with a fold to encase raw edges at the cuff vent.",
+      "geometry": "rectangle",
+      "length_formula": "arm_length_cm * 0.2 + seam_allowance_cm * 2",
+      "width_formula": "3 * 2 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:06:59.609746+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "cuff_band-jacket-v1",
+      "trigger_detail": "cuff_band",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Cuff Band",
+      "description": "Ribbed or woven cuff band for the sleeve hem of a bomber jacket, cut as a rectangle to be folded and seamed into a loop.",
+      "geometry": "rectangle",
+      "length_formula": "(chest_cm / 2 * 0.55 + seam_allowance_cm * 2)",
+      "width_formula": "(7 + seam_allowance_cm) * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-14T03:07:06.441994+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "hem_band-jacket-v1",
+      "trigger_detail": "hem_band",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Hem Band",
+      "description": "Ribbed or woven hem band that finishes the bottom opening of the bomber jacket, cut on fold to form a double-layer band.",
+      "geometry": "rectangle",
+      "length_formula": "(chest_cm + 4) / 2",
+      "width_formula": "8 * 2",
+      "cut_qty": 1,
+      "on_fold": true,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-05-14T03:07:12.802530+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "hood-jacket-v1",
+      "trigger_detail": "hood",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Hood Main Panel",
+      "description": "The main structural panel of the hood, cut twice and seamed at the centre back to form the hood shell.",
+      "geometry": "rectangle",
+      "length_formula": "shoulder_width_cm * 0.85 + seam_allowance_cm * 2",
+      "width_formula": "chest_cm * 0.32 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:07:22.581120+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "hood_part1-jacket-v1",
+      "trigger_detail": "hood",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Hood Front Facing",
+      "description": "A narrow facing strip sewn around the front opening edge of the hood to finish it cleanly or house a drawcord channel.",
+      "geometry": "rectangle",
+      "length_formula": "shoulder_width_cm * 0.85 + seam_allowance_cm * 2",
+      "width_formula": "5 + seam_allowance_cm * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T03:07:22.583121+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "band_collar-jacket-v1",
+      "trigger_detail": "band_collar",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Band Collar",
+      "description": "A straight stand collar band that wraps around the neckline of the denim jacket, sewn to the neck edge and finished on the inside.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm * 0.5 + seam_allowance_cm * 2",
+      "width_formula": "(3.5 * 2) + (seam_allowance_cm * 2)",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T15:07:40.218114+00:00",
+      "times_used": 2
+    },
+    {
+      "id": "no_collar-jacket-v1",
+      "trigger_detail": "no_collar",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Neckline Facing",
+      "description": "A rectangular facing strip that finishes the raw neckline edge of the collarless anorak jacket, folded to the inside and topstitched.",
+      "geometry": "rectangle",
+      "length_formula": "(chest_cm / 2) + 4",
+      "width_formula": "(seam_allowance_cm * 2) + 4",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T15:07:46.502052+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "epaulets-jacket-v1",
+      "trigger_detail": "epaulets",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Epaulet",
+      "description": "Rectangular shoulder epaulet strip sewn at the shoulder seam and buttoned near the collar, typical of military-style jackets.",
+      "geometry": "rectangle",
+      "length_formula": "shoulder_width_cm / 4 + seam_allowance_cm * 2",
+      "width_formula": "5 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T15:07:52.015995+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "belt-jacket-v1",
+      "trigger_detail": "belt",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Belt",
+      "description": "A straight waist belt for the military jacket, cut on fold to create a doubled band with clean edges when stitched and turned.",
+      "geometry": "rectangle",
+      "length_formula": "waist_cm + 20",
+      "width_formula": "5 * 2",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T15:07:58.053955+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "patch_pocket_flap-jacket-v1",
+      "trigger_detail": "patch_pocket_flap",
+      "garment_types": [
+        "jacket"
+      ],
+      "name": "Patch Pocket Flap",
+      "description": "Curved Western-inspired pocket flap for the large front patch pockets of the denim jacket; cut two pairs (four total) so each flap can be sewn right-sides-together and turned for a clean finish.",
+      "geometry": "rectangle",
+      "length_formula": "hip_cm / 4 * 0.56 + seam_allowance_cm * 2",
+      "width_formula": "6.5 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-05-14T16:59:06.696999+00:00",
+      "times_used": 1
+    }
+  ]
+}

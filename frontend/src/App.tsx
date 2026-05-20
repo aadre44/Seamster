@@ -5,6 +5,7 @@ import Toolbar from './components/Toolbar'
 import PropertiesPanel from './components/PropertiesPanel'
 import MeasurementPanel from './components/MeasurementPanel'
 import AIAssistModal from './components/AIAssistModal'
+import InstructionsPanel from './components/InstructionsPanel'
 import { downloadSVG } from './export/svgExport'
 
 function StatusBar() {
@@ -27,7 +28,15 @@ function FileButtons() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const save = () => {
-    const data = { version: 1, elements: state.elements, pieces: state.pieces, measurements: state.measurements }
+    const data = {
+      version: 1,
+      elements: state.elements,
+      pieces: state.pieces,
+      measurements: state.measurements,
+      ...(state.instructions ? { instructions: state.instructions } : {}),
+      ...(state.lastFeatures ? { lastFeatures: state.lastFeatures } : {}),
+      ...(state.lastMeasurements ? { lastMeasurements: state.lastMeasurements } : {}),
+    }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -41,7 +50,13 @@ function FileButtons() {
       const res = await fetch('http://localhost:8000/api/export/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ elements, pieces, paper_size: paperSize, single_page: singlePage }),
+        body: JSON.stringify({
+          elements,
+          pieces,
+          paper_size: paperSize,
+          single_page: singlePage,
+          ...(state.instructions ? { instructions: state.instructions } : {}),
+        }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const blob = await res.blob()
@@ -65,7 +80,15 @@ function FileButtons() {
       try {
         const data = JSON.parse(json)
         if (!data.elements || !Array.isArray(data.elements)) throw new Error('Invalid file')
-        dispatch({ type: 'LOAD_STATE', elements: data.elements, pieces: data.pieces ?? [], measurements: data.measurements ?? {} })
+        dispatch({
+          type: 'LOAD_STATE',
+          elements: data.elements,
+          pieces: data.pieces ?? [],
+          measurements: data.measurements ?? {},
+          instructions: data.instructions ?? null,
+          lastFeatures: data.lastFeatures ?? null,
+          lastMeasurements: data.lastMeasurements ?? null,
+        })
       } catch { alert('Failed to load pattern file.') }
     })
     e.target.value = ''
@@ -81,7 +104,7 @@ function FileButtons() {
         className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-600">
         Open
       </button>
-      <button onClick={() => downloadSVG(state.elements, state.pieces)}
+      <button onClick={() => downloadSVG(state.elements, state.pieces, state.instructions ?? undefined)}
         className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-600">
         Export SVG
       </button>
@@ -99,7 +122,11 @@ function FileButtons() {
 }
 
 function Editor() {
+  const { state } = useEditor()
   const [showAI, setShowAI] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
+
+  const canShowInstructions = state.lastFeatures !== null
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -116,6 +143,23 @@ function Editor() {
         >
           <span>✦</span> AI Assist
         </button>
+        {canShowInstructions && (
+          <button
+            onClick={() => setShowInstructions(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              showInstructions
+                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                : 'bg-teal-50 text-teal-700 border border-teal-300 hover:bg-teal-100'
+            }`}
+          >
+            {state.instructionsLoading ? (
+              <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span>📋</span>
+            )}
+            {state.instructions ? 'Instructions' : 'Generate Instructions'}
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <FileButtons />
         </div>
@@ -137,6 +181,11 @@ function Editor() {
           <PropertiesPanel />
           <MeasurementPanel />
         </aside>
+
+        {/* Instructions drawer */}
+        {showInstructions && (
+          <InstructionsPanel onClose={() => setShowInstructions(false)} />
+        )}
       </div>
 
       {/* Status bar */}

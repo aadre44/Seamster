@@ -1,20 +1,64 @@
-"""Straight skirt base block using the Aldrich parametric method.
+"""Skirt base block — parametric, supporting multiple silhouette styles.
 
 Coordinate system (matches frontend SVG canvas):
   - X increases rightward
   - Y increases downward
   - Each piece origin: center-front / center-back at x=0, waist at y=0
   - Hip line is at y = waist_to_hip_cm
-  - Hem line is at y = length_cm
+  - Hem line is at y = length_cm (or _LENGTH_CM[length_category] when set)
+
+Silhouettes:
+  straight, pencil, a_line, flared, circle, gathered, pleated, wrap,
+  trumpet, mermaid, tulip, tiered
+
+Length categories:
+  micro, mini, above_knee, knee, midi, maxi
+
+Closure types:
+  center_back_zip, side_zip, hook_and_eye, elastic
+
+Optional detail pieces:
+  pocket_bag, back_pocket, kick_pleat_facing, ruffle_tier
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from app.models.measurements import Measurements
-from app.patterns.geometry import Point
+from app.patterns.geometry import CurveSegment, Point
 
 EASE_CM = 2.0  # standard hip ease added to the full hip circumference
+
+# ── Fit-style parameter table ──────────────────────────────────────────────────
+# hem_mult      : multiplier of hip_qt for the side-seam hem x-coordinate
+# suppress_darts: True → no sewn darts on flat pattern (gathered, pleated, circle, etc.)
+# wrap_extra    : cm added to front SS waist / hip / hem x-coords (wrap overlap)
+# knee_taper    : if not None, add a knee-level intermediate control point;
+#                 value = knee_x / hip_qt ratio (< 1 = tapered at knee)
+_FIT_PARAMS: dict[str, dict] = {
+    "straight": dict(hem_mult=1.00, suppress_darts=False, wrap_extra=0.0,  knee_taper=None),
+    "pencil":   dict(hem_mult=0.88, suppress_darts=False, wrap_extra=0.0,  knee_taper=None),
+    "a_line":   dict(hem_mult=1.40, suppress_darts=False, wrap_extra=0.0,  knee_taper=None),
+    "flared":   dict(hem_mult=1.80, suppress_darts=True,  wrap_extra=0.0,  knee_taper=None),
+    "circle":   dict(hem_mult=2.20, suppress_darts=True,  wrap_extra=0.0,  knee_taper=None),
+    "gathered": dict(hem_mult=1.20, suppress_darts=True,  wrap_extra=0.0,  knee_taper=None),
+    "pleated":  dict(hem_mult=1.10, suppress_darts=True,  wrap_extra=0.0,  knee_taper=None),
+    "wrap":     dict(hem_mult=1.10, suppress_darts=False, wrap_extra=15.0, knee_taper=None),
+    "trumpet":  dict(hem_mult=1.60, suppress_darts=False, wrap_extra=0.0,  knee_taper=0.82),
+    "mermaid":  dict(hem_mult=1.90, suppress_darts=False, wrap_extra=0.0,  knee_taper=0.78),
+    "tulip":    dict(hem_mult=0.95, suppress_darts=False, wrap_extra=8.0,  knee_taper=None),
+    "tiered":   dict(hem_mult=1.50, suppress_darts=True,  wrap_extra=0.0,  knee_taper=None),
+}
+
+# ── Length category → fixed hem length in cm (None = use measurement) ─────────
+_LENGTH_CM: dict[str, float | None] = {
+    "micro":      28.0,
+    "mini":       42.0,
+    "above_knee": 52.0,
+    "knee":       60.0,
+    "midi":       80.0,
+    "maxi":       None,
+}
 
 
 @dataclass
@@ -29,7 +73,7 @@ class DartSpec:
 class PieceSpec:
     """Geometric specification for one pattern piece (before .psnap serialisation)."""
     name: str
-    outline: list[Point]           # closed polygon (CW in SVG coords)
+    outline: list[Point | CurveSegment]  # closed polygon; CurveSegment = bezier from prev vertex
     darts: list[DartSpec]
     grain_start: Point
     grain_end: Point
@@ -138,3 +182,266 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
     )
 
     return {"front": front_spec, "back": back_spec}
+
+
+# ── Shared geometry helpers ────────────────────────────────────────────────────
+
+# Cubic Bézier constant for approximating a quarter-circle arc.
+_BEZIER_K = 0.552
+
+
+def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> PieceSpec:
+    """Return a simple rectangular PieceSpec with a vertical grain line."""
+    outline = [
+        Point(0.0, 0.0),
+        Point(w,   0.0),
+        Point(w,   h),
+        Point(0.0, h),
+    ]
+    return PieceSpec(
+        name=name,
+        outline=outline,
+        darts=[],
+        grain_start=Point(w / 2, h * 0.1),
+        grain_end=Point(w / 2, h * 0.9),
+        cut_qty=cut_qty,
+        on_fold=False,
+        seam_allowance=sa,
+    )
+
+
+def _patch_pocket_piece(
+    name: str,
+    w: float,
+    h: float,
+    cut_qty: int,
+    sa: float,
+    corner_r: float = 2.0,
+) -> PieceSpec:
+    """Rectangular patch pocket with rounded lower corners.
+
+    Standard sewing convention: patch pockets have curved lower corners so the
+    seam allowance folds smoothly and the pocket lies flat on the garment.
+    """
+    k = _BEZIER_K
+    r = min(corner_r, w / 2 - 0.1, h / 3)  # clamp to fit geometry
+    outline: list[Point | CurveSegment] = [
+        Point(0.0, 0.0),         # top-left
+        Point(w, 0.0),           # top-right
+        Point(w, h - r),         # right side, before bottom-right curve
+        CurveSegment(            # bottom-right rounded corner (quarter-circle approx.)
+            x=w - r, y=h,
+            cp1=Point(w, h - r * (1 - k)),
+            cp2=Point(w - r * (1 - k), h),
+        ),
+        Point(r, h),             # bottom, between the two corner curves
+        CurveSegment(            # bottom-left rounded corner
+            x=0.0, y=h - r,
+            cp1=Point(r * (1 - k), h),
+            cp2=Point(0.0, h - r * (1 - k)),
+        ),
+    ]
+    return PieceSpec(
+        name=name,
+        outline=outline,
+        darts=[],
+        grain_start=Point(w / 2, h * 0.15),
+        grain_end=Point(w / 2, h * 0.85),
+        cut_qty=cut_qty,
+        on_fold=False,
+        seam_allowance=sa,
+    )
+
+
+# ── Expanded skirt block ───────────────────────────────────────────────────────
+
+def build_skirt_block(
+    m: Measurements,
+    fit_style: str = "straight",
+    length_category: str = "maxi",
+    closure_type: str = "center_back_zip",
+    has_side_pockets: bool = False,
+    has_patch_pockets: bool = False,
+    has_patch_pocket_flap: bool = False,
+    has_back_pockets: bool = False,
+    has_kick_pleat: bool = False,
+    has_side_slits: bool = False,
+    has_ruffle_tier: bool = False,
+) -> dict[str, PieceSpec]:
+    """Return front / back panels plus conditional detail pieces.
+
+    Silhouettes (fit_style):
+        straight, pencil, a_line, flared, circle, gathered, pleated, wrap,
+        trumpet, mermaid, tulip, tiered
+
+    Length categories:
+        micro, mini, above_knee, knee, midi, maxi  (None → use m.length_cm)
+
+    Closure types:
+        center_back_zip, side_zip, hook_and_eye, elastic
+    """
+    fp = _FIT_PARAMS.get(fit_style, _FIT_PARAMS["straight"])
+
+    # ── Resolve measurements ──────────────────────────────────────────────────
+    fixed_len = _LENGTH_CM.get(length_category)
+    L = fixed_len if fixed_len is not None else m.length_cm
+    L = max(L, m.waist_to_hip_cm + 5.0)   # hem must sit below the hip line
+
+    W = m.waist_cm
+    H = m.hip_cm
+    wh = m.waist_to_hip_cm
+    sa = m.seam_allowance_cm
+
+    # ── Quarter measurements ──────────────────────────────────────────────────
+    hip_qt = (H + EASE_CM) / 4
+    w_qt_f = W / 4 + 0.5      # front (Aldrich balance correction)
+    w_qt_b = W / 4 - 0.5      # back
+
+    # ── Fit parameters ────────────────────────────────────────────────────────
+    hem_mult   = fp["hem_mult"]
+    hem_x      = hip_qt * hem_mult
+    wrap_extra = fp["wrap_extra"]
+    knee_taper = fp["knee_taper"]
+
+    suppress_darts = fp["suppress_darts"]
+    if closure_type == "elastic":
+        suppress_darts = True
+
+    # ── Dart intake ───────────────────────────────────────────────────────────
+    dart_intake_f = hip_qt - w_qt_f
+    dart_intake_b = hip_qt - w_qt_b
+    dart_depth_f  = _clamp(10.0, 6.0, wh * 0.75)
+    dart_depth_b  = _clamp(13.0, 8.0, wh * 0.90)
+
+    # ── Knee control point (trumpet / mermaid) ────────────────────────────────
+    has_knee_point = knee_taper is not None
+    knee_y = wh + (L - wh) * 0.65 if has_knee_point else None
+    knee_x = hip_qt * knee_taper if has_knee_point else None
+
+    # ── Curved side seam: SS-waist → SS-hip (smooth outward sweep) ───────────
+    # cp1 is near the waist, cp2 near the hip; the curve gives a natural
+    # S-shape that follows the body's silhouette from waist to hip.
+    _ss_f_hip = CurveSegment(
+        x=hip_qt + wrap_extra, y=wh,
+        cp1=Point(w_qt_f + wrap_extra + (hip_qt - w_qt_f) * 0.12, wh * 0.30),
+        cp2=Point(hip_qt + wrap_extra + 0.4, wh * 0.70),
+    )
+    _ss_b_hip = CurveSegment(
+        x=hip_qt, y=wh,
+        cp1=Point(w_qt_b + (hip_qt - w_qt_b) * 0.12, wh * 0.30),
+        cp2=Point(hip_qt + 0.4, wh * 0.70),
+    )
+
+    # ── Front panel ───────────────────────────────────────────────────────────
+    if has_knee_point:
+        front_outline: list[Point | CurveSegment] = [
+            Point(0.0, 0.0),
+            Point(w_qt_f + wrap_extra, 0.0),
+            _ss_f_hip,
+            Point(knee_x, knee_y),
+            Point(hem_x + wrap_extra, L),
+            Point(0.0, L),
+        ]
+    else:
+        front_outline = [
+            Point(0.0, 0.0),
+            Point(w_qt_f + wrap_extra, 0.0),
+            _ss_f_hip,
+            Point(hem_x + wrap_extra, L),
+            Point(0.0, L),
+        ]
+
+    front_darts: list[DartSpec] = []
+    if not suppress_darts and dart_intake_f > 0.1:
+        dart_x = _clamp(
+            w_qt_f * 0.40,
+            dart_intake_f / 2 + 0.5,
+            w_qt_f - dart_intake_f / 2 - 0.5,
+        )
+        front_darts.append(DartSpec(center_x=dart_x, width=dart_intake_f, depth=dart_depth_f))
+
+    front_grain_x = hip_qt / 2
+    front_on_fold = fit_style not in ("wrap", "tulip")
+    front_spec = PieceSpec(
+        name="Front Skirt",
+        outline=front_outline,
+        darts=front_darts,
+        grain_start=Point(front_grain_x, wh * 0.25),
+        grain_end=Point(front_grain_x, L * 0.85),
+        cut_qty=2,
+        on_fold=front_on_fold,
+        seam_allowance=sa,
+    )
+
+    # ── Back panel ────────────────────────────────────────────────────────────
+    if has_knee_point:
+        back_outline: list[Point | CurveSegment] = [
+            Point(0.0, 0.0),
+            Point(w_qt_b, 0.0),
+            _ss_b_hip,
+            Point(knee_x, knee_y),
+            Point(hem_x, L),
+            Point(0.0, L),
+        ]
+    else:
+        back_outline = [
+            Point(0.0, 0.0),
+            Point(w_qt_b, 0.0),
+            _ss_b_hip,
+            Point(hem_x, L),
+            Point(0.0, L),
+        ]
+
+    back_darts: list[DartSpec] = []
+    if not suppress_darts and dart_intake_b > 0.1:
+        dw_each = dart_intake_b / 2
+        dart1_x = _clamp(w_qt_b * 0.30, dw_each / 2 + 0.3, w_qt_b / 2 - dw_each / 2 - 0.3)
+        dart2_x = _clamp(w_qt_b * 0.65, w_qt_b / 2 + dw_each / 2 + 0.3, w_qt_b - dw_each / 2 - 0.3)
+        back_darts.append(DartSpec(center_x=dart1_x, width=dw_each, depth=dart_depth_b))
+        back_darts.append(DartSpec(center_x=dart2_x, width=dw_each, depth=dart_depth_b))
+
+    back_grain_x = hip_qt / 2
+    back_spec = PieceSpec(
+        name="Back Skirt",
+        outline=back_outline,
+        darts=back_darts,
+        grain_start=Point(back_grain_x, wh * 0.25),
+        grain_end=Point(back_grain_x, L * 0.85),
+        cut_qty=2,
+        on_fold=False,
+        seam_allowance=sa,
+    )
+
+    pieces: dict[str, PieceSpec] = {"front": front_spec, "back": back_spec}
+
+    # ── Optional detail pieces ────────────────────────────────────────────────
+    if has_side_pockets:
+        bag_w = max(10.0, hip_qt * 0.60)
+        pieces["pocket_bag"] = _rect_piece("Side Pocket Bag", bag_w, 16.0, 2, sa)
+
+    if has_patch_pockets:
+        # Applied patch pocket sized proportionally to hip quarter and skirt length.
+        # Standard sewing: pocket must sit below the hip line with room for opening.
+        pocket_w = max(12.0, hip_qt * 0.55)
+        pocket_h = max(15.0, hip_qt * 0.80)
+        pieces["patch_pocket"] = _patch_pocket_piece(
+            "Front Patch Pocket", pocket_w, pocket_h, cut_qty=2, sa=sa, corner_r=2.0
+        )
+        if has_patch_pocket_flap:
+            flap_h = max(6.0, pocket_w * 0.45)
+            pieces["patch_pocket_flap"] = _patch_pocket_piece(
+                "Patch Pocket Flap", pocket_w, flap_h, cut_qty=4, sa=sa, corner_r=1.5
+            )
+
+    if has_back_pockets:
+        pieces["back_pocket"] = _rect_piece("Back Welt Pocket", 13.0, 14.0, 2, sa)
+
+    if has_kick_pleat:
+        pieces["kick_pleat_facing"] = _rect_piece("Kick Pleat Facing", 15.0, 20.0, 1, sa)
+
+    if has_ruffle_tier or fit_style == "tiered":
+        tier_w = hip_qt * 2.0 * 1.5   # 150 % gather ratio
+        tier_h = L * 0.30
+        pieces["ruffle_tier"] = _rect_piece("Ruffle / Tier Strip", tier_w, tier_h, 2, sa)
+
+    return pieces

@@ -46,6 +46,20 @@ class Point:
         return self.x * other.x + self.y * other.y
 
 
+@dataclass
+class CurveSegment:
+    """An outline vertex reached via a cubic Bezier curve from the previous vertex.
+
+    When placed at position i in a PieceSpec.outline list, the edge from outline[i-1]
+    to this vertex is drawn as a cubic Bezier rather than a straight line.
+    cp1 is the control point near the previous vertex; cp2 is near this vertex.
+    """
+    x: float
+    y: float
+    cp1: Point
+    cp2: Point
+
+
 Polygon = list[Point]
 
 

@@ -6,9 +6,18 @@ class Measurements(BaseModel):
     waist_cm: float = Field(gt=40, lt=160, description="Natural waist circumference in cm")
     hip_cm: float = Field(gt=50, lt=180, description="Fullest hip circumference in cm")
     waist_to_hip_cm: float = Field(gt=10, lt=35, description="Vertical distance waist to hip in cm")
-    length_cm: float = Field(gt=20, lt=150, description="Desired skirt length from waist to hem in cm")
+    length_cm: float = Field(gt=20, lt=150, description="Desired garment length from waist to hem in cm")
 
     # Optional — sensible defaults applied by the pattern engine
     waistband_width_cm: float = Field(default=3.0, gt=0, lt=15)
     seam_allowance_cm: float = Field(default=1.5, gt=0, lt=5)
     hem_allowance_cm: float = Field(default=3.0, gt=0, lt=10)
+
+    # Shirt / blouse specific
+    chest_cm: float | None = Field(default=None, gt=60, lt=200)
+    shoulder_width_cm: float | None = Field(default=None, gt=25, lt=70)
+    arm_length_cm: float | None = Field(default=None, gt=40, lt=90)
+
+    # Trouser / pants specific
+    inseam_cm: float | None = Field(default=None, gt=40, lt=110)
+    rise_cm: float | None = Field(default=None, gt=15, lt=45)

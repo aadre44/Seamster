@@ -247,10 +247,164 @@ def _draw_test_square(c, x_pts, y_pts):
     c.setFillColorRGB(0, 0, 0)
 
 
+# ── Instructions pages ────────────────────────────────────────────────────────
+
+def _wrap_text(text: str, max_chars: int) -> list[str]:
+    """Wrap text to lines of at most max_chars without splitting words."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        if not current:
+            current = word
+        elif len(current) + 1 + len(word) <= max_chars:
+            current += " " + word
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def _draw_instructions_pages(c, instructions: dict, page_size) -> None:
+    """Append formatted instruction pages to an open reportlab Canvas."""
+    page_w_pts, page_h_pts = page_size
+    LEFT   = MARGIN_CM * cm
+    RIGHT  = page_w_pts - MARGIN_CM * cm
+    TOP    = page_h_pts - MARGIN_CM * cm
+    BODY_W = RIGHT - LEFT
+    MAX_CHARS = int(BODY_W / (6 * 0.6))  # approximate chars per line at font size 8
+
+    garment_summary = instructions.get("garment_summary", "")
+    sections = instructions.get("sections", [])
+
+    step_num = 1
+    y = TOP
+
+    def new_page():
+        nonlocal y
+        c.showPage()
+        y = TOP
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        c.setFont("Helvetica", 6)
+        c.drawCentredString(page_w_pts / 2, MARGIN_CM * cm - 10, "PatternSnap — Sewing Instructions")
+
+    def need_space(pts_needed: float) -> None:
+        nonlocal y
+        if y - pts_needed < MARGIN_CM * cm + 20:
+            new_page()
+
+    # ── Cover line ──────────────────────────────────────────────────────────
+    c.showPage()
+    y = TOP
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColorRGB(0.1, 0.1, 0.1)
+    c.drawString(LEFT, y, "Sewing Instructions")
+    y -= 20
+
+    if garment_summary:
+        c.setFont("Helvetica-Oblique", 9)
+        c.setFillColorRGB(0.35, 0.35, 0.35)
+        for line in _wrap_text(garment_summary, MAX_CHARS):
+            need_space(14)
+            c.drawString(LEFT, y, line)
+            y -= 14
+
+    y -= 10
+    c.setStrokeColorRGB(0.8, 0.8, 0.8)
+    c.setLineWidth(0.5)
+    c.line(LEFT, y, RIGHT, y)
+    y -= 16
+
+    # ── Sections & steps ────────────────────────────────────────────────────
+    for section in sections:
+        need_space(30)
+        c.setFont("Helvetica-Bold", 10)
+        c.setFillColorRGB(0.1, 0.27, 0.6)
+        c.drawString(LEFT, y, section.get("title", ""))
+        y -= 6
+        c.setStrokeColorRGB(0.1, 0.27, 0.6)
+        c.setLineWidth(0.4)
+        c.line(LEFT, y, LEFT + 6 * cm, y)
+        y -= 14
+
+        for step in section.get("steps", []):
+            instruction = step.get("instruction", "")
+            technique   = step.get("technique", "")
+            tip         = step.get("tip", "")
+
+            inst_lines = _wrap_text(instruction, MAX_CHARS - 6)
+            tech_lines = _wrap_text(technique, MAX_CHARS - 8) if technique else []
+            tip_lines  = _wrap_text(tip,       MAX_CHARS - 8) if tip       else []
+
+            block_h = len(inst_lines) * 11 + (len(tech_lines) * 10 + 14 if tech_lines else 0) + (len(tip_lines) * 10 + 14 if tip_lines else 0) + 8
+            need_space(block_h)
+
+            # Step number bubble
+            BUBBLE_R = 6
+            bx, by = LEFT + BUBBLE_R, y - BUBBLE_R
+            c.setFillColorRGB(0.18, 0.44, 0.91)
+            c.setStrokeColorRGB(0.18, 0.44, 0.91)
+            c.circle(bx, by, BUBBLE_R, stroke=0, fill=1)
+            c.setFillColorRGB(1, 1, 1)
+            c.setFont("Helvetica-Bold", 6)
+            c.drawCentredString(bx, by - 2, str(step_num))
+
+            # Instruction text
+            TEXT_LEFT = LEFT + BUBBLE_R * 2 + 6
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica", 8)
+            for line in inst_lines:
+                c.drawString(TEXT_LEFT, y, line)
+                y -= 11
+
+            # Technique block
+            if tech_lines:
+                y -= 3
+                need_space(len(tech_lines) * 10 + 16)
+                c.setFillColorRGB(0.93, 0.96, 1.0)
+                block_h_pts = len(tech_lines) * 10 + 12
+                c.roundRect(TEXT_LEFT, y - block_h_pts + 6, BODY_W - (TEXT_LEFT - LEFT), block_h_pts, 3, stroke=0, fill=1)
+                c.setFillColorRGB(0.1, 0.27, 0.6)
+                c.setFont("Helvetica-Bold", 7)
+                c.drawString(TEXT_LEFT + 4, y, "Technique")
+                y -= 10
+                c.setFont("Helvetica", 7)
+                c.setFillColorRGB(0.15, 0.32, 0.65)
+                for line in tech_lines:
+                    c.drawString(TEXT_LEFT + 4, y, line)
+                    y -= 10
+                y -= 3
+
+            # Tip block
+            if tip_lines:
+                y -= 2
+                need_space(len(tip_lines) * 10 + 16)
+                c.setFillColorRGB(1.0, 0.97, 0.88)
+                block_h_pts = len(tip_lines) * 10 + 12
+                c.roundRect(TEXT_LEFT, y - block_h_pts + 6, BODY_W - (TEXT_LEFT - LEFT), block_h_pts, 3, stroke=0, fill=1)
+                c.setFillColorRGB(0.55, 0.35, 0.0)
+                c.setFont("Helvetica-Bold", 7)
+                c.drawString(TEXT_LEFT + 4, y, "Tip")
+                y -= 10
+                c.setFont("Helvetica", 7)
+                c.setFillColorRGB(0.5, 0.3, 0.0)
+                for line in tip_lines:
+                    c.drawString(TEXT_LEFT + 4, y, line)
+                    y -= 10
+                y -= 3
+
+            step_num += 1
+            y -= 10
+
+        y -= 6
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def tile_pdf(svg_content: str = "", paper_size: str = "a4", single_page: bool = False,
-             elements=None, pieces=None) -> bytes:
+             elements=None, pieces=None, instructions: dict | None = None) -> bytes:
     """Return PDF bytes. elements/pieces are lists of dicts from the frontend."""
     if elements is None:
         elements = []
@@ -280,6 +434,8 @@ def tile_pdf(svg_content: str = "", paper_size: str = "a4", single_page: bool = 
         c.setFont("Helvetica", 7)
         c.setFillColorRGB(0.6, 0.6, 0.6)
         c.drawString(0.5*cm, 0.5*cm - 10, "5 cm test square — print at 100%")
+        if instructions:
+            _draw_instructions_pages(c, instructions, A4)
         c.save()
         return buf.getvalue()
 
@@ -350,15 +506,49 @@ def tile_pdf(svg_content: str = "", paper_size: str = "a4", single_page: bool = 
             ]:
                 _draw_crosshair(c, cx_pts, cy_pts, arm_pts)
 
-            # Page label
-            c.setFillColorRGB(0.3, 0.3, 0.3)
-            c.setFont("Helvetica-Bold", 10)
-            c.drawString(MARGIN_CM*cm + 4, page_h_pts - MARGIN_CM*cm - 12, label)
+            # Page label — large, prominent, top-left
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(MARGIN_CM*cm + 4, page_h_pts - MARGIN_CM*cm - 16, label)
             c.setFont("Helvetica", 7)
-            c.drawString(MARGIN_CM*cm + 4, page_h_pts - MARGIN_CM*cm - 22,
+            c.drawString(MARGIN_CM*cm + 4, page_h_pts - MARGIN_CM*cm - 26,
                          f"Overlap: {OVERLAP_CM} cm  |  PatternSnap")
 
+            # Mini position map — bottom-right corner, shows grid with current tile highlighted
+            MAP_CELL = min(12.0, (page_w_pts - 2*MARGIN_CM*cm) / max(cols * 2, 1))
+            MAP_CELL_H = min(10.0, MAP_CELL * 0.8)
+            map_w = cols * MAP_CELL
+            map_h = rows * MAP_CELL_H
+            map_x0 = page_w_pts - MARGIN_CM*cm - map_w - 4
+            map_y0 = MARGIN_CM*cm + 4
+            c.setFont("Helvetica", 5)
+            for mr in range(rows):
+                for mc in range(cols):
+                    cx = map_x0 + mc * MAP_CELL
+                    cy = map_y0 + (rows - 1 - mr) * MAP_CELL_H
+                    is_current = (mr == row and mc == col)
+                    if is_current:
+                        c.setFillColorRGB(0.2, 0.4, 0.8)
+                        c.setStrokeColorRGB(0.1, 0.2, 0.6)
+                    else:
+                        c.setFillColorRGB(0.92, 0.94, 0.98)
+                        c.setStrokeColorRGB(0.6, 0.6, 0.6)
+                    c.setLineWidth(0.4)
+                    c.rect(cx, cy, MAP_CELL, MAP_CELL_H, stroke=1, fill=1)
+                    tile_label = f"{chr(65+mr)}{mc+1}"
+                    if is_current:
+                        c.setFillColorRGB(1, 1, 1)
+                    else:
+                        c.setFillColorRGB(0.3, 0.3, 0.3)
+                    c.drawCentredString(cx + MAP_CELL/2, cy + MAP_CELL_H/2 - 2, tile_label)
+            c.setStrokeColorRGB(0, 0, 0)
+            c.setFillColorRGB(0, 0, 0)
+            c.setLineWidth(0.5)
+
             c.showPage()
+
+    if instructions:
+        _draw_instructions_pages(c, instructions, page_size)
 
     c.save()
     return buf.getvalue()
