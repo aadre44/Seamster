@@ -16,6 +16,7 @@ from app.api.export import router as export_router
 from app.api.generate import router as generate_router
 from app.api.instructions import router as instructions_router
 from app.api.patterns import router as patterns_router
+from app.api.provider import router as provider_router
 from app.api.templates import router as templates_router
 from app.database import Base, engine
 
@@ -30,7 +31,7 @@ async def lifespan(application: FastAPI):
     yield
 
 
-app = FastAPI(title="PatternSnap API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Seamster API", version="0.1.0", lifespan=lifespan)
 
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 app.add_middleware(
@@ -46,12 +47,20 @@ app.include_router(export_router, prefix="/api")
 app.include_router(generate_router, prefix="/api")
 app.include_router(instructions_router, prefix="/api")
 app.include_router(patterns_router, prefix="/api")
+app.include_router(provider_router, prefix="/api")
 app.include_router(templates_router, prefix="/api")
 
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok"}
+    from app.llm import get_provider
+
+    try:
+        provider = get_provider()
+        return {"status": "ok", "llm_provider": provider.name, "llm_model": provider.model}
+    except ValueError as exc:
+        # Misconfigured LLM_PROVIDER — report it without failing the health probe.
+        return {"status": "ok", "llm_provider": "invalid", "llm_error": str(exc)}
 
 
 @app.get("/api/garment-types")
@@ -65,7 +74,7 @@ def skirt_types() -> dict:
     return {
         "silhouettes": ["straight", "pencil", "a_line", "circle", "gathered", "pleated", "wrap"],
         "waistband_types": ["straight", "contoured", "elastic", "facing", "yoke"],
-        "closure_types": ["center_back_zip", "side_zip", "button_fly", "hook_and_eye", "none"],
+        "closure_types": ["center_back_zip", "side_zip", "button_front", "hook_and_eye", "none"],
         "details": [
             "kick_pleat", "back_vent", "side_slits", "patch_pockets",
             "welt_pockets", "belt_loops", "lining_visible", "topstitching",

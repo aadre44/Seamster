@@ -288,7 +288,7 @@ def _draw_instructions_pages(c, instructions: dict, page_size) -> None:
         y = TOP
         c.setFillColorRGB(0.1, 0.1, 0.1)
         c.setFont("Helvetica", 6)
-        c.drawCentredString(page_w_pts / 2, MARGIN_CM * cm - 10, "PatternSnap — Sewing Instructions")
+        c.drawCentredString(page_w_pts / 2, MARGIN_CM * cm - 10, "Seamster — Sewing Instructions")
 
     def need_space(pts_needed: float) -> None:
         nonlocal y
@@ -450,7 +450,7 @@ def tile_pdf(svg_content: str = "", paper_size: str = "a4", single_page: bool = 
 
     # ── Assembly diagram page ────────────────────────────────────────────────
     c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(page_w_pts/2, page_h_pts - 1.5*cm, "PatternSnap — Assembly Guide")
+    c.drawCentredString(page_w_pts/2, page_h_pts - 1.5*cm, "Seamster — Assembly Guide")
     c.setFont("Helvetica", 9)
     c.drawString(MARGIN_CM*cm, page_h_pts - 2.5*cm,
                  f"Paper: {paper_size.upper()}  |  Grid: {cols} cols x {rows} rows  |  Overlap: {OVERLAP_CM} cm")
@@ -512,7 +512,7 @@ def tile_pdf(svg_content: str = "", paper_size: str = "a4", single_page: bool = 
             c.drawString(MARGIN_CM*cm + 4, page_h_pts - MARGIN_CM*cm - 16, label)
             c.setFont("Helvetica", 7)
             c.drawString(MARGIN_CM*cm + 4, page_h_pts - MARGIN_CM*cm - 26,
-                         f"Overlap: {OVERLAP_CM} cm  |  PatternSnap")
+                         f"Overlap: {OVERLAP_CM} cm  |  Seamster")
 
             # Mini position map — bottom-right corner, shows grid with current tile highlighted
             MAP_CELL = min(12.0, (page_w_pts - 2*MARGIN_CM*cm) / max(cols * 2, 1))

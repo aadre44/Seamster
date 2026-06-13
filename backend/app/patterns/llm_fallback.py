@@ -15,12 +15,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from datetime import datetime, timezone
 
-import anthropic
-
+from app.llm import LLMError, complete_with_retry, get_provider
 from app.models.features import GarmentFeatures
 from app.models.measurements import Measurements
 from app.patterns.learned_pieces import PieceTemplate, apply_template, get_store
@@ -208,21 +206,13 @@ def generate_novel_pieces(
 
     Template-first: hits the learned store before calling the LLM.
     Newly generated templates are saved immediately so future requests are free.
-    Returns an empty list (not an error) if the API key is missing or a call fails.
+    Returns an empty list (not an error) if the provider is unconfigured or a call fails.
     """
     if not unsupported_details:
         return []
 
     store = get_store()
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning(
-            "ANTHROPIC_API_KEY not set — skipping LLM fallback for: %s",
-            unsupported_details,
-        )
-        return []
-
-    client = anthropic.Anthropic(api_key=api_key)
+    provider = get_provider()
     gtype = features.garment_type.value
     result_specs: list[PieceSpec] = []
 
@@ -241,17 +231,15 @@ def generate_novel_pieces(
         # ── 2. Call the LLM ───────────────────────────────────────────────────
         logger.info("LLM fallback: generating piece for detail='%s' on '%s'", detail, gtype)
         try:
-            response = client.messages.create(
-                model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6"),
-                max_tokens=1024,
+            response = complete_with_retry(
+                provider,
                 system=_SYSTEM_PROMPT,
-                messages=[
-                    {"role": "user", "content": _user_prompt(detail, features, measurements)},
-                ],
+                user_text=_user_prompt(detail, features, measurements),
+                max_tokens=1024,
             )
-            raw_text = response.content[0].text
-        except Exception:
-            logger.exception("Anthropic API call failed for detail='%s'", detail)
+            raw_text = response.text
+        except (LLMError, ValueError):
+            logger.exception("LLM call failed for detail='%s'", detail)
             continue
 
         # ── 3. Parse response ─────────────────────────────────────────────────

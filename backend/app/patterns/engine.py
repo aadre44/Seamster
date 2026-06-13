@@ -106,6 +106,7 @@ def _serialise_piece(
             elem = _make_curve(s, shifted(b.cp1), shifted(b.cp2), e, piece_id)
         else:
             elem = _make_line(s, e, piece_id, is_fold=is_fold)
+        elem["seamLabel"] = spec.edge_labels.get(i, "")
         elements.append(elem)
         outline_ids.append(elem["id"])
 
@@ -129,6 +130,7 @@ def _serialise_piece(
         "onFold": spec.on_fold,
         "seamAllowance": spec.seam_allowance,
         "closed": True,
+        "notes": spec.notes,
     }
 
     return elements, piece_dict
@@ -157,9 +159,11 @@ def _make_waistband(features: GarmentFeatures, measurements: Measurements, offse
     elements: list[dict] = []
     outline_ids: list[str] = []
     n = len(corners)
+    _wb_labels = {0: "waist"}
     for i in range(n):
         is_fold = (i == 2)  # bottom edge is fold line
         elem = _make_line(corners[i], corners[(i + 1) % n], piece_id, is_fold=is_fold)
+        elem["seamLabel"] = _wb_labels.get(i, "")
         elements.append(elem)
         outline_ids.append(elem["id"])
 
@@ -180,6 +184,41 @@ def _make_waistband(features: GarmentFeatures, measurements: Measurements, offse
         "closed": True,
     }
     return elements, piece_dict
+
+
+# ── Seam connection computation ───────────────────────────────────────────────
+
+def _compute_connections(all_elements: list[dict], all_pieces: list[dict]) -> list[dict]:
+    """Return pairs of edges that share the same non-empty seamLabel across different pieces."""
+    from itertools import combinations
+
+    piece_by_id = {p["id"]: p for p in all_pieces}
+    # Group outline elements by seamLabel (skip empty / fold lines)
+    label_groups: dict[str, list[dict]] = {}
+    outline_ids: set[str] = set()
+    for p in all_pieces:
+        for eid in p["elementIds"]:
+            outline_ids.add(eid)
+
+    for elem in all_elements:
+        if elem["id"] not in outline_ids:
+            continue
+        label = elem.get("seamLabel", "")
+        if not label or elem.get("isFold"):
+            continue
+        label_groups.setdefault(label, []).append(elem)
+
+    connections: list[dict] = []
+    for label, edges in label_groups.items():
+        # Only pair edges that belong to different pieces
+        for a, b in combinations(edges, 2):
+            if a.get("pieceId") != b.get("pieceId"):
+                connections.append({
+                    "label": label,
+                    "from": {"pieceId": a["pieceId"], "edgeId": a["id"]},
+                    "to":   {"pieceId": b["pieceId"], "edgeId": b["id"]},
+                })
+    return connections
 
 
 # ── Garment-specific generators ───────────────────────────────────────────────
@@ -204,8 +243,12 @@ def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurement
 
     _CLOSURE_MAP: dict[str, str] = {
         "center_back_zip": "center_back_zip",
+        "center_front_zip": "side_zip",
         "side_zip":        "side_zip",
         "button_fly":      "hook_and_eye",
+        "button_front":    "hook_and_eye",
+        "snap_front":      "hook_and_eye",
+        "double_breasted": "hook_and_eye",
         "hook_and_eye":    "hook_and_eye",
         "none":            "elastic",
     }
@@ -264,6 +307,7 @@ def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurement
             "waistToHip": measurements.waist_to_hip_cm,
             "garmentLength": measurements.length_cm,
         },
+        "connections": _compute_connections(all_elements, all_pieces),
     }
 
 
@@ -354,6 +398,7 @@ def _generate_shirt_pattern(features: GarmentFeatures, measurements: Measurement
             "shoulder": shoulder,
             "sleeveLength": arm_length,
         },
+        "connections": _compute_connections(all_elements, all_pieces),
     }
 
 
@@ -384,8 +429,10 @@ def _generate_trousers_pattern(features: GarmentFeatures, measurements: Measurem
     length_category = _LENGTH_MAP.get(features.length_category or "", "full_length")
 
     _CLOSURE_MAP: dict[str, str] = {
-        "center_back_zip": "zip_fly",     "side_zip": "side_zip",
-        "button_fly":      "button_fly",  "hook_and_eye": "zip_fly",
+        "center_back_zip": "zip_fly",      "side_zip": "side_zip",
+        "center_front_zip": "zip_fly",
+        "button_fly":      "button_fly",   "hook_and_eye": "zip_fly",
+        "button_front":    "button_fly",
         "none":            "elastic_waist",
     }
     closure_obj = features.closure
@@ -440,6 +487,7 @@ def _generate_trousers_pattern(features: GarmentFeatures, measurements: Measurem
             "garmentLength": measurements.length_cm,
             "inseam": inseam,
         },
+        "connections": _compute_connections(all_elements, all_pieces),
     }
 
 
@@ -461,9 +509,12 @@ def _generate_dress_pattern(features: GarmentFeatures, measurements: Measurement
 
     _CLOSURE_MAP: dict[str, str] = {
         "center_back_zip": "center_back_zip",
+        "center_front_zip": "side_zip",
         "side_zip":        "side_zip",
         "hook_and_eye":    "hook_and_eye",
         "button_fly":      "hook_and_eye",
+        "button_front":    "hook_and_eye",
+        "snap_front":      "hook_and_eye",
         "none":            "none",
     }
     closure_obj = features.closure
@@ -516,6 +567,7 @@ def _generate_dress_pattern(features: GarmentFeatures, measurements: Measurement
             "garmentLength": measurements.length_cm,
             "bust": bust,
         },
+        "connections": _compute_connections(all_elements, all_pieces),
     }
 
 
@@ -558,8 +610,12 @@ def _generate_jacket_pattern(features: GarmentFeatures, measurements: Measuremen
     # 4. Closure type
     _CLOSURE_MAP: dict[str, str] = {
         "center_back_zip": "zip",
+        "center_front_zip": "zip",
         "side_zip":        "zip",
         "button_fly":      "button_front",
+        "button_front":    "button_front",
+        "snap_front":      "button_front",
+        "double_breasted": "button_front",
         "hook_and_eye":    "button_front",
         "none":            "none",
     }
@@ -683,6 +739,7 @@ def _generate_jacket_pattern(features: GarmentFeatures, measurements: Measuremen
             "shoulder":    shoulder,
             "sleeveLength": arm_length,
         },
+        "connections": _compute_connections(all_elements, all_pieces),
     }
 
 

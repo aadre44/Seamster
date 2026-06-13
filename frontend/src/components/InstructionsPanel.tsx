@@ -10,14 +10,6 @@ interface Props {
 
 function SectionBlock({ section, baseNumber }: { section: InstructionSection; baseNumber: number }) {
   const [expanded, setExpanded] = useState(true)
-  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set())
-
-  const toggleStep = (n: number) =>
-    setExpandedSteps(prev => {
-      const next = new Set(prev)
-      next.has(n) ? next.delete(n) : next.add(n)
-      return next
-    })
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -40,41 +32,17 @@ function SectionBlock({ section, baseNumber }: { section: InstructionSection; ba
         <ol className="divide-y divide-gray-100">
           {section.steps.map((step, i) => {
             const num = baseNumber + i
-            const isOpen = expandedSteps.has(num)
-            const hasExtra = step.technique || step.tip
             return (
               <li key={num} className="px-4 py-3">
                 <div className="flex gap-3">
-                  {/* Step number bubble */}
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center mt-0.5">
                     {num}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-800 leading-relaxed">{step.instruction}</p>
-
-                    {hasExtra && (
-                      <button
-                        onClick={() => toggleStep(num)}
-                        className="mt-1.5 text-[10px] text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        {isOpen ? 'Hide details ▲' : 'Show technique & tips ▼'}
-                      </button>
-                    )}
-
-                    {isOpen && (
-                      <div className="mt-2 space-y-2">
-                        {step.technique && (
-                          <div className="bg-blue-50 border-l-2 border-blue-400 px-3 py-2 rounded-r">
-                            <p className="text-[10px] font-semibold text-blue-800 mb-0.5">Technique</p>
-                            <p className="text-[10px] text-blue-700 leading-relaxed">{step.technique}</p>
-                          </div>
-                        )}
-                        {step.tip && (
-                          <div className="bg-amber-50 border-l-2 border-amber-400 px-3 py-2 rounded-r">
-                            <p className="text-[10px] font-semibold text-amber-800 mb-0.5">Tip</p>
-                            <p className="text-[10px] text-amber-700 leading-relaxed">{step.tip}</p>
-                          </div>
-                        )}
+                    {step.tip && (
+                      <div className="mt-1.5 bg-amber-50 border-l-2 border-amber-400 px-3 py-1.5 rounded-r">
+                        <p className="text-[10px] text-amber-700 leading-relaxed">{step.tip}</p>
                       </div>
                     )}
                   </div>
@@ -97,8 +65,10 @@ export default function InstructionsPanel({ onClose }: Props) {
 
   const handleGenerate = () => {
     if (!canGenerate) return
-    const pieceNames = state.pieces.map(p => p.name).filter(Boolean)
-    if (pieceNames.length === 0) return
+    const pieces = state.pieces
+      .filter(p => p.name)
+      .map(p => ({ name: p.name, cut_qty: p.cutQty, on_fold: p.onFold, seam_allowance: p.seamAllowance, notes: p.notes ?? "" }))
+    if (pieces.length === 0) return
 
     setError(null)
     dispatch({ type: 'SET_INSTRUCTIONS', instructions: null, loading: true })
@@ -106,7 +76,7 @@ export default function InstructionsPanel({ onClose }: Props) {
     fetch(`${API}/instructions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ features: lastFeatures, measurements: lastMeasurements, piece_names: pieceNames }),
+      body: JSON.stringify({ features: lastFeatures, measurements: lastMeasurements, pieces }),
     })
       .then(r => r.ok ? r.json() : r.json().then((b: { detail?: string }) => Promise.reject(b.detail ?? 'Failed')))
       .then(data => dispatch({ type: 'SET_INSTRUCTIONS', instructions: data, loading: false }))

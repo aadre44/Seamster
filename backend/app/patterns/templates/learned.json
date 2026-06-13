@@ -394,7 +394,7 @@
       "seam_allowance_formula": "seam_allowance_cm",
       "grain_direction": "width",
       "created_at": "2026-05-13T19:10:48.213486+00:00",
-      "times_used": 2
+      "times_used": 6
     },
     {
       "id": "topstitching-skirt-v1",
@@ -754,6 +754,78 @@
       "seam_allowance_formula": "seam_allowance_cm",
       "grain_direction": "length",
       "created_at": "2026-05-14T16:59:06.696999+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "pleated-skirt-v1",
+      "trigger_detail": "pleated",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Waistband",
+      "description": "Elastic waistband for comfort and ease of wear.",
+      "geometry": "rectangle",
+      "length_formula": "max(waist_cm, hip_cm) * 2 + seam_allowance_cm",
+      "width_formula": "waistband_width_cm * 2",
+      "cut_qty": 1,
+      "on_fold": true,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-06-12T18:30:08.177633+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "pleated_part1-skirt-v1",
+      "trigger_detail": "pleated",
+      "garment_types": [
+        "skirt"
+      ],
+      "name": "Pleats",
+      "description": "Pleated skirt design.",
+      "geometry": "rectangle",
+      "length_formula": "length_cm - seam_allowance_cm * 2",
+      "width_formula": "max(waist_cm, hip_cm) / max(10.0, (length_cm - seam_allowance_cm * 2) / max(waist_cm, hip_cm))",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "width",
+      "created_at": "2026-06-12T18:30:08.180823+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "spaghetti_straps-blouse-v1",
+      "trigger_detail": "spaghetti_straps",
+      "garment_types": [
+        "blouse"
+      ],
+      "name": "Spaghetti Strap",
+      "description": "Narrow self-fabric strap for a spaghetti-strap camisole; cut 4 pieces (2 pairs) to be folded and sewn together to form 2 finished straps.",
+      "geometry": "rectangle",
+      "length_formula": "arm_length_cm * 0.5 + shoulder_width_cm * 0.5 + 10",
+      "width_formula": "3 + seam_allowance_cm * 2",
+      "cut_qty": 4,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-06-12T19:50:20.236015+00:00",
+      "times_used": 1
+    },
+    {
+      "id": "round_neck-blouse-v1",
+      "trigger_detail": "round_neck",
+      "garment_types": [
+        "blouse"
+      ],
+      "name": "Round Neck Facing",
+      "description": "A straight rectangular facing strip for the front neckline edge of the camisole, to be folded under and stitched to finish the square/slightly scooped neckline cleanly on a stretchy knit.",
+      "geometry": "rectangle",
+      "length_formula": "chest_cm / 2 + seam_allowance_cm * 2",
+      "width_formula": "4 + seam_allowance_cm",
+      "cut_qty": 2,
+      "on_fold": false,
+      "seam_allowance_formula": "seam_allowance_cm",
+      "grain_direction": "length",
+      "created_at": "2026-06-12T19:50:26.503379+00:00",
       "times_used": 1
     }
   ]

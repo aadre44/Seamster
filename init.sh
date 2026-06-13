@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# PatternSnap dev environment setup and startup
+# Seamster dev environment setup and startup
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== PatternSnap — Dev Environment Init ==="
+echo "=== Seamster — Dev Environment Init ==="
 
 # ── Backend ──────────────────────────────────────────────────────────────────
 echo "[backend] Setting up Python environment..."

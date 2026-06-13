@@ -198,6 +198,13 @@ def build_dress_block(
         ]
 
     back_bodice_grain_x = chest_qt / 2
+    _back_bodice_closure = f"{closure_type.replace('_', ' ')} at CB" if closure_type != "none" else "no closure at CB"
+    _bbn = len(back_bodice_outline)
+    _back_bodice_labels = (
+        {0: "neckline", 1: "side_seam", 2: "waist_seam", 3: "center_back"}
+        if _bbn == 4 else
+        {0: "neckline", 1: "shoulder", 2: "armhole", 3: "side_seam", 4: "waist_seam", 5: "center_back"}
+    )
     back_bodice_spec = PieceSpec(
         name="Back Bodice",
         outline=back_bodice_outline,
@@ -207,6 +214,8 @@ def build_dress_block(
         cut_qty=2,
         on_fold=True,
         seam_allowance=sa,
+        notes=f"back bodice panel cut on fold; {_back_bodice_closure}; sew to Front Bodice at shoulder seams and side seams; join to skirt at waist seam",
+        edge_labels=_back_bodice_labels,
     )
 
     # ── Front Bodice ──────────────────────────────────────────────────────────
@@ -300,6 +309,19 @@ def build_dress_block(
         )
         front_bodice_darts.append(DartSpec(center_x=dart_x, width=bust_dart_intake, depth=dart_depth_bodice))
 
+    _front_fold_note = "cut on fold at CF" if front_bodice_on_fold else "CF is open edge (wrap/closure)"
+    _fbn = len(front_bodice_outline)
+    if _fbn == 4:
+        _front_bodice_labels = {0: "neckline", 1: "side_seam", 2: "waist_seam", 3: "center_front"}
+    elif _fbn == 5:
+        if neckline == "halter":
+            _front_bodice_labels = {0: "neckline", 1: "armhole", 2: "side_seam", 3: "waist_seam", 4: "center_front"}
+        else:
+            _front_bodice_labels = {0: "shoulder", 1: "armhole", 2: "side_seam", 3: "waist_seam", 4: "center_front"}
+    elif _fbn == 7:
+        _front_bodice_labels = {0: "neckline", 1: "neckline", 2: "shoulder", 3: "armhole", 4: "side_seam", 5: "waist_seam", 6: "center_front"}
+    else:
+        _front_bodice_labels = {0: "neckline", 1: "shoulder", 2: "armhole", 3: "side_seam", 4: "waist_seam", 5: "center_front"}
     front_bodice_spec = PieceSpec(
         name="Front Bodice",
         outline=front_bodice_outline,
@@ -309,6 +331,8 @@ def build_dress_block(
         cut_qty=2,
         on_fold=front_bodice_on_fold,
         seam_allowance=sa,
+        notes=f"front bodice panel; {_front_fold_note}; sew to Back Bodice at shoulder seams and side seams; join to Front Skirt at waist seam",
+        edge_labels=_front_bodice_labels,
     )
 
     # ── Skirt block ───────────────────────────────────────────────────────────
@@ -353,6 +377,7 @@ def build_dress_block(
         dart_x = _clamp(skirt_w_qt_f * 0.40, skirt_dart_intake_f / 2 + 0.5, skirt_w_qt_f - skirt_dart_intake_f / 2 - 0.5)
         front_skirt_darts.append(DartSpec(center_x=dart_x, width=skirt_dart_intake_f, depth=skirt_dart_depth_f))
 
+    _fsn = len(front_skirt_outline)
     front_skirt_spec = PieceSpec(
         name="Front Skirt",
         outline=front_skirt_outline,
@@ -362,6 +387,8 @@ def build_dress_block(
         cut_qty=2,
         on_fold=fit_style != "wrap",
         seam_allowance=sa,
+        notes="front skirt panel; sew to Back Skirt at side seams; join to Front Bodice at waist seam",
+        edge_labels={0: "waist_seam", **{i: "side_seam" for i in range(1, _fsn - 2)}, _fsn - 2: "hem", _fsn - 1: "center_front"},
     )
 
     back_skirt_outline = _skirt_side_pts(skirt_w_qt_b, 0.0, 0.0)
@@ -374,6 +401,7 @@ def build_dress_block(
         back_skirt_darts.append(DartSpec(center_x=d1x, width=dw_each, depth=skirt_dart_depth_b))
         back_skirt_darts.append(DartSpec(center_x=d2x, width=dw_each, depth=skirt_dart_depth_b))
 
+    _bsn = len(back_skirt_outline)
     back_skirt_spec = PieceSpec(
         name="Back Skirt",
         outline=back_skirt_outline,
@@ -383,6 +411,8 @@ def build_dress_block(
         cut_qty=2,
         on_fold=False,
         seam_allowance=sa,
+        notes="back skirt panel; sew to Front Skirt at side seams; join to Back Bodice at waist seam",
+        edge_labels={0: "waist_seam", **{i: "side_seam" for i in range(1, _bsn - 2)}, _bsn - 2: "hem", _bsn - 1: "center_back"},
     )
 
     pieces: dict[str, PieceSpec] = {
@@ -398,7 +428,8 @@ def build_dress_block(
 
     if sleeve_length == "spaghetti":
         strap_h = arm_len * 0.60
-        pieces["spaghetti_strap"] = _rect_piece("Spaghetti Strap", 3.0, strap_h, 4, sa)
+        pieces["spaghetti_strap"] = _rect_piece("Spaghetti Strap", 3.0, strap_h, 4, sa,
+            notes="spaghetti strap (cut 4: 2 outer + 2 lining); sew outer to lining RS together, turn with a loop turner; attach to bodice at shoulder and back neckline")
     elif sleeve_length not in ("sleeveless",):
         if sleeve_length == "cap":
             actual_len = 6.0
@@ -410,6 +441,12 @@ def build_dress_block(
             actual_len = arm_len
 
         total_sleeve_h = cap_height + actual_len
+        _dress_sleeve_notes: dict[str, str] = {
+            "cap":           "cap sleeve; set directly into armscye with minimal ease",
+            "short":         "short set-in sleeve; sew sleeve seam first to form tube, then ease cap into armscye",
+            "three_quarter": "three-quarter set-in sleeve; sew sleeve seam to form tube, ease cap into armscye",
+            "long":          "set-in sleeve; sew sleeve seam first to form tube, then ease cap into armscye",
+        }
         sleeve_spec = PieceSpec(
             name="Sleeve",
             outline=[
@@ -424,12 +461,15 @@ def build_dress_block(
             cut_qty=2,
             on_fold=True,
             seam_allowance=sa,
+            notes=_dress_sleeve_notes.get(sleeve_length, _dress_sleeve_notes["long"]),
+            edge_labels={0: "armhole", 1: "sleeve_seam", 2: "wrist", 3: "center_sleeve"},
         )
         pieces["sleeve"] = sleeve_spec
 
     # ── Bodice facing (strapless / halter) ────────────────────────────────────
     if neckline in ("strapless", "halter"):
-        pieces["bodice_facing"] = _rect_piece("Bodice Facing", chest_qt, 6.0, 2, sa)
+        pieces["bodice_facing"] = _rect_piece("Bodice Facing", chest_qt, 6.0, 2, sa,
+            notes=f"{'strapless' if neckline == 'strapless' else 'halter'} neckline facing; interface; sew to upper bodice edge RS together, understitch and turn to inside")
 
     # ── Collar ────────────────────────────────────────────────────────────────
     if has_collar:
@@ -443,16 +483,19 @@ def build_dress_block(
             cut_qty=2,
             on_fold=False,
             seam_allowance=sa,
+            notes="dress collar; interface outer layer; sew outer to under collar RS together, turn; attach to neckline and slip-stitch inner edge",
         )
 
     # ── Belt / Sash ───────────────────────────────────────────────────────────
     if has_sash or fit_style == "wrap":
         sash_w = max(30.0, total_L * 0.45)
-        pieces["belt_sash"] = _rect_piece("Belt / Sash", sash_w, 8.0, 2, sa)
+        pieces["belt_sash"] = _rect_piece("Belt / Sash", sash_w, 8.0, 2, sa,
+            notes="belt/sash strip; sew long edges RS together, turn right side out; tie at waist or attach at side seams")
 
     # ── Side pocket bag ───────────────────────────────────────────────────────
     if has_pockets:
         bag_w = max(10.0, hip_qt * 0.60)
-        pieces["pocket_bag"] = _rect_piece("Side Pocket Bag", bag_w, 16.0, 2, sa)
+        pieces["pocket_bag"] = _rect_piece("Side Pocket Bag", bag_w, 16.0, 2, sa,
+            notes="in-seam side pocket bag; insert into skirt side seam before sewing Front Skirt to Back Skirt")
 
     return pieces

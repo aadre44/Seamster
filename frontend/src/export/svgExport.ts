@@ -107,7 +107,7 @@ function buildInstructionsSVG(instructions: SewingInstructions, startY: number, 
 
     for (const step of section.steps) {
       const instrLines = wrapText(step.instruction, MAX_CHARS - 4)
-      const techLines = step.technique ? wrapText(step.technique, MAX_CHARS - 6) : []
+      const techLines: string[] = []
       const tipLines = step.tip ? wrapText(step.tip, MAX_CHARS - 6) : []
 
       // Step bubble

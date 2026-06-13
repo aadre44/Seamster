@@ -80,6 +80,8 @@ class PieceSpec:
     cut_qty: int = 2
     on_fold: bool = False
     seam_allowance: float = 1.5    # cm; added by the engine when serialising
+    notes: str = ""                # construction context shown to the instruction generator
+    edge_labels: dict[int, str] = field(default_factory=dict)  # edge index → seam name
 
 
 def _clamp(val: float, lo: float, hi: float) -> float:
@@ -146,6 +148,7 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
         cut_qty=2,
         on_fold=True,              # center front on fold
         seam_allowance=m.seam_allowance_cm,
+        edge_labels={0: "waist", 1: "side_seam", 2: "side_seam", 3: "hem", 4: "center_front"},
     )
 
     # ── Back panel ────────────────────────────────────────────────────────────
@@ -179,6 +182,7 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
         cut_qty=2,
         on_fold=False,             # CB is a seam (for closure)
         seam_allowance=m.seam_allowance_cm,
+        edge_labels={0: "waist", 1: "side_seam", 2: "side_seam", 3: "hem", 4: "center_back"},
     )
 
     return {"front": front_spec, "back": back_spec}
@@ -190,7 +194,7 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
 _BEZIER_K = 0.552
 
 
-def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> PieceSpec:
+def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float, notes: str = "") -> PieceSpec:
     """Return a simple rectangular PieceSpec with a vertical grain line."""
     outline = [
         Point(0.0, 0.0),
@@ -207,6 +211,7 @@ def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> Piece
         cut_qty=cut_qty,
         on_fold=False,
         seam_allowance=sa,
+        notes=notes,
     )
 
 
@@ -217,6 +222,7 @@ def _patch_pocket_piece(
     cut_qty: int,
     sa: float,
     corner_r: float = 2.0,
+    notes: str = "",
 ) -> PieceSpec:
     """Rectangular patch pocket with rounded lower corners.
 
@@ -250,6 +256,7 @@ def _patch_pocket_piece(
         cut_qty=cut_qty,
         on_fold=False,
         seam_allowance=sa,
+        notes=notes,
     )
 
 
@@ -362,6 +369,8 @@ def build_skirt_block(
 
     front_grain_x = hip_qt / 2
     front_on_fold = fit_style not in ("wrap", "tulip")
+    _front_dart_note = "" if suppress_darts else "; sew waist dart(s) before attaching waistband"
+    _fn = len(front_outline)
     front_spec = PieceSpec(
         name="Front Skirt",
         outline=front_outline,
@@ -371,6 +380,8 @@ def build_skirt_block(
         cut_qty=2,
         on_fold=front_on_fold,
         seam_allowance=sa,
+        notes=f"main front panel{_front_dart_note}; sew to Back Skirt at side seams",
+        edge_labels={0: "waist", **{i: "side_seam" for i in range(1, _fn - 2)}, _fn - 2: "hem", _fn - 1: "center_front"},
     )
 
     # ── Back panel ────────────────────────────────────────────────────────────
@@ -401,6 +412,9 @@ def build_skirt_block(
         back_darts.append(DartSpec(center_x=dart2_x, width=dw_each, depth=dart_depth_b))
 
     back_grain_x = hip_qt / 2
+    _back_dart_note = "" if suppress_darts else "; sew waist dart(s) before assembling"
+    _closure_note = f"; {closure_type.replace('_', ' ')} at CB" if closure_type != "elastic" else "; elastic waist (no zip)"
+    _bn = len(back_outline)
     back_spec = PieceSpec(
         name="Back Skirt",
         outline=back_outline,
@@ -410,6 +424,8 @@ def build_skirt_block(
         cut_qty=2,
         on_fold=False,
         seam_allowance=sa,
+        notes=f"main back panel{_back_dart_note}{_closure_note}; sew to Front Skirt at side seams",
+        edge_labels={0: "waist", **{i: "side_seam" for i in range(1, _bn - 2)}, _bn - 2: "hem", _bn - 1: "center_back"},
     )
 
     pieces: dict[str, PieceSpec] = {"front": front_spec, "back": back_spec}
@@ -417,31 +433,35 @@ def build_skirt_block(
     # ── Optional detail pieces ────────────────────────────────────────────────
     if has_side_pockets:
         bag_w = max(10.0, hip_qt * 0.60)
-        pieces["pocket_bag"] = _rect_piece("Side Pocket Bag", bag_w, 16.0, 2, sa)
+        pieces["pocket_bag"] = _rect_piece("Side Pocket Bag", bag_w, 16.0, 2, sa,
+            notes="in-seam pocket bag; insert into side seam before sewing Front Skirt to Back Skirt")
 
     if has_patch_pockets:
-        # Applied patch pocket sized proportionally to hip quarter and skirt length.
-        # Standard sewing: pocket must sit below the hip line with room for opening.
         pocket_w = max(12.0, hip_qt * 0.55)
         pocket_h = max(15.0, hip_qt * 0.80)
         pieces["patch_pocket"] = _patch_pocket_piece(
-            "Front Patch Pocket", pocket_w, pocket_h, cut_qty=2, sa=sa, corner_r=2.0
+            "Front Patch Pocket", pocket_w, pocket_h, cut_qty=2, sa=sa, corner_r=2.0,
+            notes="applied patch pocket; press under seam allowances and topstitch to Front Skirt before assembling side seams",
         )
         if has_patch_pocket_flap:
             flap_h = max(6.0, pocket_w * 0.45)
             pieces["patch_pocket_flap"] = _patch_pocket_piece(
-                "Patch Pocket Flap", pocket_w, flap_h, cut_qty=4, sa=sa, corner_r=1.5
+                "Patch Pocket Flap", pocket_w, flap_h, cut_qty=4, sa=sa, corner_r=1.5,
+                notes="pocket flap (cut 4: 2 outer + 2 lining); sew outer to lining RS together, turn, topstitch above pocket opening",
             )
 
     if has_back_pockets:
-        pieces["back_pocket"] = _rect_piece("Back Welt Pocket", 13.0, 14.0, 2, sa)
+        pieces["back_pocket"] = _rect_piece("Back Welt Pocket", 13.0, 14.0, 2, sa,
+            notes="back welt pocket facing; construct welt opening on Back Skirt before assembling side seams")
 
     if has_kick_pleat:
-        pieces["kick_pleat_facing"] = _rect_piece("Kick Pleat Facing", 15.0, 20.0, 1, sa)
+        pieces["kick_pleat_facing"] = _rect_piece("Kick Pleat Facing", 15.0, 20.0, 1, sa,
+            notes="kick pleat facing; interface; sew to back hem vent before stitching pleat closed")
 
     if has_ruffle_tier or fit_style == "tiered":
         tier_w = hip_qt * 2.0 * 1.5   # 150 % gather ratio
         tier_h = L * 0.30
-        pieces["ruffle_tier"] = _rect_piece("Ruffle / Tier Strip", tier_w, tier_h, 2, sa)
+        pieces["ruffle_tier"] = _rect_piece("Ruffle / Tier Strip", tier_w, tier_h, 2, sa,
+            notes="ruffle/tier strip cut at 150% fullness; gather evenly before attaching to skirt hemline")
 
     return pieces

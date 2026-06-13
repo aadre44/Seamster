@@ -6,6 +6,8 @@ import PropertiesPanel from './components/PropertiesPanel'
 import MeasurementPanel from './components/MeasurementPanel'
 import AIAssistModal from './components/AIAssistModal'
 import InstructionsPanel from './components/InstructionsPanel'
+import AssemblyView from './components/AssemblyView'
+import ModelToggle from './components/ModelToggle'
 import { downloadSVG } from './export/svgExport'
 
 function StatusBar() {
@@ -85,6 +87,7 @@ function FileButtons() {
           elements: data.elements,
           pieces: data.pieces ?? [],
           measurements: data.measurements ?? {},
+          connections: data.connections ?? [],
           instructions: data.instructions ?? null,
           lastFeatures: data.lastFeatures ?? null,
           lastMeasurements: data.lastMeasurements ?? null,
@@ -125,8 +128,10 @@ function Editor() {
   const { state } = useEditor()
   const [showAI, setShowAI] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
+  const [showAssembly, setShowAssembly] = useState(false)
 
   const canShowInstructions = state.lastFeatures !== null
+  const canShowAssembly = state.pieces.length > 0
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -134,7 +139,7 @@ function Editor() {
 
       {/* Top header */}
       <header className="flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200 shrink-0">
-        <h1 className="text-sm font-semibold text-gray-900 tracking-tight">PatternSnap</h1>
+        <h1 className="text-sm font-semibold text-gray-900 tracking-tight">Seamster</h1>
         <span className="text-gray-300 text-sm">|</span>
         <span className="text-xs text-gray-500">Pattern Editor</span>
         <button
@@ -160,7 +165,22 @@ function Editor() {
             {state.instructions ? 'Instructions' : 'Generate Instructions'}
           </button>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        {canShowAssembly && (
+          <button
+            onClick={() => setShowAssembly(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              showAssembly
+                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                : 'bg-teal-50 text-teal-700 border border-teal-300 hover:bg-teal-100'
+            }`}
+          >
+            <span>🧩</span>
+            Assembly View
+          </button>
+        )}
+        <div className="ml-auto flex items-center gap-3">
+          <ModelToggle />
+          <span className="text-gray-200 text-sm">|</span>
           <FileButtons />
         </div>
       </header>
@@ -170,8 +190,8 @@ function Editor() {
         {/* Left toolbar */}
         <Toolbar />
 
-        {/* Canvas (fills remaining space) */}
-        <Canvas />
+        {/* Canvas / Assembly View (fills remaining space) */}
+        {showAssembly ? <AssemblyView /> : <Canvas />}
 
         {/* Right sidebar */}
         <aside className="w-52 shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">

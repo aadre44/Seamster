@@ -26,6 +26,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
             "welt_pockets", "belt_loops", "lining_visible", "topstitching",
             "ruffle", "elastic_waist",
         ],
+        "closures": ["center_back_zip", "side_zip", "button_front", "hook_and_eye", "none"],
         "has_waistband": True,
         "has_darts": True,
     },
@@ -45,6 +46,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
             "side_pockets", "patch_pockets",
             "ruffle", "pleats",
         ],
+        "closures": ["center_back_zip", "side_zip", "button_front", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -55,6 +57,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "details": ["cuffs", "belt_loops", "patch_pockets", "welt_pockets", "side_pockets",
                     "pleats", "topstitching", "fly_shield", "cargo_pocket",
                     "high_rise", "low_rise", "ultra_high_rise"],
+        "closures": ["button_fly", "side_zip", "none"],
         "has_waistband": True,
         "has_darts": True,
     },
@@ -65,6 +68,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "details": ["elastic_waist", "drawstring", "patch_pockets", "side_pockets",
                     "belt_loops", "topstitching", "cargo_pocket", "cuffs",
                     "welt_pockets", "high_rise", "low_rise"],
+        "closures": ["button_fly", "side_zip", "none"],
         "has_waistband": True,
         "has_darts": False,
     },
@@ -76,6 +80,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "details": ["collar", "ribbed_collar", "button_placket", "cuffs", "patch_pockets",
                     "chest_pocket", "topstitching", "yoke", "spaghetti_straps", "straps",
                     "drawstring_hem", "tie_front", "smocking", "elastic_hem"],
+        "closures": ["button_front", "center_front_zip", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -86,6 +91,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "length_categories": ["cropped", "hip_length", "tunic"],
         "details": ["collar", "v_neck", "round_neck", "ruffles", "lining_visible", "topstitching",
                     "spaghetti_straps", "straps", "tie_front", "smocking", "elastic_hem"],
+        "closures": ["button_front", "center_back_zip", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -121,6 +127,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
             "cuffs", "button_cuff", "snap_cuff", "woven_cuff",
             "sleeve_placket", "cuff_vent", "two_piece_sleeve", "tailored_sleeve",
         ],
+        "closures": ["center_front_zip", "button_front", "snap_front", "double_breasted", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -141,6 +148,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
             # finish
             "topstitching", "sleeve_placket", "cuff_vent", "cuffs", "button_cuff",
         ],
+        "closures": ["button_front", "double_breasted", "center_front_zip", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -148,6 +156,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "silhouettes": ["fitted", "boned", "relaxed", "wrap"],
         "length_categories": ["cropped", "waist_length", "hip_length"],
         "details": ["boning", "lining_visible", "topstitching", "busk", "lace_up", "zipper"],
+        "closures": ["center_back_zip", "hook_and_eye", "center_front_zip", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -156,6 +165,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "length_categories": ["hip_length", "knee", "midi", "maxi"],
         "details": ["collar", "lapels", "patch_pockets", "welt_pockets", "lining_visible",
                     "topstitching", "belt", "hood", "double_breasted"],
+        "closures": ["button_front", "center_front_zip", "double_breasted", "none"],
         "has_waistband": False,
         "has_darts": True,
     },
@@ -164,6 +174,7 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "length_categories": ["micro", "short", "mid_thigh", "knee"],
         "details": ["belt_loops", "patch_pockets", "side_pockets", "cuffs",
                     "elastic_waist", "topstitching"],
+        "closures": ["button_fly", "side_zip", "none"],
         "has_waistband": True,
         "has_darts": False,
     },
@@ -174,6 +185,8 @@ _DEFAULT_VOCAB = {
     "silhouettes": ["fitted", "relaxed", "straight", "flared", "wrap"],
     "length_categories": ["short", "mid", "long"],
     "details": ["pockets", "lining_visible", "topstitching"],
+    "closures": ["center_back_zip", "side_zip", "button_front", "button_fly",
+                 "hook_and_eye", "center_front_zip", "none"],
     "has_waistband": False,
     "has_darts": False,
 }
@@ -210,9 +223,16 @@ def build_system_prompt(garment_type: GarmentType) -> str:
 
     pocket_note = (
         f'\n{_POCKET_NOTE}\n'
-        if gtype in ("trousers", "pants", "shorts", "skirt", "dress")
+        if gtype in ("trousers", "pants", "shorts", "skirt", "dress",
+                     "jacket", "blazer", "coat")
         else ""
     )
+
+    # Closure vocabulary is garment-specific: a front-zip jacket needs
+    # 'center_front_zip', which makes no sense for a skirt. Falling back to the
+    # default keeps any unlisted type usable.
+    closures = vocab.get("closures", _DEFAULT_VOCAB["closures"])
+    closure_options = " | ".join(f'"{c}"' for c in closures)
 
     return (
         f'You are a garment analysis expert. Analyze the provided {gtype} photograph(s) '
@@ -221,8 +241,11 @@ def build_system_prompt(garment_type: GarmentType) -> str:
         f'2. silhouette: one of {vocab["silhouettes"]}\n'
         f'   length_category: one of {vocab["length_categories"]}\n'
         f'{waistband_line}'
-        f'4. closure: {{"type": "center_back_zip" | "side_zip" | "button_fly" | "hook_and_eye" | "none",'
+        f'4. closure: {{"type": {closure_options},'
         f' "position": "center_back" | "left_side" | "right_side" | "center_front"}}\n'
+        f'   Pick the closure type AND its matching position from what is actually visible '
+        f'(e.g. a front zipper is "center_front_zip" at "center_front", not a back zip). '
+        f'Use "none" only when there is no visible fastening at all.\n'
         f'{darts_line}'
         f'6. details: array of strings from {vocab["details"]}\n'
         f'{pocket_note}'

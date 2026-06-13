@@ -24,7 +24,13 @@ class WaistbandFeature(BaseModel):
 
 
 class ClosureFeature(BaseModel):
-    type: Literal["center_back_zip", "side_zip", "button_fly", "hook_and_eye", "none"]
+    type: Literal[
+        # bottom / dress closures
+        "center_back_zip", "side_zip", "button_fly", "hook_and_eye",
+        # front-opening closures (shirts, jackets, coats, blazers)
+        "center_front_zip", "button_front", "snap_front", "double_breasted",
+        "none",
+    ]
     position: Literal["center_back", "left_side", "right_side", "center_front"]
 
 

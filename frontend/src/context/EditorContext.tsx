@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
-import type { CanvasElement, EditorState, GarmentFeatures, Measurements, PatternPiece, SewingInstructions, ToolType, UnitSystem } from '../types'
+import type { CanvasElement, EditorState, GarmentFeatures, Measurements, PatternPiece, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
 import { mirrorPiece } from '../utils/pieceTransforms'
 
 type Action =
@@ -24,7 +24,7 @@ type Action =
   | { type: 'LIVE_UPDATE_ELEMENTS'; elements: CanvasElement[] }
   | { type: 'REMOVE_SIDE_FROM_PIECE'; pieceId: string; elementId: string }
   | { type: 'MIRROR_PIECE'; pieceId: string; op: 'flipH' | 'flipV' }
-  | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
+  | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; connections?: SeamConnection[]; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
   | { type: 'SET_INSTRUCTIONS'; instructions: SewingInstructions | null; loading: boolean; features?: GarmentFeatures; measurements?: Measurements }
   | { type: 'PUSH_UNDO' }
   | { type: 'UNDO' }
@@ -36,6 +36,7 @@ const initialState: EditorState = {
   elements: [],
   pieces: [],
   measurements: {},
+  connections: [],
   selectedIds: [],
   selectedPieceId: null,
   activeTool: 'select',
@@ -179,6 +180,7 @@ function reducer(state: EditorState, action: Action): EditorState {
         elements: action.elements,
         pieces: action.pieces,
         measurements: action.measurements,
+        connections: action.connections ?? [],
         instructions: action.instructions ?? null,
         lastFeatures: action.lastFeatures ?? null,
         lastMeasurements: action.lastMeasurements ?? null,

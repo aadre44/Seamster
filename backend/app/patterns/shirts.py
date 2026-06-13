@@ -194,6 +194,7 @@ def build_shirt_block(
         ]
 
     back_grain_x = chest_qt / 2
+    _bn = len(back_outline)
     back_spec = PieceSpec(
         name="Back Bodice",
         outline=back_outline,
@@ -203,6 +204,8 @@ def build_shirt_block(
         cut_qty=2,
         on_fold=True,
         seam_allowance=m.seam_allowance_cm,
+        notes="main back panel cut on fold at CB; sew to Front Bodice at shoulder seams then side seams",
+        edge_labels={0: "neckline", 1: "shoulder", 2: "armhole", **{i: "side_seam" for i in range(3, _bn - 2)}, _bn - 2: "hem", _bn - 1: "center_back"},
     )
 
     # ── Front Bodice ──────────────────────────────────────────────────────────
@@ -295,6 +298,13 @@ def build_shirt_block(
         front_cut_qty = 2
 
     front_grain_x = chest_qt / 2
+    _front_fold_note = (
+        "has button-placket extension at CF; cut 2 separate pieces; interface placket strip before folding"
+        if has_placket else
+        "cut on fold at CF"
+    )
+    _fn = len(front_outline)
+    _n_neck = 2 if neckline == "square" else 1
     front_spec = PieceSpec(
         name="Front Bodice",
         outline=front_outline,
@@ -304,6 +314,8 @@ def build_shirt_block(
         cut_qty=front_cut_qty,
         on_fold=front_on_fold,
         seam_allowance=m.seam_allowance_cm,
+        notes=f"main front panel; {_front_fold_note}; sew to Back Bodice at shoulder seams then side seams",
+        edge_labels={**{i: "neckline" for i in range(_n_neck)}, _n_neck: "shoulder", _n_neck + 1: "armhole", **{i: "side_seam" for i in range(_n_neck + 2, _fn - 2)}, _fn - 2: "hem", _fn - 1: "center_front"},
     )
 
     pieces: dict[str, PieceSpec] = {"back_bodice": back_spec, "front_bodice": front_spec}
@@ -362,6 +374,16 @@ def build_shirt_block(
                 Point(0.0, total_sleeve_h),
             ]
 
+        _sleeve_notes: dict[str, str] = {
+            "cap":        "cap sleeve; set directly into armscye with minimal ease; no sleeve seam",
+            "short":      "short set-in sleeve; sew sleeve seam first to form tube, then ease cap into armscye",
+            "flutter":    "flutter sleeve; no sleeve seam; attach wide hem edge directly to armscye; hem drapes freely",
+            "three_quarter": "three-quarter set-in sleeve; sew sleeve seam to form tube, ease cap into armscye",
+            "bell":       "bell-flared sleeve; sew sleeve seam to form tube, ease cap into armscye; flared hem requires no easing",
+            "puff_short": "short puffed sleeve; gather wide cap before setting into armscye to create puff volume",
+            "puff_long":  "long puffed sleeve; gather extra-wide cap before setting into armscye; gather hem before attaching cuff",
+            "long":       "set-in sleeve; sew sleeve seam first to form tube, then ease cap into armscye",
+        }
         sleeve_grain_x = cap_w_half / 2
         sleeve_spec = PieceSpec(
             name="Sleeve",
@@ -372,6 +394,8 @@ def build_shirt_block(
             cut_qty=2,
             on_fold=True,
             seam_allowance=m.seam_allowance_cm,
+            notes=_sleeve_notes.get(sleeve_length, _sleeve_notes["long"]),
+            edge_labels={0: "armhole", 1: "sleeve_seam", 2: "wrist", 3: "center_sleeve"},
         )
         pieces["sleeve"] = sleeve_spec
 
@@ -393,6 +417,8 @@ def build_shirt_block(
                 cut_qty=2,
                 on_fold=False,
                 seam_allowance=m.seam_allowance_cm,
+                notes="straight shirt cuff; interface both layers; sew short ends to form band; attach to sleeve hem RS together, fold under and topstitch",
+                edge_labels={0: "wrist"},
             )
             pieces["cuff"] = cuff_spec
 
@@ -415,6 +441,8 @@ def build_shirt_block(
             cut_qty=2,
             on_fold=False,
             seam_allowance=m.seam_allowance_cm,
+            notes="shirt collar band; interface both layers; sew outer collar to neckline RS together, then slip-stitch inner edge over seam allowance",
+            edge_labels={0: "neckline"},
         )
         pieces["collar"] = collar_spec
 
@@ -439,6 +467,7 @@ def build_shirt_block(
             cut_qty=1,
             on_fold=True,
             seam_allowance=m.seam_allowance_cm,
+            notes="stretch rib collar band cut ~10% smaller than neckline opening; sew short ends to form loop; fold in half and attach RS together, stretching band to fit neckline",
         )
         pieces["rib_collar"] = rib_spec
 
@@ -454,6 +483,11 @@ def build_shirt_block(
             Point(0.0, tube_h),
         ]
         band_name = "Turtleneck Band" if neckline == "turtleneck" else "Mock Turtleneck Band"
+        _band_note = (
+            "full turtleneck band cut on fold; sew short ends to form tube; fold in half lengthwise and attach doubled edge to neckline RS together"
+            if neckline == "turtleneck" else
+            "mock turtleneck band cut on fold; sew short ends to form tube; fold in half and attach to neckline RS together; sits upright without folding over"
+        )
         band_spec = PieceSpec(
             name=band_name,
             outline=band_outline,
@@ -463,6 +497,7 @@ def build_shirt_block(
             cut_qty=1,
             on_fold=True,
             seam_allowance=m.seam_allowance_cm,
+            notes=_band_note,
         )
         pieces["neck_band"] = band_spec
 
@@ -485,6 +520,7 @@ def build_shirt_block(
             cut_qty=1,
             on_fold=False,
             seam_allowance=m.seam_allowance_cm,
+            notes="henley placket strip; finish long edges; slash front neckline and insert placket before assembling body; buttons/buttonholes along centre",
         )
         pieces["henley_placket"] = henley_spec
 

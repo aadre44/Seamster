@@ -1,40 +1,33 @@
-import asyncio
-import json
 import logging
-import os
 
-import anthropic
+from pydantic import BaseModel
 
+from app.llm import acomplete_with_retry, get_provider, parse_json_response
 from app.models.features import GarmentFeatures
 from app.models.measurements import Measurements
 
+
+class PieceInfo(BaseModel):
+    name: str
+    cut_qty: int = 2
+    on_fold: bool = False
+    seam_allowance: float = 1.5
+    notes: str = ""
+
 logger = logging.getLogger(__name__)
-
-_client: anthropic.AsyncAnthropic | None = None
-
-
-def _get_client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
 
 
 _SYSTEM_PROMPT = """\
-You are an expert sewing instructor and pattern maker with deep knowledge of garment construction,
-couture techniques, and industrial methods. Your instructions are used by people sewing from
-home-printed pattern pieces, so you must be accurate, practical, and clear.
+You are an expert sewing instructor. Generate concise, accurate step-by-step sewing instructions
+for home sewists working from printed pattern pieces.
 
-Style rules:
-- Write for a beginner who is motivated and willing to learn — explain WHY each step matters, not just WHAT to do.
-- Do not simplify or omit advanced techniques when they are the correct method (e.g. understitching, clipping
-  curves, stay-stitching, notching, flat-felled seams, French seams, hand-picking a zip, slip-stitching a
-  lining). Explain them in plain language the first time they appear.
-- Reference piece names EXACTLY as given in the context (e.g. "Front Panel", "Waistband").
+Rules:
+- Each step is 1-2 sentences: one clear action and the immediate result. No technique explanations.
+- Reference piece names EXACTLY as given (e.g. "Front Panel", "Cuff Band").
 - Follow correct construction order: prepare fabric → cut & mark → interface → construct body
-  → attach closures → attach waistband/collar/sleeves → finish → press.
-- Seam allowances included in the pattern: construct with the right side together unless stated otherwise.
+  → attach closures → collar/sleeves → finish → press.
 - Use metric measurements (cm) throughout.
+- Tips are optional and only for genuinely easy-to-miss mistakes (1 sentence max).
 
 Output format — return ONLY valid JSON, no markdown fences, no extra text:
 {
@@ -45,17 +38,15 @@ Output format — return ONLY valid JSON, no markdown fences, no extra text:
       "steps": [
         {
           "number": <integer>,
-          "instruction": "<the action to take, 1-3 sentences>",
-          "technique": "<optional: name and explain the sewing technique used, 1-4 sentences>",
-          "tip": "<optional: beginner-friendly note or common mistake to avoid, 1-2 sentences>"
+          "instruction": "<action and result, 1-2 sentences>",
+          "tip": "<optional: one sentence warning about a common mistake>"
         }
       ]
     }
   ]
 }
 
-Include only sections that are relevant to this specific garment. Omit empty sections entirely.
-Step numbers must be consecutive across all sections combined (1, 2, 3 … N).
+Include only sections relevant to this garment. Step numbers are consecutive across all sections (1, 2, 3 … N).
 """
 
 
@@ -74,12 +65,12 @@ _GARMENT_TOKEN_WEIGHTS: dict[str, float] = {
 }
 
 
-def _compute_max_tokens(features: GarmentFeatures, piece_names: list[str]) -> int:
+def _compute_max_tokens(features: GarmentFeatures, pieces: list[PieceInfo]) -> int:
     base = 2048
-    per_piece = len(piece_names) * 350
-    per_detail = len(features.details) * 120 if features.details else 0
-    sleeve_extra = 300 if features.sleeve_length and features.sleeve_length != "sleeveless" else 0
-    neckline_extra = 150 if features.neckline else 0
+    per_piece = len(pieces) * 250
+    per_detail = len(features.details) * 80 if features.details else 0
+    sleeve_extra = 200 if features.sleeve_length and features.sleeve_length != "sleeveless" else 0
+    neckline_extra = 100 if features.neckline else 0
 
     garment_key = features.garment_type.value.lower()
     multiplier = _GARMENT_TOKEN_WEIGHTS.get(garment_key, 1.0)
@@ -91,7 +82,7 @@ def _compute_max_tokens(features: GarmentFeatures, piece_names: list[str]) -> in
 def _build_user_prompt(
     features: GarmentFeatures,
     measurements: Measurements,
-    piece_names: list[str],
+    pieces: list[PieceInfo],
 ) -> str:
     lines: list[str] = [
         f"Garment type: {features.garment_type.value}",
@@ -133,97 +124,56 @@ def _build_user_prompt(
     if measurements.inseam_cm:
         lines.append(f"  inseam {measurements.inseam_cm} cm")
 
-    lines.append(f"Seam allowance included in pattern: {measurements.seam_allowance_cm} cm")
-    lines.append(f"Hem allowance included in pattern: {measurements.hem_allowance_cm} cm")
+    lines.append(f"Seam allowance: {measurements.seam_allowance_cm} cm")
+    lines.append(f"Hem allowance: {measurements.hem_allowance_cm} cm")
 
     if features.notes:
         lines.append(f"Pattern notes: {features.notes}")
 
     lines.append("")
-    lines.append("Pattern pieces (use these exact names in your instructions):")
-    for name in piece_names:
-        lines.append(f"  • {name}")
+    lines.append("Generated pattern pieces:")
+    for p in pieces:
+        attrs: list[str] = [f"cut x{p.cut_qty}"]
+        if p.on_fold:
+            attrs.append("cut on fold")
+        if p.seam_allowance != measurements.seam_allowance_cm:
+            attrs.append(f"seam allowance {p.seam_allowance} cm")
+        piece_line = f"  • {p.name} ({', '.join(attrs)})"
+        if p.notes:
+            piece_line += f" — {p.notes}"
+        lines.append(piece_line)
 
     lines.append("")
     lines.append(
-        "Write complete step-by-step sewing instructions for this garment. "
-        "Include every step from pre-washing fabric to the final press. "
-        "Explain techniques that a beginner may not know. "
-        "Return only the JSON object described in the system prompt."
+        "Write complete step-by-step sewing instructions for this garment from pre-washing to final press. "
+        "Base the cutting, interfacing, and construction steps on the exact pieces listed above. "
+        "Keep each step to 1-2 sentences. Return only the JSON object described in the system prompt."
     )
 
     return "\n".join(lines)
 
 
-def _parse_json_response(raw_text: str) -> dict:
-    text = raw_text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        inner = lines[1:] if lines else []
-        if inner and inner[-1].strip() == "```":
-            inner = inner[:-1]
-        text = "\n".join(inner).strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Claude returned invalid JSON: {raw_text[:300]}") from exc
-
-
 async def generate_instructions(
     features: GarmentFeatures,
     measurements: Measurements,
-    piece_names: list[str],
+    pieces: list[PieceInfo],
 ) -> dict:
-    """Call Claude and return structured sewing instructions as a dict."""
-    client = _get_client()
-    model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
-    user_prompt = _build_user_prompt(features, measurements, piece_names)
-    max_tokens = _compute_max_tokens(features, piece_names)
-    logger.debug("Computed max_tokens=%d for %s with %d pieces", max_tokens, features.garment_type.value, len(piece_names))
+    """Call the configured LLM and return structured sewing instructions as a dict."""
+    user_prompt = _build_user_prompt(features, measurements, pieces)
+    max_tokens = _compute_max_tokens(features, pieces)
+    logger.debug("Computed max_tokens=%d for %s with %d pieces", max_tokens, features.garment_type.value, len(pieces))
 
-    _RETRY_DELAYS = [3, 8, 15]
-    raw_text = ""
-    for attempt in range(len(_RETRY_DELAYS) + 1):
-        try:
-            response = await client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            raw_text = response.content[0].text
-            break
-        except anthropic.AuthenticationError as exc:
-            raise ValueError(
-                "Anthropic API key is missing or invalid. Check your ANTHROPIC_API_KEY environment variable."
-            ) from exc
-        except anthropic.BadRequestError as exc:
-            raise ValueError(f"Claude rejected the request: {exc}") from exc
-        except anthropic.OverloadedError:
-            if attempt < len(_RETRY_DELAYS):
-                delay = _RETRY_DELAYS[attempt]
-                logger.warning(
-                    "Claude overloaded (attempt %d/%d), retrying in %ds…",
-                    attempt + 1, len(_RETRY_DELAYS) + 1, delay,
-                )
-                await asyncio.sleep(delay)
-                continue
-            raise ValueError("Claude is temporarily overloaded. Please wait a moment and try again.")
-        except anthropic.RateLimitError:
-            if attempt < len(_RETRY_DELAYS):
-                await asyncio.sleep(_RETRY_DELAYS[attempt])
-                continue
-            raise ValueError("Rate limit reached. Please wait a moment and try again.")
-        except anthropic.APIError:
-            if attempt == 0:
-                await asyncio.sleep(3)
-                continue
-            raise
+    response = await acomplete_with_retry(
+        get_provider(),
+        system=_SYSTEM_PROMPT,
+        user_text=user_prompt,
+        max_tokens=max_tokens,
+    )
 
-    logger.debug("Instructions raw response length: %d chars", len(raw_text))
-    if response.stop_reason == "max_tokens":
+    logger.debug("Instructions raw response length: %d chars", len(response.text))
+    if response.truncated:
         raise ValueError(
-            "Claude's response was cut off because the garment description produced too many "
+            "The LLM's response was cut off because the garment description produced too many "
             "instructions. Try reducing the number of pattern pieces or garment details."
         )
-    return _parse_json_response(raw_text)
+    return parse_json_response(response.text)

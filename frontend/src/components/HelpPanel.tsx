@@ -93,7 +93,7 @@ export default function HelpPanel() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-xl">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">Tool Reference</h2>
-                <p className="text-[11px] text-gray-400 mt-0.5">PatternSnap — Phase 1 Pattern Editor</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Seamster — Phase 1 Pattern Editor</p>
               </div>
               <button
                 onClick={() => setOpen(false)}

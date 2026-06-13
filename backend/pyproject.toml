@@ -1,7 +1,7 @@
 [project]
-name = "patternsnap-backend"
+name = "seamster-backend"
 version = "0.1.0"
-description = "PatternSnap backend — pattern generation and AI analysis"
+description = "Seamster backend — pattern generation and AI analysis"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi==0.111.0",

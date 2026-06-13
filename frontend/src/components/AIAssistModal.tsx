@@ -341,7 +341,10 @@ function UploadStep({
 // ── Step 2: Review ────────────────────────────────────────────────────────────
 
 const WAISTBAND_TYPES = ['straight', 'contoured', 'elastic', 'facing', 'yoke']
-const CLOSURE_TYPES = ['center_back_zip', 'side_zip', 'button_fly', 'hook_and_eye', 'none']
+const CLOSURE_TYPES = [
+  'center_back_zip', 'side_zip', 'button_fly', 'hook_and_eye',
+  'center_front_zip', 'button_front', 'snap_front', 'double_breasted', 'none',
+]
 const CLOSURE_POSITIONS = ['center_back', 'left_side', 'right_side', 'center_front']
 
 type MeasurementField = { key: string; label: string; min: number; max: number }
@@ -650,6 +653,7 @@ export default function AIAssistModal({ onClose }: Props) {
         elements: psnap.elements,
         pieces: psnap.pieces ?? [],
         measurements: psnap.measurements ?? {},
+        connections: psnap.connections ?? [],
       })
 
       // Cache features/measurements so the Instructions panel can generate on demand

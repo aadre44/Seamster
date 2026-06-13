@@ -131,7 +131,7 @@ def _clamp(val: float, lo: float, hi: float) -> float:
 
 
 def _rect_piece(
-    name: str, w: float, h: float, cut_qty: int, sa: float, on_fold: bool = False
+    name: str, w: float, h: float, cut_qty: int, sa: float, on_fold: bool = False, notes: str = ""
 ) -> PieceSpec:
     """Rectangular PieceSpec with a horizontal centre grain line."""
     return PieceSpec(
@@ -143,6 +143,7 @@ def _rect_piece(
         cut_qty=cut_qty,
         on_fold=on_fold,
         seam_allowance=sa,
+        notes=notes,
     )
 
 
@@ -257,6 +258,8 @@ def build_jacket_block(
             cut_qty=2,
             on_fold=True,
             seam_allowance=sa,
+            notes="upper back yoke panel cut on fold; sew to Back Panel at yoke seam first, then join shoulder seams to Front Bodice",
+            edge_labels={0: "neckline", 1: "shoulder", 2: "armhole", 3: "armhole", 4: "yoke_seam", 5: "center_back"},
         )
 
         # Back Panel — lower back from yoke seam to hem
@@ -275,6 +278,7 @@ def build_jacket_block(
                 Point(hem_side, L),
                 Point(0.0, L),
             ]
+        _pn = len(panel_outline)
         pieces["back_panel"] = PieceSpec(
             name="Back Panel",
             outline=panel_outline,
@@ -284,6 +288,8 @@ def build_jacket_block(
             cut_qty=2,
             on_fold=True,
             seam_allowance=sa,
+            notes="lower back body panel cut on fold; sew to Back Yoke at yoke seam, then side seams to Front Bodice",
+            edge_labels={0: "yoke_seam", **{i: "side_seam" for i in range(1, _pn - 2)}, _pn - 2: "hem", _pn - 1: "center_back"},
         )
 
     else:
@@ -307,6 +313,7 @@ def build_jacket_block(
                 Point(hem_side, L),
                 Point(0.0, L),
             ]
+        _bbn = len(back_outline)
         pieces["back_bodice"] = PieceSpec(
             name="Back Bodice",
             outline=back_outline,
@@ -316,6 +323,8 @@ def build_jacket_block(
             cut_qty=2,
             on_fold=True,
             seam_allowance=sa,
+            notes="single back body panel cut on fold; sew to Front Bodice at shoulder seams then side seams",
+            edge_labels={0: "neckline", 1: "shoulder", 2: "armhole", **{i: "side_seam" for i in range(3, _bbn - 2)}, _bbn - 2: "hem", _bbn - 1: "center_back"},
         )
 
     # ── Front Bodice (always off-fold; CF is the opening/closure edge) ────────
@@ -346,15 +355,18 @@ def build_jacket_block(
             Point(front_hem, L),
             Point(0.0, L),
         ]
+    _fn = len(front_outline)
     pieces["front_bodice"] = PieceSpec(
         name="Front Bodice",
         outline=front_outline,
         darts=[],
         grain_start=Point(front_chest / 2, arm_depth),
         grain_end=Point(front_chest / 2, L * 0.85),
-        cut_qty=2,         # left + right; mirror when cutting
+        cut_qty=2,
         on_fold=False,
         seam_allowance=sa,
+        notes="front body panel (left and right cut separately, mirror when cutting); interface CF edge; attach facing before joining shoulder and side seams to back",
+        edge_labels={0: "neckline", 1: "shoulder", 2: "armhole", **{i: "side_seam" for i in range(3, _fn - 2)}, _fn - 2: "hem", _fn - 1: "center_front"},
     )
 
     # ── Sleeve ────────────────────────────────────────────────────────────────
@@ -393,6 +405,8 @@ def build_jacket_block(
                 cut_qty=2,
                 on_fold=False,
                 seam_allowance=sa,
+                notes="upper section of two-piece tailored sleeve; carries the sleeve crown; sew to Under Sleeve at both sleeve seams first, then set the assembled sleeve into the armscye",
+                edge_labels={0: "armhole", 1: "sleeve_seam", 2: "wrist", 3: "sleeve_seam"},
             )
             pieces["under_sleeve"] = PieceSpec(
                 name="Under Sleeve",
@@ -408,6 +422,8 @@ def build_jacket_block(
                 cut_qty=2,
                 on_fold=False,
                 seam_allowance=sa,
+                notes="under section of two-piece tailored sleeve; flatter cut for inside arm; sew to Upper Sleeve, press seams, then insert assembled sleeve as a unit into the armscye",
+                edge_labels={1: "sleeve_seam", 3: "sleeve_seam"},
             )
         else:
             pieces["sleeve"] = PieceSpec(
@@ -424,6 +440,8 @@ def build_jacket_block(
                 cut_qty=2,
                 on_fold=True,
                 seam_allowance=sa,
+                notes="one-piece jacket sleeve; sew sleeve seam to form tube, ease cap into armscye; finish hem to cuff band or fold back for turn-up",
+                edge_labels={0: "armhole", 1: "sleeve_seam", 2: "wrist", 3: "center_sleeve"},
             )
 
     # ── Collar ─────────────────────────────────────────────────────────────────
@@ -432,7 +450,8 @@ def build_jacket_block(
     if has_collar and not ct["skip"]:
         neck_circ = (back_neck_w + front_neck_w) * 2 + sa * 2 + ct["collar_w_extra"]
         collar_h  = _COLLAR_H * ct["collar_h_factor"]
-        pieces["collar"] = _rect_piece("Collar", neck_circ, collar_h * 2, 1, sa, on_fold=True)
+        pieces["collar"] = _rect_piece("Collar", neck_circ, collar_h * 2, 1, sa, on_fold=True,
+            notes="jacket collar cut on fold to give two layers; interface; sew outer collar to neckline RS together, then fell-stitch inner collar over seam allowance")
 
     # ── Front Facing ───────────────────────────────────────────────────────────
     # Strip along the CF from neckline to hem: forms the lapel fold-back zone
@@ -442,32 +461,38 @@ def build_jacket_block(
     if has_facing:
         facing_h = L - front_neck_depth + sa * 2
         facing_w = _FACING_W * bp["facing_w_factor"]
-        pieces["front_facing"] = _rect_piece("Front Facing", facing_w, facing_h, 2, sa)
+        pieces["front_facing"] = _rect_piece("Front Facing", facing_w, facing_h, 2, sa,
+            notes="front facing/lapel strip; interface; sew to CF of Front Bodice RS together, understitch, then turn and press to form lapel")
 
     # ── Patch Pockets ──────────────────────────────────────────────────────────
     if has_patch_pockets:
         pocket_w = max(12.0, chest_qt * 0.52)
         pocket_h = max(14.0, chest_qt * 0.62)
-        pieces["patch_pocket"] = _rect_piece("Patch Pocket", pocket_w, pocket_h, 2, sa)
+        pieces["patch_pocket"] = _rect_piece("Patch Pocket", pocket_w, pocket_h, 2, sa,
+            notes="patch pocket; interface; press under seam allowances and topstitch to Front Bodice before assembling body")
 
     # ── Welt Pockets ───────────────────────────────────────────────────────────
     # Two pieces per pocket: a narrow welt strip and the inner pocket bag.
     if has_welt_pockets:
         welt_w = max(13.0, chest_qt * 0.58)
-        pieces["welt_strip"]      = _rect_piece("Welt Strip",      welt_w, 2.5,  2, sa)
-        pieces["welt_pocket_bag"] = _rect_piece("Welt Pocket Bag", welt_w, 16.0, 2, sa)
+        pieces["welt_strip"]      = _rect_piece("Welt Strip",      welt_w, 2.5,  2, sa,
+            notes="welt strip for bound welt pocket; interface; construct welt opening on Front Bodice before assembling body")
+        pieces["welt_pocket_bag"] = _rect_piece("Welt Pocket Bag", welt_w, 16.0, 2, sa,
+            notes="welt pocket bag; sew to welt strip and slip inside opening; stitch bag to seam allowances only")
 
     # ── Cuff Band (bomber / varsity rib knit) ──────────────────────────────────
     # Cut 15 % shorter than wrist circumference — rib stretches when sewn.
     if has_cuff_band:
         wrist_circ = (cap_w_half - 2.0) * 2 * 0.85
-        pieces["cuff_band"] = _rect_piece("Cuff Band", wrist_circ, _CUFF_H, 2, sa)
+        pieces["cuff_band"] = _rect_piece("Cuff Band", wrist_circ, _CUFF_H, 2, sa,
+            notes="rib knit cuff band cut 15% shorter than wrist circumference; sew short ends to form tube; attach to sleeve hem RS together, stretching band to fit")
 
     # ── Hem Band (bomber / varsity rib knit) ───────────────────────────────────
     # Half of full chest circumference (cut on fold), 15 % shorter for stretch.
     if has_hem_band:
         hem_band_w = chest_qt * 4 * 0.85 / 2
-        pieces["hem_band"] = _rect_piece("Hem Band", hem_band_w, _HEM_BAND_H, 1, sa, on_fold=True)
+        pieces["hem_band"] = _rect_piece("Hem Band", hem_band_w, _HEM_BAND_H, 1, sa, on_fold=True,
+            notes="rib knit hem band cut on fold at 15% shorter than chest circumference; sew short ends to form tube; attach to jacket hem RS together, stretching to fit")
 
     # ── Hood Panel ─────────────────────────────────────────────────────────────
     # Simplified single-panel approximation.  Width ≈ half head circumference;
@@ -475,32 +500,38 @@ def build_jacket_block(
     if has_hood:
         hood_w = chest_qt * 1.12           # ~29–32 cm (half head circ)
         hood_h = arm_depth + 10.0          # ~35–38 cm (nape to crown)
-        pieces["hood_panel"] = _rect_piece("Hood Panel", hood_w, hood_h, 2, sa)
+        pieces["hood_panel"] = _rect_piece("Hood Panel", hood_w, hood_h, 2, sa,
+            notes="two-piece hood panel; sew centre seam RS together first to form hood shape, then attach open edge to neckline")
 
     # ── Woven Cuff (button / snap — denim, military, tailored) ───────────────
     # Distinct from the rib knit cuff_band. Folds on the long edge for two layers.
     if has_cuff and sleeve_length not in ("sleeveless", "short"):
         wrist_circ = (cap_w_half - 2.0) * 2 + sa * 2
-        pieces["cuff"] = _rect_piece("Cuff", wrist_circ, _BUTTON_CUFF_H * 2, 2, sa, on_fold=True)
+        pieces["cuff"] = _rect_piece("Cuff", wrist_circ, _BUTTON_CUFF_H * 2, 2, sa, on_fold=True,
+            notes="woven button cuff cut on fold for two layers; interface; sew short ends, fold in half and attach to sleeve hem; buttons and buttonholes on overlap")
 
     # ── Breast / Chest Welt Pocket ────────────────────────────────────────────
     # Single small welt on left chest (blazer, military, denim jacket).
     if has_breast_pocket:
-        pieces["breast_pocket_welt"] = _rect_piece("Breast Pocket Welt", _BREAST_POCKET_W, 2.5, 1, sa)
-        pieces["breast_pocket_bag"]  = _rect_piece("Breast Pocket Bag",  _BREAST_POCKET_W, 14.0, 1, sa)
+        pieces["breast_pocket_welt"] = _rect_piece("Breast Pocket Welt", _BREAST_POCKET_W, 2.5, 1, sa,
+            notes="single welt for left breast pocket; interface; construct welt opening on Front Bodice before assembling")
+        pieces["breast_pocket_bag"]  = _rect_piece("Breast Pocket Bag",  _BREAST_POCKET_W, 14.0, 1, sa,
+            notes="breast pocket bag; slip inside welt opening and stitch bag to seam allowances only")
 
     # ── In-Seam / Slash Pocket Bags ──────────────────────────────────────────
     # Hidden bag sits inside the side seam; the opening is cut into the front panel.
     if has_in_seam_pockets:
         bag_w = max(14.0, chest_qt * 0.62)
         bag_h = max(16.0, chest_qt * 0.72)
-        pieces["pocket_bag"] = _rect_piece("Pocket Bag", bag_w, bag_h, 2, sa)
+        pieces["pocket_bag"] = _rect_piece("Pocket Bag", bag_w, bag_h, 2, sa,
+            notes="in-seam/slash pocket bag; insert into side seam before closing body seams; bag hangs inside garment")
 
     # ── Sleeve Placket / Cuff Vent ────────────────────────────────────────────
     # Narrow strip at the sleeve hem that forms the vent opening for cuff buttons.
     if has_sleeve_placket and sleeve_length not in ("sleeveless", "short"):
         placket_h = max(10.0, arm_length * 0.18)
-        pieces["sleeve_placket"] = _rect_piece("Sleeve Placket", _SLEEVE_PLACKET_W, placket_h, 2, sa)
+        pieces["sleeve_placket"] = _rect_piece("Sleeve Placket", _SLEEVE_PLACKET_W, placket_h, 2, sa,
+            notes="sleeve placket/cuff vent strip; interface; slash sleeve hem and insert placket to form vent opening for cuff buttons")
 
     # ── Belt Strap ─────────────────────────────────────────────────────────────
     # On-fold half-belt sized to chest circumference; height 5 cm (doubled to 10 cm

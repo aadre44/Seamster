@@ -13,6 +13,7 @@ export interface LineElement {
   formula?: string
   isFold: boolean
   pieceId?: string
+  seamLabel?: string
 }
 
 export interface CurveElement {
@@ -24,6 +25,7 @@ export interface CurveElement {
   end: Point
   formula?: string
   pieceId?: string
+  seamLabel?: string
 }
 
 export interface GrainLineElement {
@@ -50,6 +52,12 @@ export interface AnchorPointElement {
 
 export type CanvasElement = LineElement | CurveElement | GrainLineElement | NotchElement | AnchorPointElement
 
+export interface SeamConnection {
+  label: string
+  from: { pieceId: string; edgeId: string }
+  to: { pieceId: string; edgeId: string }
+}
+
 export interface PatternPiece {
   id: string
   name: string
@@ -58,6 +66,7 @@ export interface PatternPiece {
   onFold: boolean
   seamAllowance: number // cm
   closed: boolean
+  notes?: string
 }
 
 export type ToolType = 'select' | 'line' | 'curve' | 'seam-allowance' | 'grain-line' | 'notch' | 'point' | 'eraser'
@@ -68,6 +77,7 @@ export interface EditorState {
   elements: CanvasElement[]
   pieces: PatternPiece[]
   measurements: Record<string, number>
+  connections: SeamConnection[]
   selectedIds: string[]
   selectedPieceId: string | null
   activeTool: ToolType
@@ -97,7 +107,10 @@ export const GARMENT_TYPES: GarmentType[] = [
 ]
 
 export type WaistbandType = 'straight' | 'contoured' | 'elastic' | 'facing' | 'yoke'
-export type ClosureType = 'center_back_zip' | 'side_zip' | 'button_fly' | 'hook_and_eye' | 'none'
+export type ClosureType =
+  | 'center_back_zip' | 'side_zip' | 'button_fly' | 'hook_and_eye'
+  | 'center_front_zip' | 'button_front' | 'snap_front' | 'double_breasted'
+  | 'none'
 export type ClosurePosition = 'center_back' | 'left_side' | 'right_side' | 'center_front'
 
 export interface WaistbandFeature {
@@ -171,7 +184,6 @@ export type WizardStep = 1 | 2 | 3 | 4 | 5
 export interface InstructionStep {
   number: number
   instruction: string
-  technique?: string
   tip?: string
 }
 

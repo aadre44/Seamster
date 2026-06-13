@@ -217,6 +217,7 @@ def build_trousers_block(
             depth=_clamp(9.0, 6.0, wh * 0.70),
         ))
 
+    _front_dart_note = "" if suppress_darts else "; sew front waist dart(s) before attaching waistband"
     front_spec = PieceSpec(
         name="Front Leg",
         outline=front_outline,
@@ -226,6 +227,8 @@ def build_trousers_block(
         cut_qty=2,
         on_fold=False,
         seam_allowance=sa,
+        notes=f"front trouser leg{_front_dart_note}; inseam joins to Back Leg at crotch; outseam joins back at side seam",
+        edge_labels={0: "waist", 1: "side_seam", 2: "side_seam", 3: "side_seam", 4: "side_seam", 5: "hem", 6: "inseam", 7: "inseam", 8: "crotch", 9: "center_front"},
     )
 
     # ── Back Leg ──────────────────────────────────────────────────────────────
@@ -265,6 +268,7 @@ def build_trousers_block(
         back_darts.append(DartSpec(center_x=dart1_x, width=dw_each, depth=dart_depth_b))
         back_darts.append(DartSpec(center_x=dart2_x, width=dw_each, depth=dart_depth_b))
 
+    _back_dart_note = "" if suppress_darts else "; sew back waist dart(s) before attaching waistband"
     back_spec = PieceSpec(
         name="Back Leg",
         outline=back_outline,
@@ -274,6 +278,8 @@ def build_trousers_block(
         cut_qty=2,
         on_fold=False,
         seam_allowance=sa,
+        notes=f"back trouser leg with curved seat{_back_dart_note}; deeper back rise; inseam joins Front Leg; outseam forms side seam",
+        edge_labels={0: "waist", 1: "side_seam", 2: "side_seam", 3: "side_seam", 4: "side_seam", 5: "hem", 6: "inseam", 7: "inseam", 8: "crotch", 9: "center_back"},
     )
 
     pieces: dict[str, PieceSpec] = {"front": front_spec, "back": back_spec}
@@ -282,30 +288,40 @@ def build_trousers_block(
 
     if closure_type in ("zip_fly", "button_fly"):
         fly_w = 5.0 if closure_type == "zip_fly" else 7.0
-        pieces["fly_facing"] = _rect_piece("Fly Facing", fly_w, rise, 1, sa)
+        _fly_note = (
+            "fly facing strip; interface; sew to left front fly extension before inserting zip"
+            if closure_type == "zip_fly" else
+            "button fly facing strip; interface; sew to left front fly extension; make buttonholes before assembling"
+        )
+        pieces["fly_facing"] = _rect_piece("Fly Facing", fly_w, rise, 1, sa, notes=_fly_note)
 
     if has_fly_shield and closure_type == "zip_fly":
-        pieces["fly_shield"] = _rect_piece("Fly Shield", 4.0, rise, 1, sa)
+        pieces["fly_shield"] = _rect_piece("Fly Shield", 4.0, rise, 1, sa,
+            notes="fly shield; interface; sits behind zip teeth on right front; attach at waistband")
 
     if has_front_pockets:
         bag_w = max(10.0, hip_qt * 0.60)
-        pieces["pocket_bag"] = _rect_piece("Front Pocket Bag", bag_w, 16.0, 2, sa)
+        pieces["pocket_bag"] = _rect_piece("Front Pocket Bag", bag_w, 16.0, 2, sa,
+            notes="in-seam/side-slash pocket bag; insert into side seam before sewing Front Leg to Back Leg")
 
     if has_back_pockets:
-        pieces["back_pocket"] = _rect_piece("Back Pocket", 14.0, 15.0, 2, sa)
+        pieces["back_pocket"] = _rect_piece("Back Pocket", 14.0, 15.0, 2, sa,
+            notes="back patch pocket; topstitch to Back Leg before assembling inseam and outseam")
 
     if has_cargo_pocket:
-        # Cargo pocket: bag + matching flap (both proportional to hip quarter)
         pocket_w = max(14.0, hip_qt * 0.56)
-        pieces["cargo_pocket"] = _rect_piece("Cargo Pocket", pocket_w, 22.0, 2, sa)
-        pieces["cargo_pocket_flap"] = _rect_piece("Cargo Pocket Flap", pocket_w, 6.5, 2, sa)
+        pieces["cargo_pocket"] = _rect_piece("Cargo Pocket", pocket_w, 22.0, 2, sa,
+            notes="cargo pocket bag; topstitch to Front Leg outer thigh with bellows pleat before assembling legs")
+        pieces["cargo_pocket_flap"] = _rect_piece("Cargo Pocket Flap", pocket_w, 6.5, 2, sa,
+            notes="cargo pocket flap; interface; sew outer to lining RS together, turn and topstitch above cargo pocket opening")
 
     if has_cuff_band:
-        # Doubled rectangle — folds at the hem edge
         band_w = ankle_half_f * 2 + sa * 2
-        pieces["cuff_band"] = _rect_piece("Cuff Band", band_w, 12.0, 2, sa)
+        pieces["cuff_band"] = _rect_piece("Cuff Band", band_w, 12.0, 2, sa,
+            notes="trouser turn-up cuff band; fold at hemline to form double-layer cuff; press and topstitch to secure")
     elif has_ankle_elastic:
-        elastic_w = ankle_half_f * 2 * 0.80   # 80% of ankle circ for stretch
-        pieces["ankle_elastic"] = _rect_piece("Ankle Elastic Casing", elastic_w, 8.0, 2, sa)
+        elastic_w = ankle_half_f * 2 * 0.80
+        pieces["ankle_elastic"] = _rect_piece("Ankle Elastic Casing", elastic_w, 8.0, 2, sa,
+            notes="ankle elastic casing strip; sew to trouser hem, fold over and stitch channel, thread elastic through")
 
     return pieces

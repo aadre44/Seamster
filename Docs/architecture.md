@@ -1,4 +1,4 @@
-# PatternSnap — Architecture
+# Seamster — Architecture
 
 ## Stack
 
@@ -38,10 +38,11 @@ Seamster/
 │
 ├── backend/
 │   └── app/
-│       ├── main.py                   FastAPI app, CORS config
+│       ├── main.py                   FastAPI app, CORS config, /api/health (reports LLM provider)
 │       ├── api/export.py             POST /api/export/pdf — returns tiled PDF binary
-│       ├── api/analyze.py            Phase 2: POST /api/analyze (Claude vision)
+│       ├── api/analyze.py            Phase 2: POST /api/analyze (LLM vision)
 │       ├── api/generate.py           Phase 2: POST /api/generate (parametric engine)
+│       ├── llm/                      Provider-agnostic LLM layer (Anthropic + Ollama)
 │       └── export/pdf_tiler.py       reportlab tiled PDF with registration marks
 │
 ├── Docs/                             Technical documentation
@@ -140,8 +141,25 @@ JSON with top-level keys:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/export/pdf` | POST | Accepts SVG string + page size, returns tiled PDF binary |
-| `/api/analyze` | POST | Phase 2: Claude vision — analyzes a garment photo |
+| `/api/analyze` | POST | Phase 2: LLM vision — analyzes a garment photo |
 | `/api/generate` | POST | Phase 2: Generates parametric pattern from measurements |
+| `/api/health` | GET | Reports `{status, llm_provider, llm_model}` for the active config |
+
+---
+
+## LLM Provider Layer
+
+The `backend/app/llm/` package decouples all AI calls from any single vendor. A
+`LLMProvider` ABC (`base.py`) exposes `acomplete()` / `complete()` returning a
+normalized `LLMResponse(text, truncated)`. Two implementations exist:
+`anthropic_provider.py` (cloud Claude, text + vision) and `ollama_provider.py`
+(local open-source models via httpx `/api/chat`). `factory.get_provider()` selects
+one from the `LLM_PROVIDER` env var (default `anthropic`) and caches it; the
+factory also centralizes the `[3, 8, 15]s` retry schedule and the shared JSON
+parser. The three call sites — `vision/analyzer.py`, `patterns/instruction_generator.py`,
+and `patterns/llm_fallback.py` — build prompts and validate output but delegate
+the request to this layer. A single global provider serves all three, so running
+on Ollama requires a vision-capable model (e.g. `qwen2.5vl:7b`) for `/analyze`.
 
 ---
 
@@ -150,4 +168,4 @@ JSON with top-level keys:
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1 | Active | 2D canvas editor — draw, annotate, export |
-| 2 | Planned | AI photo-to-pattern — Claude vision + parametric engine |
+| 2 | Planned | AI photo-to-pattern — LLM vision (Anthropic or Ollama) + parametric engine |
