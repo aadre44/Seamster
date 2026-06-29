@@ -57,6 +57,7 @@ _GARMENT_TOKEN_WEIGHTS: dict[str, float] = {
     "dress":    1.6,
     "shirt":    1.5,
     "blouse":   1.5,
+    "vest":     1.5,
     "trousers": 1.4,
     "pants":    1.4,
     "shorts":   1.2,
@@ -94,6 +95,12 @@ def _build_user_prompt(
         lines.append(f"Sleeve length: {features.sleeve_length}")
     if features.neckline:
         lines.append(f"Neckline: {features.neckline}")
+    if features.construction:
+        c = features.construction
+        lines.append(
+            f"Construction: {c.strap_style} straps, {c.back_coverage} back, "
+            f"{c.front_opening} front opening"
+        )
 
     closure = features.closure
     lines.append(f"Closure: {closure.type} at {closure.position}")
@@ -107,6 +114,37 @@ def _build_user_prompt(
     if features.darts:
         d = features.darts
         lines.append(f"Darts: {d.front} front, {d.back} back")
+
+    if features.binding and features.binding.edges:
+        b = features.binding
+        contrast = "contrast " if b.contrast else ""
+        lines.append(
+            f"Edge binding: {contrast}bias binding ~{b.width_cm} cm finished on the "
+            f"{', '.join(b.edges)} edge(s) — apply as a wrapped, topstitched lip"
+        )
+    if features.facings:
+        lines.append(f"Facings: turned facing on the {', '.join(features.facings)} edge(s)")
+    if features.welt_pockets:
+        wp = features.welt_pockets[0]
+        kind = "double-besom" if wp.besom else "welt"
+        total = sum(max(1, p.count) for p in features.welt_pockets)
+        lines.append(
+            f"Pockets: {total} bound {kind} pocket(s) ~{wp.width_cm} cm wide at the {wp.position}"
+        )
+    if features.shape and (features.shape.hem_style != "straight"
+                           or features.shape.hem_sweep_cm or features.shape.waist_taper_cm
+                           or features.shape.side_vent_cm or features.shape.front_cut != "closed"):
+        s = features.shape
+        bits = [f"{s.hem_style.replace('_', ' ')} hem"]
+        if s.waist_taper_cm:
+            bits.append(f"waist nipped {s.waist_taper_cm} cm")
+        if s.hem_sweep_cm:
+            bits.append(f"hem {'swept out' if s.hem_sweep_cm > 0 else 'tapered in'} {abs(s.hem_sweep_cm)} cm")
+        if s.side_vent_cm:
+            bits.append(f"{s.side_vent_cm} cm side vents (stop the side seam above the hem)")
+        if s.front_cut != "closed":
+            bits.append(f"{s.front_cut.replace('_', ' ')} front (the lower fronts open ~{s.front_cut_depth_cm} cm)")
+        lines.append("Silhouette: " + ", ".join(bits) + " — follow the cut hemline and finish the open edges")
 
     if features.details:
         lines.append(f"Construction details: {', '.join(features.details)}")

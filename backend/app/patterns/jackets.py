@@ -45,6 +45,7 @@ from __future__ import annotations
 
 from app.models.measurements import Measurements
 from app.patterns.geometry import Point
+from app.patterns.pockets import make_patch_pocket, make_welt_pocket
 from app.patterns.skirts import PieceSpec
 
 EASE_CHEST = 8.0      # standard jacket chest ease (2 cm more than a shirt)
@@ -171,6 +172,7 @@ def build_jacket_block(
     has_sleeve_placket: bool = False,    # vent strip at cuff opening
     has_belt: bool = False,              # on-fold half-belt (trench / military)
     has_epaulets: bool = False,          # shoulder tab (military / utility)
+    pocket_shape: str = "square",        # square | rounded | angled | pointed | curved
 ) -> dict[str, PieceSpec]:
     """Return jacket pattern pieces shaped by the analysed garment features.
 
@@ -468,17 +470,18 @@ def build_jacket_block(
     if has_patch_pockets:
         pocket_w = max(12.0, chest_qt * 0.52)
         pocket_h = max(14.0, chest_qt * 0.62)
-        pieces["patch_pocket"] = _rect_piece("Patch Pocket", pocket_w, pocket_h, 2, sa,
+        pieces["patch_pocket"] = make_patch_pocket(
+            "Patch Pocket", pocket_w, pocket_h, sa, shape=pocket_shape, cut_qty=2,
             notes="patch pocket; interface; press under seam allowances and topstitch to Front Bodice before assembling body")
 
     # ── Welt Pockets ───────────────────────────────────────────────────────────
     # Two pieces per pocket: a narrow welt strip and the inner pocket bag.
     if has_welt_pockets:
         welt_w = max(13.0, chest_qt * 0.58)
-        pieces["welt_strip"]      = _rect_piece("Welt Strip",      welt_w, 2.5,  2, sa,
-            notes="welt strip for bound welt pocket; interface; construct welt opening on Front Bodice before assembling body")
-        pieces["welt_pocket_bag"] = _rect_piece("Welt Pocket Bag", welt_w, 16.0, 2, sa,
-            notes="welt pocket bag; sew to welt strip and slip inside opening; stitch bag to seam allowances only")
+        pieces["welt_strip"], pieces["welt_pocket_bag"] = make_welt_pocket(
+            welt_w, sa, name_prefix="Welt", welt_h=2.5 / 2, bag_depth=16.0, cut_qty=2,
+            placement_note="on the Front Bodice",
+        )
 
     # ── Cuff Band (bomber / varsity rib knit) ──────────────────────────────────
     # Cut 15 % shorter than wrist circumference — rib stretches when sewn.

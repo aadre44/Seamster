@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
+from app.patterns.pleats import PleatSpec
+from app.patterns.pockets import make_patch_pocket
 
 EASE_CM = 2.0  # standard hip ease added to the full hip circumference
 
@@ -82,6 +84,7 @@ class PieceSpec:
     seam_allowance: float = 1.5    # cm; added by the engine when serialising
     notes: str = ""                # construction context shown to the instruction generator
     edge_labels: dict[int, str] = field(default_factory=dict)  # edge index → seam name
+    pleats: list[PleatSpec] = field(default_factory=list)      # interior pleat markings (fold + placement)
 
 
 def _clamp(val: float, lo: float, hi: float) -> float:
@@ -274,6 +277,7 @@ def build_skirt_block(
     has_kick_pleat: bool = False,
     has_side_slits: bool = False,
     has_ruffle_tier: bool = False,
+    pocket_shape: str = "square",
 ) -> dict[str, PieceSpec]:
     """Return front / back panels plus conditional detail pieces.
 
@@ -439,8 +443,10 @@ def build_skirt_block(
     if has_patch_pockets:
         pocket_w = max(12.0, hip_qt * 0.55)
         pocket_h = max(15.0, hip_qt * 0.80)
-        pieces["patch_pocket"] = _patch_pocket_piece(
-            "Front Patch Pocket", pocket_w, pocket_h, cut_qty=2, sa=sa, corner_r=2.0,
+        # Skirt patch pockets default to softly rounded corners; honour a detected shape.
+        shape = pocket_shape if pocket_shape in ("pointed", "angled", "curved", "rounded") else "rounded"
+        pieces["patch_pocket"] = make_patch_pocket(
+            "Front Patch Pocket", pocket_w, pocket_h, sa, shape=shape, cut_qty=2, corner=2.0,
             notes="applied patch pocket; press under seam allowances and topstitch to Front Skirt before assembling side seams",
         )
         if has_patch_pocket_flap:

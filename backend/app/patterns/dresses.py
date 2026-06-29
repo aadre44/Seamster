@@ -89,7 +89,7 @@ def _clamp(val: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, val))
 
 
-def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> PieceSpec:
+def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float, notes: str = "") -> PieceSpec:
     """Return a simple rectangular PieceSpec with a horizontal grain line."""
     return PieceSpec(
         name=name,
@@ -100,6 +100,7 @@ def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> Piece
         cut_qty=cut_qty,
         on_fold=False,
         seam_allowance=sa,
+        notes=notes,
     )
 
 
@@ -114,6 +115,9 @@ def build_dress_block(
     has_sash: bool = False,
     has_pockets: bool = False,
     has_lining: bool = False,
+    strap_style: str = "shoulder_seam",
+    back_coverage: str = "full",
+    front_opening: str = "closed",
 ) -> dict[str, PieceSpec]:
     """Return dress pattern pieces shaped by the analysed garment features.
 
@@ -127,6 +131,17 @@ def build_dress_block(
     fit_style = (fit_style or "a_line").lower()
     neckline  = (neckline  or "round").lower()
     sleeve_length = (sleeve_length or "sleeveless").lower()
+
+    # ── Construction topology ─────────────────────────────────────────────────
+    # The dress bodice already models "halter"/"strapless" via the neckline; map the
+    # structured strap_style onto it so both signals drive the same geometry.
+    strap_style   = (strap_style or "shoulder_seam").lower()
+    back_coverage = (back_coverage or "full").lower()
+    front_opening = (front_opening or "closed").lower()
+    if strap_style in ("halter_neck", "halter_tie") and neckline != "halter":
+        neckline = "halter"
+    elif strap_style == "strapless" and neckline != "strapless":
+        neckline = "strapless"
 
     fp = _FIT_PARAMS.get(fit_style, _DEFAULT_FIT)
     is_empire = fp["empire"]
@@ -168,6 +183,9 @@ def build_dress_block(
     # ── Neckline depth ────────────────────────────────────────────────────────
     depth_extra = _NECKLINE_DEPTH_EXTRA.get(neckline, 0.0)
     front_neck_depth = bust / 10 + 2.0 + depth_extra
+    # Open front (plunge / deep V split): drop the CF opening toward the waistline.
+    if front_opening in ("plunge", "deep_v_split"):
+        front_neck_depth = max(front_neck_depth, bodice_h * 0.85)
 
     # ── Back Bodice ───────────────────────────────────────────────────────────
     if neckline == "strapless":
@@ -416,11 +434,19 @@ def build_dress_block(
     )
 
     pieces: dict[str, PieceSpec] = {
-        "back_bodice":  back_bodice_spec,
         "front_bodice": front_bodice_spec,
         "front_skirt":  front_skirt_spec,
         "back_skirt":   back_skirt_spec,
     }
+    # Backless dress: drop the back bodice; the halter straps + a waist tie hold it on.
+    if back_coverage == "backless":
+        pieces["waist_tie"] = _rect_piece(
+            "Waist Tie", max(50.0, W * 0.75), 5.0, 2, sa,
+            notes="waist tie (cut 2); fold lengthwise RS together, stitch and turn; attach at the "
+                  "bodice side seams so the open back ties closed at the waist",
+        )
+    else:
+        pieces["back_bodice"] = back_bodice_spec
 
     # ── Sleeve ────────────────────────────────────────────────────────────────
     cap_height = bust / 8

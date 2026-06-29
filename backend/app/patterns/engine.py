@@ -20,16 +20,22 @@ from __future__ import annotations
 
 import uuid
 
-from app.models.features import GarmentFeatures, GarmentType
+from collections import namedtuple
+
+from app.models.features import Construction, GarmentFeatures, GarmentType, ShapeMode
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
 from app.patterns.llm_fallback import detect_unsupported_details, generate_novel_pieces
 from app.patterns.modifiers import apply_feature_modifiers, apply_silhouette
 from app.patterns.dresses import build_dress_block
 from app.patterns.jackets import build_jacket_block
+from app.patterns.pleats import apply_pleats, pleat_unit_allowance
+from app.patterns.pockets import make_patch_pocket
 from app.patterns.shirts import build_shirt_block
 from app.patterns.skirts import DartSpec, PieceSpec, build_skirt_block, build_straight_skirt_block
 from app.patterns.trousers import build_trousers_block
+from app.patterns.shaping import apply_shape
+from app.patterns.vests import build_vest_block
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -117,6 +123,41 @@ def _serialise_piece(
         leg_r = shifted(Point(dart.center_x + dart.width / 2, 0.0))
         elements.append(_make_line(leg_l, tip, piece_id))
         elements.append(_make_line(leg_r, tip, piece_id))
+
+    # ── Pleat markings (interior lines, NOT in outline_ids) ──────────────────
+    # Each pleat draws a dashed fold line (the crease that sits on top) and a
+    # solid placement line (where the fold is brought to), plus a short tick at
+    # the top showing the fold direction. These are skipped by
+    # _compute_connections because they are not in outline_ids.
+    for pleat in getattr(spec, "pleats", []):
+        fold_el = _make_line(
+            shifted(Point(pleat.fold_x, pleat.y_top)),
+            shifted(Point(pleat.fold_x, pleat.y_bottom)),
+            piece_id, is_fold=True,
+        )
+        fold_el["seamLabel"] = "pleat_fold"
+        elements.append(fold_el)
+
+        place_el = _make_line(
+            shifted(Point(pleat.placement_x, pleat.y_top)),
+            shifted(Point(pleat.placement_x, pleat.y_bottom)),
+            piece_id,
+        )
+        place_el["seamLabel"] = "pleat_placement"
+        elements.append(place_el)
+
+        # Direction tick: a short diagonal from the fold line toward the placement
+        # line, just below the top edge — shows which way the pleat is folded.
+        tick_dir = 1.0 if pleat.placement_x >= pleat.fold_x else -1.0
+        tick_run = min(2.0, abs(pleat.placement_x - pleat.fold_x) or 2.0)
+        tick_y = pleat.y_top + min(2.0, (pleat.y_bottom - pleat.y_top) * 0.1)
+        tick_el = _make_line(
+            shifted(Point(pleat.fold_x, pleat.y_top)),
+            shifted(Point(pleat.fold_x + tick_dir * tick_run, tick_y)),
+            piece_id,
+        )
+        tick_el["seamLabel"] = "pleat_fold"
+        elements.append(tick_el)
 
     # ── Grain line ────────────────────────────────────────────────────────────
     gl = _make_grain_line(shifted(spec.grain_start), shifted(spec.grain_end), piece_id)
@@ -221,6 +262,97 @@ def _compute_connections(all_elements: list[dict], all_pieces: list[dict]) -> li
     return connections
 
 
+# ── Pocket shape + pleat resolution ───────────────────────────────────────────
+
+_POCKET_SHAPE_TOKENS: dict[str, str] = {
+    "pocket_pointed": "pointed",
+    "pocket_rounded": "rounded",
+    "pocket_angled":  "angled",
+    "pocket_curved":  "curved",
+}
+
+
+def _pocket_shape(details: list[str]) -> str:
+    """Map the detected pocket-shape detail token to a make_patch_pocket shape."""
+    for token, shape in _POCKET_SHAPE_TOKENS.items():
+        if token in details:
+            return shape
+    return "square"
+
+
+_ResolvedPleats = namedtuple("_ResolvedPleats", "kind count depth placement")
+
+# Default finished pleat depth (cm) when the analysis did not estimate one.
+_DEFAULT_PLEAT_DEPTH = 3.0
+
+
+def _resolve_pleats(
+    features: GarmentFeatures,
+    *,
+    default_placement: str,
+    waist_cm: float,
+) -> _ResolvedPleats | None:
+    """Normalise pleat detection into (kind, count, depth, placement) or None.
+
+    Covers three signals, in priority order:
+      1. the structured ``features.pleats`` PleatDetail,
+      2. the legacy ``pleated`` skirt silhouette,
+      3. a bare ``"pleats"`` / ``"pleated"`` detail token.
+    Auto-sizes count (from the waist) and depth when the analysis left them blank.
+    ``count`` is interpreted as pleats *per panel* by the garment wiring.
+    """
+    pd = getattr(features, "pleats", None)
+    details = features.details or []
+    silhouette = (features.silhouette or "").lower()
+
+    structured = (
+        pd is not None
+        and getattr(pd, "type", "none") != "none"
+        and (pd.count > 0 or pd.placement != "none")
+    )
+    legacy = silhouette == "pleated" or "pleats" in details or "pleated" in details
+    if not structured and not legacy:
+        return None
+
+    kind = pd.type if (structured and pd.type != "none") else "knife"
+    placement = pd.placement if (structured and pd.placement != "none") else default_placement
+    depth = pd.depth_cm if (structured and pd.depth_cm > 0) else _DEFAULT_PLEAT_DEPTH
+
+    count = pd.count if (structured and pd.count > 0) else 0
+    if count <= 0:
+        if placement in ("all_around", "skirt"):
+            # Roughly one pleat per ~6 cm of finished waist-quarter, min 3 per panel.
+            count = max(3, int((waist_cm / 4) / 6))
+        elif placement in ("front_waist", "back_waist"):
+            count = 2
+        else:
+            count = 1
+    # A photo counts pleats across the whole garment; panels are cut in pairs,
+    # so halve an all-around count to get a sensible per-panel figure.
+    elif placement in ("all_around", "skirt") and count > 3:
+        count = max(2, count // 2)
+
+    return _ResolvedPleats(kind, count, depth, placement)
+
+
+def _resolve_construction(features: GarmentFeatures) -> Construction:
+    """Return the garment's Construction, defaulting sensibly when the analysis omitted it.
+
+    Falls back to the neckline: ``halter`` ⇒ an integral halter strap, ``strapless`` ⇒
+    strapless. This keeps older analyses (which only set ``neckline``) producing the
+    right topology even without a structured ``construction`` object.
+    """
+    c = features.construction
+    if c is not None:
+        return c
+    neckline = (features.neckline or "").lower()
+    if neckline == "halter":
+        return Construction(strap_style="halter_neck", front_opening="plunge")
+    if neckline == "strapless":
+        return Construction(strap_style="strapless")
+    return Construction()
+
+
 # ── Garment-specific generators ───────────────────────────────────────────────
 
 def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurements) -> dict:
@@ -233,6 +365,13 @@ def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurement
         "mermaid":  "mermaid",  "tulip":   "tulip",   "tiered":  "tiered",
     }
     fit_style = _SILHOUETTE_TO_FIT.get(features.silhouette or "", "straight")
+
+    # Real pleat handling: when pleats are detected, draft a clean straight panel
+    # and add the fabric allowance + fold markings ourselves rather than relying on
+    # the cosmetic "pleated" fit (which only flared the hem 10%).
+    pleats = _resolve_pleats(features, default_placement="all_around", waist_cm=measurements.waist_cm)
+    if pleats is not None:
+        fit_style = "straight"
 
     # "maxi" maps to None in _LENGTH_CM → uses measurement directly
     _LENGTH_MAP: dict[str, str] = {
@@ -270,6 +409,7 @@ def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurement
         has_kick_pleat="kick_pleat" in details,
         has_side_slits="side_slits" in details,
         has_ruffle_tier="ruffle" in details,
+        pocket_shape=_pocket_shape(details),
     )
 
     # Honour explicit AI dart-count overrides (e.g. vision returns darts.front == 0)
@@ -278,6 +418,28 @@ def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurement
             pieces["front"].darts = []
         if features.darts.back == 0 and "back" in pieces:
             pieces["back"].darts = []
+
+    # Full-length pleats: widen the front/back panels by the pleat allowance and
+    # distribute fold markings across each panel (darts are released into pleats).
+    if pleats is not None:
+        for key in ("front", "back"):
+            spec = pieces.get(key)
+            if spec is None:
+                continue
+            spec.darts = []
+            orig_w = max(p.x for p in spec.outline)
+            total = pleat_unit_allowance(pleats.kind, pleats.depth) * pleats.count
+            margin = max(2.0, total * 0.08)
+            apply_pleats(
+                spec, insert_x=0.0, count=pleats.count, depth=pleats.depth,
+                kind=pleats.kind, y_top=0.0, release_y=None,
+                mark_region=(margin, orig_w + total - margin),
+            )
+            spec.notes = (
+                f"{pleats.count} {pleats.kind.replace('_', ' ')} pleats per panel; "
+                f"fold on the dashed fold line and bring to the placement line, then baste "
+                f"across the top before attaching the waistband; " + (spec.notes or "")
+            )
 
     all_elements: list[dict] = []
     all_pieces: list[dict] = []
@@ -311,26 +473,18 @@ def _generate_skirt_pattern(features: GarmentFeatures, measurements: Measurement
     }
 
 
-def _make_shirt_pocket(chest_cm: float, sa: float) -> PieceSpec:
-    """Generate a single chest patch pocket piece sized from chest measurement."""
+def _make_shirt_pocket(chest_cm: float, sa: float, shape: str = "square") -> PieceSpec:
+    """Generate a single chest patch pocket piece sized from chest measurement.
+
+    ``shape`` (square | rounded | angled | pointed | curved) controls the bottom
+    edge so a pointed/chevron chest pocket is no longer flattened to a rectangle.
+    """
     pocket_w = max(10.0, chest_cm * 0.13)
     pocket_h = max(12.0, chest_cm * 0.155)
-    spec = PieceSpec(
-        name="Chest Patch Pocket",
-        outline=[
-            Point(0.0, 0.0),
-            Point(pocket_w, 0.0),
-            Point(pocket_w, pocket_h),
-            Point(0.0, pocket_h),
-        ],
-        darts=[],
-        grain_start=Point(pocket_w * 0.2, pocket_h / 2),
-        grain_end=Point(pocket_w * 0.8, pocket_h / 2),
-        cut_qty=1,
-        on_fold=False,
-        seam_allowance=sa,
+    return make_patch_pocket(
+        "Chest Patch Pocket", pocket_w, pocket_h, sa, shape=shape, cut_qty=1,
+        notes="chest patch pocket; press under seam allowances and topstitch to the Front Bodice before assembling shoulders",
     )
-    return spec
 
 
 def _generate_shirt_pattern(features: GarmentFeatures, measurements: Measurements) -> dict:
@@ -346,6 +500,8 @@ def _generate_shirt_pattern(features: GarmentFeatures, measurements: Measurement
 
     details = features.details
 
+    construction = _resolve_construction(features)
+
     base = build_shirt_block(
         measurements,
         chest_ease_extra=ease_extra,
@@ -356,7 +512,28 @@ def _generate_shirt_pattern(features: GarmentFeatures, measurements: Measurement
         has_collar="collar" in details,
         has_cuffs="cuffs" in details,
         has_ribbed_collar="ribbed_collar" in details,
+        has_elastic_hem="elastic_hem" in details or "drawstring_hem" in details,
+        strap_style=construction.strap_style,
+        back_coverage=construction.back_coverage,
+        front_opening=construction.front_opening,
+        strap_width=construction.strap_width,
     )
+
+    # Back centre-back pleat (e.g. dress-shirt action pleat) when pleats are
+    # detected at the back. Released partway down for movement ease.
+    pleats = _resolve_pleats(features, default_placement="center_back", waist_cm=measurements.waist_cm)
+    if pleats is not None and pleats.placement in ("center_back", "back_waist", "all_around", "skirt"):
+        back_spec = base.get("back_bodice")
+        if back_spec is not None:
+            body_len = max(p.y for p in back_spec.outline)
+            apply_pleats(
+                back_spec, insert_x=1.0, count=1, depth=pleats.depth,
+                kind=pleats.kind, y_top=0.0, release_y=body_len * 0.45,
+            )
+            back_spec.notes = (
+                f"centre-back {pleats.kind.replace('_', ' ')} pleat for movement ease; "
+                f"fold and baste at the yoke before assembling; " + (back_spec.notes or "")
+            )
 
     all_elements: list[dict] = []
     all_pieces: list[dict] = []
@@ -379,7 +556,7 @@ def _generate_shirt_pattern(features: GarmentFeatures, measurements: Measurement
     # Both "chest_pocket" and "patch_pockets" refer to the same physical piece on
     # a shirt — generate exactly once to avoid duplicate pieces from the LLM fallback.
     if "chest_pocket" in details or "patch_pockets" in details:
-        pocket_spec = _make_shirt_pocket(chest, measurements.seam_allowance_cm)
+        pocket_spec = _make_shirt_pocket(chest, measurements.seam_allowance_cm, shape=_pocket_shape(details))
         pocket_w = max(p.x for p in pocket_spec.outline)
         p_elems, p_dict = _serialise_piece(pocket_spec, offset_x=cursor_x, offset_y=2.0)
         all_elements.extend(p_elems)
@@ -456,6 +633,31 @@ def _generate_trousers_pattern(features: GarmentFeatures, measurements: Measurem
         has_belt_loops="belt_loops" in details,
     )
 
+    # Front-waist pleats (classic pleated trousers): replace the front waist dart
+    # with pleats near the crease, adding fullness that releases by the hip line.
+    pleats = _resolve_pleats(features, default_placement="front_waist", waist_cm=measurements.waist_cm)
+    if pleats is not None and pleats.placement in ("front_waist", "all_around", "center_front"):
+        front_spec = base.get("front")
+        if front_spec is not None:
+            front_spec.darts = []  # the pleat takes up the dart's waist intake
+            wh = measurements.waist_to_hip_cm
+            # outline[0] is the CF-at-waist vertex; the crotch curve dips further
+            # left lower down, so use the waist vertex (not the global min x) to
+            # keep the pleat between CF and the side seam.
+            cf_x = front_spec.outline[0].x
+            n_pleats = min(pleats.count, 2)  # 1–2 pleats per front leg
+            total = pleat_unit_allowance(pleats.kind, pleats.depth) * n_pleats
+            apply_pleats(
+                front_spec, insert_x=cf_x + 2.0, count=n_pleats, depth=pleats.depth,
+                kind=pleats.kind, y_top=0.0, release_y=wh, max_y=wh * 0.5,
+                mark_region=(cf_x + 2.0, cf_x + 2.0 + total),
+            )
+            front_spec.notes = (
+                f"{n_pleats} front {pleats.kind.replace('_', ' ')} pleat(s) at the waist near the "
+                f"crease, released to the hip; fold to the placement line before attaching the "
+                f"waistband; " + (front_spec.notes or "")
+            )
+
     all_elements: list[dict] = []
     all_pieces: list[dict] = []
     gap = 5.0
@@ -521,6 +723,8 @@ def _generate_dress_pattern(features: GarmentFeatures, measurements: Measurement
     raw_closure = closure_obj.type if closure_obj and hasattr(closure_obj, "type") else "none"
     closure_type = _CLOSURE_MAP.get(raw_closure, "center_back_zip")
 
+    construction = _resolve_construction(features)
+
     base = build_dress_block(
         measurements,
         fit_style=fit_style,
@@ -532,6 +736,9 @@ def _generate_dress_pattern(features: GarmentFeatures, measurements: Measurement
         has_sash=any(d in details for d in ("tie_back", "sash", "belt")),
         has_pockets=any(d in details for d in ("side_pockets", "patch_pockets")),
         has_lining="lining_visible" in details,
+        strap_style=construction.strap_style,
+        back_coverage=construction.back_coverage,
+        front_opening=construction.front_opening,
     )
 
     # Honour explicit dart-count overrides from the vision analysis
@@ -540,6 +747,29 @@ def _generate_dress_pattern(features: GarmentFeatures, measurements: Measurement
             base["front_bodice"].darts = []
         if features.darts.back == 0 and "back_bodice" in base:
             base["back_bodice"].darts = []
+
+    # Pleats in the dress skirt portion: the Front/Back Skirt pieces have a waist
+    # origin (y=0) so they pleat exactly like a stand-alone skirt.
+    pleats = _resolve_pleats(features, default_placement="skirt", waist_cm=measurements.waist_cm)
+    if pleats is not None:
+        for key in ("front_skirt", "back_skirt"):
+            spec = base.get(key)
+            if spec is None:
+                continue
+            spec.darts = []
+            orig_w = max(p.x for p in spec.outline)
+            total = pleat_unit_allowance(pleats.kind, pleats.depth) * pleats.count
+            margin = max(2.0, total * 0.08)
+            apply_pleats(
+                spec, insert_x=0.0, count=pleats.count, depth=pleats.depth,
+                kind=pleats.kind, y_top=0.0, release_y=None,
+                mark_region=(margin, orig_w + total - margin),
+            )
+            spec.notes = (
+                f"{pleats.count} {pleats.kind.replace('_', ' ')} pleats per panel; fold to the "
+                f"placement line and baste across the waist before joining to the bodice; "
+                + (spec.notes or "")
+            )
 
     all_elements: list[dict] = []
     all_pieces: list[dict] = []
@@ -698,6 +928,7 @@ def _generate_jacket_pattern(features: GarmentFeatures, measurements: Measuremen
         has_sleeve_placket=has_sleeve_placket,
         has_belt=has_belt,
         has_epaulets=has_epaulets,
+        pocket_shape=_pocket_shape(details),
     )
 
     # Honour explicit dart-count overrides from vision analysis
@@ -708,6 +939,23 @@ def _generate_jacket_pattern(features: GarmentFeatures, measurements: Measuremen
             for key in ("back_bodice", "back_yoke", "back_panel"):
                 if key in base:
                     base[key].darts = []
+
+    # Centre-back action / inverted pleat (utility, anorak, trench) when detected.
+    pleats = _resolve_pleats(features, default_placement="center_back", waist_cm=measurements.waist_cm)
+    if pleats is not None and pleats.placement in ("center_back", "back_waist", "all_around", "skirt"):
+        for key in ("back_bodice", "back_panel"):
+            back_spec = base.get(key)
+            if back_spec is not None:
+                body_len = max(p.y for p in back_spec.outline)
+                apply_pleats(
+                    back_spec, insert_x=1.0, count=1, depth=pleats.depth,
+                    kind=pleats.kind, y_top=0.0, release_y=body_len * 0.5,
+                )
+                back_spec.notes = (
+                    f"centre-back {pleats.kind.replace('_', ' ')} action pleat for movement; "
+                    f"fold and baste at the top before assembling; " + (back_spec.notes or "")
+                )
+                break
 
     # 7. Serialise (same boilerplate as every other garment generator)
     all_elements: list[dict] = []
@@ -738,6 +986,235 @@ def _generate_jacket_pattern(features: GarmentFeatures, measurements: Measuremen
             "bust":        chest,
             "shoulder":    shoulder,
             "sleeveLength": arm_length,
+        },
+        "connections": _compute_connections(all_elements, all_pieces),
+    }
+
+
+def _resolve_vest_finishes(features: GarmentFeatures) -> tuple[tuple[str, ...], float, bool, tuple[str, ...], int, float, bool]:
+    """Merge the structured vest fields with loose detail tokens into builder kwargs.
+
+    Returns (binding_edges, binding_width, binding_contrast, facings,
+             welt_count, welt_width, welt_besom). Detail-token fallbacks let an analysis
+    that only emitted strings (e.g. "neckline_binding", "welt_pockets") still drive the
+    geometry, while the structured fields take precedence when present.
+    """
+    details = features.details or []
+
+    # Binding
+    binding_edges: list[str] = []
+    binding_width = 1.0
+    binding_contrast = True
+    if features.binding is not None and features.binding.edges:
+        binding_edges = list(features.binding.edges)
+        binding_width = features.binding.width_cm
+        binding_contrast = features.binding.contrast
+    else:
+        if any(d in details for d in ("neckline_binding", "contrast_binding", "binding", "piping")):
+            binding_edges.append("neckline")
+        if "armhole_binding" in details:
+            binding_edges.append("armhole")
+        if "hem_binding" in details:
+            binding_edges.append("hem")
+
+    # Facings
+    facings: list[str] = list(features.facings or [])
+    if "armhole_facing" in details and "armhole" not in facings:
+        facings.append("armhole")
+    if "hem_facing" in details and "hem" not in facings:
+        facings.append("hem")
+    if "neckline_facing" in details and "neckline" not in facings:
+        facings.append("neckline")
+
+    # Welt pockets
+    welt_count = 0
+    welt_width = 14.0
+    welt_besom = False
+    if features.welt_pockets:
+        welt_count = sum(max(1, wp.count) for wp in features.welt_pockets)
+        welt_width = features.welt_pockets[0].width_cm
+        welt_besom = features.welt_pockets[0].besom
+    elif "welt_pockets" in details or "besom_pockets" in details:
+        welt_count = 2  # a symmetric pair is the common case
+        welt_besom = "besom_pockets" in details
+
+    return (
+        tuple(binding_edges), binding_width, binding_contrast,
+        tuple(facings), welt_count, welt_width, welt_besom,
+    )
+
+
+def _resolve_asymmetry(features: GarmentFeatures) -> tuple[str, str, float, float]:
+    """Return (front_style, wrap_side, overlap_cm, closure_drop_frac) from the structured
+    asymmetry field, with a detail-token fallback (``asymmetric_wrap`` / ``wrap_front``)."""
+    a = features.asymmetry
+    if a is not None and a.front_style == "asymmetric_wrap":
+        return a.front_style, a.wrap_side, a.overlap_cm, a.closure_drop_frac
+    details = features.details or []
+    if any(d in details for d in ("asymmetric_wrap", "asymmetric_front", "wrap_front", "diagonal_closure")):
+        return "asymmetric_wrap", "right", 12.0, 1.0
+    return "symmetric", "right", 12.0, 1.0
+
+
+def _resolve_collar(features: GarmentFeatures) -> str:
+    """Return the vest collar style from the neckline or detail tokens (else 'none')."""
+    neckline = (features.neckline or "").lower()
+    if neckline in ("mandarin", "band", "stand", "mandarin_collar"):
+        return "mandarin"
+    details = features.details or []
+    if any(d in details for d in ("mandarin_collar", "band_collar", "stand_collar", "mandarin", "collar")):
+        return "mandarin"
+    return "none"
+
+
+def _generate_vest_pattern(
+    features: GarmentFeatures, measurements: Measurements, shape_mode: ShapeMode = "modifiers",
+) -> dict:
+    _SILHOUETTE_TO_FIT: dict[str, str] = {
+        "slim": "slim", "fitted": "fitted", "regular": "regular",
+        "relaxed": "relaxed", "boxy": "boxy", "oversized": "oversized",
+        "athletic": "athletic", "longline": "longline",
+    }
+    fit_style = _SILHOUETTE_TO_FIT.get(features.silhouette or "", "boxy")
+
+    ease_map = {
+        "slim": -2.0, "fitted": -2.0, "regular": 0.0, "relaxed": 2.0,
+        "boxy": 4.0, "oversized": 6.0, "athletic": -1.0, "longline": 0.0,
+    }
+    ease_extra = ease_map.get(fit_style, 4.0)
+
+    (binding_edges, binding_width, binding_contrast,
+     facings, welt_count, welt_width, welt_besom) = _resolve_vest_finishes(features)
+    front_style, wrap_side, overlap_cm, closure_drop_frac = _resolve_asymmetry(features)
+    collar_style = _resolve_collar(features)
+
+    base = build_vest_block(
+        measurements,
+        fit_style=fit_style,
+        neckline=features.neckline or "notched_v",
+        chest_ease_extra=ease_extra,
+        binding_edges=binding_edges,
+        binding_width=binding_width,
+        binding_contrast=binding_contrast,
+        facings=facings,
+        welt_count=welt_count,
+        welt_width=welt_width,
+        welt_besom=welt_besom,
+        bake_shape=(shape_mode == "fit_params" and features.shape is not None),
+        front_style=front_style,
+        wrap_side=wrap_side,
+        overlap_cm=overlap_cm,
+        closure_drop_frac=closure_drop_frac,
+        collar_style=collar_style,
+    )
+
+    # Honour explicit dart-count overrides from the vision analysis
+    if hasattr(features, "darts") and features.darts is not None:
+        if features.darts.front == 0 and "front_bodice" in base:
+            base["front_bodice"].darts = []
+        if features.darts.back == 0 and "back_bodice" in base:
+            base["back_bodice"].darts = []
+
+    # Shape layer (modifiers / warp); fit_params was baked into the block above.
+    base = apply_shape(base, features, measurements, mode=shape_mode)
+
+    all_elements: list[dict] = []
+    all_pieces: list[dict] = []
+    gap = 5.0
+    cursor_x = 2.0
+
+    for spec in base.values():
+        max_x = max(p.x for p in spec.outline)
+        elems, piece_dict = _serialise_piece(spec, offset_x=cursor_x, offset_y=2.0)
+        all_elements.extend(elems)
+        if piece_dict:
+            all_pieces.append(piece_dict)
+        cursor_x += max_x + gap
+
+    chest = measurements.chest_cm if measurements.chest_cm is not None else (measurements.hip_cm - 4.0)
+    shoulder = measurements.shoulder_width_cm if measurements.shoulder_width_cm is not None else (chest / 4 + 7.5)
+
+    return {
+        "version": 1,
+        "elements": all_elements,
+        "pieces": all_pieces,
+        "measurements": {
+            "waist": measurements.waist_cm,
+            "hip": measurements.hip_cm,
+            "garmentLength": measurements.length_cm,
+            "bust": chest,
+            "shoulder": shoulder,
+        },
+        "connections": _compute_connections(all_elements, all_pieces),
+    }
+
+
+def _generate_bodice_pattern(
+    features: GarmentFeatures, measurements: Measurements, shape_mode: ShapeMode = "modifiers",
+) -> dict:
+    """A fitted sleeveless bodice block — reuses the vest block (with shoulder seams) so the
+    shared shape layer is exercised on a second garment. Makes GarmentType.BODICE real
+    (previously routed to the measurements-only placeholder)."""
+    _SILHOUETTE_TO_FIT: dict[str, str] = {
+        "fitted": "fitted", "slim": "slim", "boned": "fitted",
+        "relaxed": "relaxed", "wrap": "relaxed", "regular": "regular",
+    }
+    fit_style = _SILHOUETTE_TO_FIT.get(features.silhouette or "", "fitted")
+
+    (binding_edges, binding_width, binding_contrast,
+     facings, welt_count, welt_width, welt_besom) = _resolve_vest_finishes(features)
+    front_style, wrap_side, overlap_cm, closure_drop_frac = _resolve_asymmetry(features)
+
+    base = build_vest_block(
+        measurements,
+        fit_style=fit_style,
+        neckline=features.neckline or "v_neck",
+        chest_ease_extra=0.0,
+        binding_edges=binding_edges,
+        binding_width=binding_width,
+        binding_contrast=binding_contrast,
+        facings=facings,
+        welt_count=welt_count,
+        welt_width=welt_width,
+        welt_besom=welt_besom,
+        bake_shape=(shape_mode == "fit_params" and features.shape is not None),
+        front_style=front_style,
+        wrap_side=wrap_side,
+        overlap_cm=overlap_cm,
+        closure_drop_frac=closure_drop_frac,
+        collar_style=_resolve_collar(features),
+    )
+
+    if hasattr(features, "darts") and features.darts is not None:
+        if features.darts.front == 0 and "front_bodice" in base:
+            base["front_bodice"].darts = []
+        if features.darts.back == 0 and "back_bodice" in base:
+            base["back_bodice"].darts = []
+
+    base = apply_shape(base, features, measurements, mode=shape_mode)
+
+    all_elements: list[dict] = []
+    all_pieces: list[dict] = []
+    gap = 5.0
+    cursor_x = 2.0
+    for spec in base.values():
+        max_x = max(p.x for p in spec.outline)
+        elems, piece_dict = _serialise_piece(spec, offset_x=cursor_x, offset_y=2.0)
+        all_elements.extend(elems)
+        if piece_dict:
+            all_pieces.append(piece_dict)
+        cursor_x += max_x + gap
+
+    chest = measurements.chest_cm if measurements.chest_cm is not None else (measurements.hip_cm - 4.0)
+    return {
+        "version": 1,
+        "elements": all_elements,
+        "pieces": all_pieces,
+        "measurements": {
+            "waist": measurements.waist_cm,
+            "hip": measurements.hip_cm,
+            "garmentLength": measurements.length_cm,
+            "bust": chest,
         },
         "connections": _compute_connections(all_elements, all_pieces),
     }
@@ -806,8 +1283,16 @@ def _append_novel_pieces(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def generate_pattern(features: GarmentFeatures, measurements: Measurements) -> dict:
-    """Return a .psnap JSON-compatible dict for the given garment features + measurements."""
+def generate_pattern(
+    features: GarmentFeatures,
+    measurements: Measurements,
+    shape_mode: ShapeMode = "modifiers",
+) -> dict:
+    """Return a .psnap JSON-compatible dict for the given garment features + measurements.
+
+    ``shape_mode`` selects the silhouette-generation strategy for shape-aware garments
+    (vest / bodice): "modifiers" (default), "warp", or "fit_params".
+    """
     if features.garment_type == GarmentType.SKIRT:
         psnap = _generate_skirt_pattern(features, measurements)
     elif features.garment_type in (GarmentType.SHIRT, GarmentType.BLOUSE):
@@ -818,6 +1303,10 @@ def generate_pattern(features: GarmentFeatures, measurements: Measurements) -> d
         psnap = _generate_dress_pattern(features, measurements)
     elif features.garment_type in (GarmentType.JACKET, GarmentType.BLAZER):
         psnap = _generate_jacket_pattern(features, measurements)
+    elif features.garment_type == GarmentType.VEST:
+        psnap = _generate_vest_pattern(features, measurements, shape_mode)
+    elif features.garment_type == GarmentType.BODICE:
+        psnap = _generate_bodice_pattern(features, measurements, shape_mode)
     else:
         psnap = _generate_placeholder_pattern(features, measurements)
 

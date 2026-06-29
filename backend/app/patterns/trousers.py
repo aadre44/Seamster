@@ -7,7 +7,8 @@ Coordinate system (matches frontend SVG canvas):
   - y increases toward ankle
 
 Pieces produced: Front Leg, Back Leg, and conditionally: fly_facing, fly_shield,
-pocket_bag, back_pocket, cargo_pocket, cargo_pocket_flap, cuff_band, ankle_elastic.
+pocket_bag, back_pocket, cargo_pocket, cargo_pocket_flap, cuff_band, ankle_elastic,
+belt_loops.
 A waistband is added separately by the pattern engine using _make_waistband().
 
 Crotch seam geometry
@@ -76,7 +77,7 @@ def _clamp(val: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, val))
 
 
-def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> PieceSpec:
+def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float, notes: str = "") -> PieceSpec:
     """Return a simple rectangular PieceSpec with a horizontal grain line."""
     outline = [
         Point(0.0, 0.0),
@@ -93,6 +94,7 @@ def _rect_piece(name: str, w: float, h: float, cut_qty: int, sa: float) -> Piece
         cut_qty=cut_qty,
         on_fold=False,
         seam_allowance=sa,
+        notes=notes,
     )
 
 
@@ -109,7 +111,7 @@ def build_trousers_block(
     has_cargo_pocket: bool = False,
     has_cuff_band: bool = False,
     has_ankle_elastic: bool = False,
-    has_belt_loops: bool = False,       # indicator only — no geometry piece
+    has_belt_loops: bool = False,       # emits a folded belt-loop strip piece
 ) -> dict[str, PieceSpec]:
     """Return front/back legs plus conditional detail pieces.
 
@@ -323,5 +325,16 @@ def build_trousers_block(
         elastic_w = ankle_half_f * 2 * 0.80
         pieces["ankle_elastic"] = _rect_piece("Ankle Elastic Casing", elastic_w, 8.0, 2, sa,
             notes="ankle elastic casing strip; sew to trouser hem, fold over and stitch channel, thread elastic through")
+
+    if has_belt_loops:
+        # Belt loops are cut as one strip, folded in thirds (finished ~1 cm wide).
+        # Flat strip width = 3× finished width; height spans the waistband plus
+        # bar-tack allowance at each end. Count scales with waist: 5 small, 7 larger.
+        loop_count = 5 if W < 80.0 else 7
+        loop_strip_w = 3.0 + sa * 2          # folded into a ~1 cm finished loop
+        loop_strip_h = 8.0                   # waistband height + bar-tack allowance
+        pieces["belt_loops"] = _rect_piece("Belt Loop", loop_strip_w, loop_strip_h, loop_count, sa,
+            notes="belt loop strips; fold long edges to centre and topstitch, cut into "
+                  f"{loop_count} loops, bar-tack evenly around the waistband")
 
     return pieces

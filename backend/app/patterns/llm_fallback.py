@@ -44,59 +44,100 @@ _TECHNIQUES: frozenset[str] = frozenset({
     "single_breasted", "double_breasted",
     "moto_zip", "asymmetric_zip", "center_zip", "snap_front",
     "action_back",
+    # pocket-shape modifiers — change an existing patch pocket's bottom edge, not a piece
+    "pocket_pointed", "pocket_rounded", "pocket_angled", "pocket_curved",
+    # pleat modifiers — handled by the engine (allowance + fold markings on the panel)
+    "pleats", "pleated",
+    # gathering/shirring technique — no standalone piece
+    "smocking",
+    # neckline descriptors that sometimes leak into details — the neckline field
+    # already drives the geometry, so these never produce a standalone piece
+    "v_neck", "round_neck", "v_neckline", "scoop_neck",
 })
 
+# Several garment types share one generator, so they MUST share one detail set —
+# otherwise the registry drifts and the fallback duplicates pieces the shared
+# builder already produced. These shared sets are defined once and reused below.
+# (test_parametric_registry_sync.py guards this invariant.)
+
+# shirt + blouse → _generate_shirt_pattern
+# Strap / tie tokens are now owned by the structured `construction` field (the strap is
+# integral to the halter front, or a styling detail) — register them so the fallback does
+# NOT emit duplicate strap rectangles. `elastic_hem`/`drawstring_hem` build a native Hem
+# Casing Band, so they must be registered too.
+_SHIRT_DETAILS: set[str] = {
+    "button_placket", "collar", "ribbed_collar", "cuffs", "chest_pocket", "patch_pockets",
+    "spaghetti_straps", "straps", "halter_strap", "wide_straps", "one_shoulder",
+    "racerback", "tie_front",
+    "elastic_hem", "drawstring_hem", "ruffles", "ruffle",
+}
+
+# trousers + pants → _generate_trousers_pattern
+_TROUSER_DETAILS: set[str] = {
+    "patch_pockets", "side_pockets", "welt_pockets", "cargo_pocket",
+    "fly_shield", "cuffs", "elastic_waist", "belt_loops", "drawstring",
+    "high_rise", "low_rise", "ultra_high_rise",
+}
+
+# jacket + blazer → _generate_jacket_pattern
+# vest → _generate_vest_pattern. Bindings, facings and welt pockets are driven by the
+# structured fields (binding / facings / welt_pockets) but the analysis may also emit the
+# equivalent loose detail tokens; register them so the fallback never duplicates the piece.
+_VEST_DETAILS: set[str] = {
+    "neckline_binding", "contrast_binding", "binding", "piping",
+    "armhole_binding", "hem_binding",
+    "armhole_facing", "hem_facing", "neckline_facing", "facing",
+    "welt_pockets", "besom_pockets",
+    # neckline descriptors that may leak into details — the neckline field drives geometry
+    "notched_v", "split_v", "notched_neckline",
+    # mandarin/band stand collar — built natively by the vest block
+    "mandarin_collar", "band_collar", "stand_collar", "mandarin", "collar",
+    # asymmetric wrap front — built natively (overlap + underlap panels)
+    "asymmetric_wrap", "asymmetric_front", "wrap_front", "diagonal_closure",
+}
+
+_JACKET_DETAILS: set[str] = {
+    # structural / facing
+    "collar",
+    "notch_lapel", "peak_lapel", "shawl_collar", "band_collar", "no_collar",
+    "lapels", "facing", "back_yoke", "yoke", "western_yoke",
+    "lining_visible",
+    # breast style
+    "single_breasted", "double_breasted",
+    # pockets
+    "patch_pockets", "welt_pockets",
+    "side_pockets", "in_seam_pockets", "slash_pockets",
+    "breast_pocket", "chest_pocket", "chest_welt",
+    # outerwear extras
+    "hood",
+    "epaulets", "epaulet_tab", "shoulder_tab",
+    "belt", "belt_strap", "self_belt",
+    "belt_loops", "drawstring_hem",
+    # rib / knit trim
+    "cuff_band", "hem_band",
+    "ribbed_cuffs", "ribbed_hem", "knit_cuffs", "knit_hem",
+    # cuff / sleeve finishing
+    "cuffs", "button_cuff", "snap_cuff", "woven_cuff",
+    "sleeve_placket", "cuff_vent",
+    "two_piece_sleeve", "tailored_sleeve",
+}
+
 _PARAMETRIC_DETAILS: dict[str, set[str]] = {
-    "shirt":    {"button_placket", "collar", "cuffs", "chest_pocket", "patch_pockets"}
-                | _TECHNIQUES,
-    "blouse":   {"collar"} | _TECHNIQUES,
+    "shirt":    _SHIRT_DETAILS | _TECHNIQUES,
+    "blouse":   _SHIRT_DETAILS | _TECHNIQUES,
     "skirt":    {"patch_pockets", "patch_pocket_flap", "side_pockets", "welt_pockets",
                  "kick_pleat", "side_slits", "ruffle", "elastic_waist"} | _TECHNIQUES,
-    "trousers": {"patch_pockets", "side_pockets", "welt_pockets", "cargo_pocket",
-                 "fly_shield", "cuffs", "elastic_waist",
-                 "high_rise", "low_rise", "ultra_high_rise", "pleats"} | _TECHNIQUES,
-    "pants":    {"patch_pockets", "side_pockets", "welt_pockets", "cargo_pocket",
-                 "cuffs", "elastic_waist", "drawstring",
-                 "high_rise", "low_rise"} | _TECHNIQUES,
+    "trousers": _TROUSER_DETAILS | _TECHNIQUES,
+    "pants":    _TROUSER_DETAILS | _TECHNIQUES,
     "shorts":   {"patch_pockets", "side_pockets", "cuffs", "elastic_waist"} | _TECHNIQUES,
-    "jacket":   {
-                    # structural / facing
-                    "collar",
-                    "notch_lapel", "peak_lapel", "shawl_collar", "band_collar", "no_collar",
-                    "lapels", "facing", "back_yoke", "yoke", "western_yoke",
-                    "lining_visible",
-                    # breast style
-                    "single_breasted", "double_breasted",
-                    # pockets
-                    "patch_pockets", "welt_pockets",
-                    "side_pockets", "in_seam_pockets", "slash_pockets",
-                    "breast_pocket", "chest_pocket", "chest_welt",
-                    # outerwear extras (now parametrically handled)
-                    "hood",
-                    "epaulets", "epaulet_tab", "shoulder_tab",
-                    "belt", "belt_strap", "self_belt",
-                    "belt_loops", "drawstring_hem",
-                    # rib / knit trim
-                    "cuff_band", "hem_band",
-                    "ribbed_cuffs", "ribbed_hem", "knit_cuffs", "knit_hem",
-                    # cuff / sleeve finishing
-                    "cuffs", "button_cuff", "snap_cuff", "woven_cuff",
-                    "sleeve_placket", "cuff_vent",
-                    "two_piece_sleeve", "tailored_sleeve",
-                } | _TECHNIQUES,
-    "blazer":   {
-                    "collar",
-                    "notch_lapel", "peak_lapel", "shawl_collar", "band_collar",
-                    "lapels", "facing", "back_yoke",
-                    "single_breasted", "double_breasted",
-                    "patch_pockets", "welt_pockets", "lining_visible",
-                    "breast_pocket", "chest_pocket", "chest_welt", "in_seam_pockets",
-                    "two_piece_sleeve", "tailored_sleeve",
-                    "cuffs", "button_cuff", "sleeve_placket", "cuff_vent",
-                } | _TECHNIQUES,
+    "jacket":   _JACKET_DETAILS | _TECHNIQUES,
+    "blazer":   _JACKET_DETAILS | _TECHNIQUES,
+    "vest":     _VEST_DETAILS | _TECHNIQUES,
     "bodice":   set() | _TECHNIQUES,
     "coat":     set() | _TECHNIQUES,
-    "dress":    set() | _TECHNIQUES,
+    # Dress generator natively builds a collar, belt/sash, and side pocket bag.
+    "dress":    {"collar", "belt", "sash", "tie_back",
+                 "side_pockets", "patch_pockets"} | _TECHNIQUES,
 }
 
 # ── LLM prompt ────────────────────────────────────────────────────────────────
