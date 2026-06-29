@@ -147,6 +147,168 @@ JSON with top-level keys:
 
 ---
 
+## Pattern Detail Handling — pockets & pleats
+
+The parametric engine (`backend/app/patterns/`) shapes two commonly-mis-rendered
+details from the vision analysis:
+
+- **Patch pocket bottom shape** — `pockets.py::make_patch_pocket()` is the single
+  builder used by every garment block. A `shape` argument
+  (`square`/`rounded`/`angled`/`pointed`/`curved`) selects the bottom edge, built
+  from `Point`/`CurveSegment` primitives. The vision layer reports the shape with a
+  `pocket_*` detail token (`prompts.py`) plus a notes-based fallback
+  (`analyzer.py::_infer_pockets_from_notes`). `engine.py::_pocket_shape()` maps the
+  token to the builder argument.
+
+- **Pleats** — `pleats.py` models the two pattern-making essentials:
+  `pleat_unit_allowance()` encodes the fabric each fold consumes (`2×depth` knife /
+  accordion / pintuck; `4×depth` box / inverted box); `apply_pleats()` widens the
+  panel by that allowance (optionally tapering above `max_y` for released waist
+  pleats) and attaches `PleatSpec` markings. `PieceSpec` (in `skirts.py`) carries a
+  `pleats: list[PleatSpec]` field, and `engine.py::_serialise_piece()` renders each
+  as interior fold (dashed `isFold`) + placement lines with a direction tick — not
+  part of the cutting outline, so `_compute_connections()` ignores them. The
+  analysis returns a structured `PleatDetail` (`type`/`count`/`placement`/
+  `depth_cm`); `engine.py::_resolve_pleats()` normalises it (also honouring the
+  legacy `pleated` silhouette and bare `pleats` token) and each `_generate_*`
+  applies it to the relevant panels (skirt/dress full-length, trouser front-waist,
+  shirt/jacket centre-back).
+
+- **Construction topology (strap / back / front opening)** — the `Construction`
+  sub-model (`models/features.py`) captures three orthogonal axes the neckline alone
+  can't express, so halter/backless/plunge garments build correctly:
+  - `strap_style` — `shoulder_seam` (default) | `halter_neck` | `halter_tie` |
+    `spaghetti_straps` | `wide_straps` | `one_shoulder` | `strapless` | `racerback`.
+  - `back_coverage` — `full` (default) | `low_back` | `racer` | `backless`.
+  - `front_opening` — `closed` (default) | `plunge` | `deep_v_split` | `keyhole` |
+    `surplice` | `placket` | `wrap`.
+  The vision layer reports the object directly (`prompts.py`, `_CONSTRUCTION_NOTE`)
+  with a notes-based fallback (`analyzer.py::_infer_construction_from_notes`).
+  `engine.py::_resolve_construction()` defaults it (and maps `neckline=halter/strapless`
+  when the object is absent) and passes the three axes into `build_shirt_block` /
+  `build_dress_block`.
+  - **Shoulderless = sleeveless.** Any `strap_style` ≠ `shoulder_seam` forces
+    `sleeve_length=sleeveless` and builds no shoulder seam (guards against a strappy top
+    regressing into a sleeved blouse when the analysis is noisy).
+  - **Front** (halter): the neckline rises into an integral strap. `closed`/`plunge` keep
+    ONE continuous Front **cut on the CF fold** (the deep V is a notch, not a seam);
+    `deep_v_split` is still ONE continuous piece but cut on the fold along the **top
+    (back-neck) edge** — the strap mirrors over the neck so the two panels are joined only
+    by the strap, with the centre front fully open below it (the fold is the top seam, not a
+    vertical centre band). A shoulder-seam `deep_v_split` is two off-fold halves;
+    a shoulder-seam `plunge` stays one piece on the fold.
+  - **Front** (non-halter shoulderless: spaghetti/wide/one_shoulder/strapless): a
+    strapless-style band/V front on the fold **plus separate strap pieces** (`_rect_piece`;
+    none for strapless).
+  - **Back**: `backless` omits the Back Bodice (adding a **Waist Tie**); any other coverage
+    on a shoulderless top builds a **band back** (flat top edge, bare shoulders) whose top
+    sits at the **underarm for a halter** (low/bare back) but **higher for a tank**
+    (spaghetti/wide/one_shoulder/racerback — covers the shoulder blades) so the back side
+    seam matches the front. Non-shoulderless `low_back`/`racer` keep a conventional
+    shouldered back, scooped/narrowed.
+  - **Halter vs tank (anchor point)**: a halter is supported at the NECK (straps meet behind
+    the neck, bare shoulders); a tank/cami is supported at the SHOULDERS (straps over the
+    shoulders). `analyzer.py::_refine_strap_style` keeps `halter_neck`/`halter_tie` **only when
+    the notes give positive neck-support evidence** ("behind the neck", "bare shoulders", …);
+    with tank/over-shoulder language or NO neck evidence it downgrades to `spaghetti_straps`
+    ("when unsure → tank"). Skipped only when the neckline is explicitly `halter`.
+    `_clamp_spaghetti_back` then forbids a `full` back on a `spaghetti_straps` top (clamped to
+    `low_back`) — thin straps support at most a half back, or a backless one.
+  - **Strap width** (`construction.strap_width`: `thin`/`medium`/`wide` → ≈2/4/7 cm via
+    `shirts.py::_strap_cm`) sizes the integral halter strap and the separate spaghetti/wide
+    strap pieces so each matches its photo (None ⇒ per-style default). The halter strap's
+    outer edge is a single smooth curve (gradual bust→strap flare) at any width. Vision
+    estimates the category; `analyzer.py::_refine_strap_width` backfills it from the notes.
+  - `elastic_hem`/`drawstring_hem` build a native **Hem Casing Band**; all shoulderless/
+    open fronts add a **Front Facing**.
+  The strap/tie/hem and neckline-descriptor (`v_neck`, `round_neck`) tokens are registered
+  in `_PARAMETRIC_DETAILS`/`_TECHNIQUES` so the LLM fallback never emits duplicate strap or
+  "neckline" pieces. Back-coverage inference is conservative: an unseen or merely
+  *assumed*-open halter back defaults to `low_back`; `backless` needs a clearly open back or
+  a `deep_v_split` front. A second safety net (`_refine_front_split`) upgrades a `plunge` to
+  `deep_v_split` when the notes describe the front panels as open/separate (the model often
+  mislabels a split centre front as a continuous plunge). See
+  [pattern-piece-construction-notes.md](pattern-piece-construction-notes.md) for the full
+  per-garment nuance reference.
+
+- **Edge finishes (bindings & shaped facings)** — `finishings.py` adds the two edge
+  treatments the engine previously could not express (every old "facing" was a flat
+  rectangle and there was no binding at all):
+  - `make_edge_binding()` builds a continuous bias strip sized to a known edge *run-length*
+    (so it actually fits the neckline/armhole/hem), flagged for cut-from-contrast when the
+    trim is a contrasting colour — this is the signature dark lip around a vest neckline.
+  - `make_edge_facing()` (+ `make_armhole_facing` / `make_hem_facing`) samples an outline
+    subpath (expanding any `CurveSegment`) and offsets each point toward an interior
+    reference, so the facing *follows a curved armhole* instead of flattening to a rectangle.
+  Both return a `PieceSpec` and are garment-agnostic. `path_length()` expands Bézier edges
+  for accurate run-lengths.
+
+- **Welt / besom pockets** — `pockets.py::make_welt_pocket()` is the single placeable welt
+  builder (welt strip + pocket bag) with parametric opening width, welt height, bag depth and
+  a placement note; `besom=True` gives the taller double-lip strip. Jackets now call it too
+  (one implementation instead of the old hard-coded rectangles).
+
+- **Vest garment (`GarmentType.VEST`)** — `vests.py::build_vest_block()` is a dedicated
+  sleeveless upper-body block: Front + Back bodice, **never a sleeve**. It reuses the shirt
+  boxy bodice maths (`shirts.py::_FIT_PARAMS`, the armscye `CurveSegment`, quarter
+  measurements) and adds:
+  - a **notched / split-V neckline** drafted as real outline geometry — a short near-vertical
+    CF slit (`split_width` × `split_height`) that flares into a V, with an optional notch step
+    (`notched_v`) vs a clean V (`split_v`);
+  - optional contrast **bindings** (neckline/armhole/hem), **armhole/hem/neckline facings**,
+    and lower-front **welt pockets**, all driven from the structured `binding` / `facings` /
+    `welt_pockets` feature fields (with loose detail-token fallbacks).
+  `engine.py::_generate_vest_pattern` parses the silhouette → fit style, merges the structured
+  finishes with detail tokens (`_resolve_vest_finishes`), and serialises like every other
+  garment. The vest's native detail tokens are registered in `_PARAMETRIC_DETAILS["vest"]`
+  (`_VEST_DETAILS`) so the LLM fallback never duplicates a binding/facing/welt piece. Vision
+  reports the new fields via `prompts.py` (`_EDGE_FINISH_NOTE`, gated by `has_edge_finishes`)
+  with notes-based backfill (`analyzer.py::_infer_vest_finishes_from_notes`).
+
+- **Garment shape system (silhouette/contour)** — `shaping.py` finally wires the post-build shape
+  pipeline that `modifiers.py` only sketched (`apply_silhouette` was imported and never called). It
+  mutates a panel's CONTOUR in place — mirroring `pleats.py::apply_pleats` — targeting edges by their
+  `seamLabel` (`hem` / `side_seam` / `center_front`), so it is garment-agnostic. Vision returns one
+  structured `ShapeFeature` (hem style + depth + waist taper + hem sweep); three interchangeable
+  `shape_mode` strategies consume it so they can be compared apples-to-apples:
+  - **`modifiers`** (default): composable named transforms — `reshape_hem` (`pointed` drops a CF apex,
+    `curved_scoop`/`cutaway` swap the hem for a `CurveSegment`, `high_low` offsets CF-vs-side,
+    `angled` slants it) + `apply_taper` (ramps side-seam x from −waist_taper at the waist to
+    +hem_sweep at the hem) + `reshape_side_vent` (splits the lower side seam — upper stays sewn
+    `side_seam`, lower becomes an unlabelled/open vent edge) + `apply_front_cut` (front only:
+    sends it off-fold cut 2 and sweeps the lower CF away into a `cutaway`/`open_drape` opening;
+    a wrap/surplice overlap stays `closed`).
+  - **`warp`**: `warp_to_silhouette` remaps the side+hem subpath onto a normalized `SilhouettePath`
+    hull scaled to the panel bbox, anchoring neckline/armhole/shoulder/CF-fold and clamping x ≥ 0 so
+    the outline stays simple; a hull is synthesized from `ShapeFeature` when none is supplied.
+  - **`fit_params`**: a coarse per-silhouette contour baked into the builder at draft time
+    (`vests.py::_VEST_SHAPE_PARAMS`); `apply_shape` is a no-op post-build.
+  `apply_shape` only touches the body panels (those carrying both `armhole` and `hem`); trim
+  (bindings/facings/welts) is skipped. `engine.py::generate_pattern(features, measurements, shape_mode)`
+  threads the mode from the `/api/generate` body into `_generate_vest_pattern` and the new
+  `_generate_bodice_pattern` (which makes `GarmentType.BODICE` real instead of a placeholder by reusing
+  the vest block). Vision exposes the `shape` object via `prompts.py` (`_SHAPE_NOTE`, gated by
+  `has_shape`) with notes backfill (`analyzer.py::_infer_shape_from_notes`). The frontend AI-Assist
+  modal carries a **Shape-mode toggle** (`Modifiers · Warp · Fit-params`) sent as `shape_mode`.
+
+- **Asymmetric wrap fronts (topology, not an edge tweak)** — every other front is mirror-symmetric
+  about a vertical CF, so a diagonal wrap (two *different* fronts) is structurally impossible for the
+  edge modifiers. `AsymmetryFeature` (`front_style=asymmetric_wrap`, `wrap_side`, `overlap_cm`,
+  `closure_drop_frac`) drives `vests.py::_asymmetric_fronts`, which drafts the front in a full-front
+  frame (x: 0 = left side seam … FW = right side seam) and returns two non-mirrored panels: an
+  **Overlap Front** (large wrap panel whose diagonal free edge is the visible closure) and an
+  **Underlap Front** (the panel beneath). The closure edges are labelled `overlap_edge` /
+  `underlap_edge` (distinct, single-piece) so `_compute_connections` never sews them as a seam;
+  `wrap_side=left` reflects the construction about FW. `engine.py::_resolve_asymmetry` maps the field
+  (with `asymmetric_wrap`/`wrap_front` detail fallbacks); `_resolve_collar` adds a **Mandarin / band
+  stand collar** (`neckline=mandarin` or a `mandarin_collar` detail). Vision reports both via
+  `prompts.py` (asymmetry object + note; `mandarin` neckline) with notes backfill
+  (`analyzer.py::_infer_asymmetry_from_notes`). The `warp` mode additionally accepts a
+  `silhouette_path.panels` map (a normalized hull per piece name) so each asymmetric panel can be
+  warped to its own outline — the foundation for fully vision-driven, per-panel outlines.
+
+---
+
 ## LLM Provider Layer
 
 The `backend/app/llm/` package decouples all AI calls from any single vendor. A
