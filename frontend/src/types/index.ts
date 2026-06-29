@@ -99,12 +99,40 @@ export interface EditorState {
 
 export type GarmentType =
   | 'skirt' | 'dress' | 'trousers' | 'pants' | 'shirt'
-  | 'blouse' | 'jacket' | 'blazer' | 'bodice' | 'coat' | 'shorts'
+  | 'blouse' | 'jacket' | 'blazer' | 'vest' | 'bodice' | 'coat' | 'shorts'
 
 export const GARMENT_TYPES: GarmentType[] = [
   'skirt', 'dress', 'trousers', 'pants', 'shirt',
-  'blouse', 'jacket', 'blazer', 'bodice', 'coat', 'shorts',
+  'blouse', 'jacket', 'blazer', 'vest', 'bodice', 'coat', 'shorts',
 ]
+
+// Silhouette-generation strategy for shape-aware garments (vest / bodice).
+export type ShapeMode = 'modifiers' | 'warp' | 'fit_params'
+
+export type HemStyle =
+  | 'straight' | 'pointed' | 'angled' | 'curved_scoop' | 'high_low' | 'cutaway'
+
+export type FrontCut = 'closed' | 'cutaway' | 'open_drape'
+
+export interface ShapeFeature {
+  hem_style: HemStyle
+  hem_depth_cm: number
+  waist_taper_cm: number
+  hem_sweep_cm: number
+  high_low_cm: number
+  side_vent_cm: number
+  front_cut: FrontCut
+  front_cut_depth_cm: number
+}
+
+export type FrontStyle = 'symmetric' | 'asymmetric_wrap'
+
+export interface AsymmetryFeature {
+  front_style: FrontStyle
+  wrap_side: 'left' | 'right'
+  overlap_cm: number
+  closure_drop_frac: number
+}
 
 export type WaistbandType = 'straight' | 'contoured' | 'elastic' | 'facing' | 'yoke'
 export type ClosureType =
@@ -136,6 +164,8 @@ export interface GarmentFeatures {
   waistband?: WaistbandFeature
   darts?: DartFeature
   details: string[]
+  shape?: ShapeFeature
+  asymmetry?: AsymmetryFeature
   confidence: number
   notes: string
 }

@@ -6,7 +6,7 @@
  */
 import { useState, useRef } from 'react'
 import { useEditor } from '../context/EditorContext'
-import type { GarmentFeatures, GarmentType, Measurements, WaistbandType } from '../types'
+import type { GarmentFeatures, GarmentType, Measurements, ShapeMode, WaistbandType } from '../types'
 import { GARMENT_TYPES } from '../types'
 
 const API = 'http://localhost:8000/api'
@@ -376,6 +376,8 @@ const MEASUREMENT_FIELDS: Record<string, MeasurementField[]> = {
   ],
 }
 MEASUREMENT_FIELDS['blouse'] = MEASUREMENT_FIELDS['shirt']
+MEASUREMENT_FIELDS['vest'] = MEASUREMENT_FIELDS['shirt']
+MEASUREMENT_FIELDS['bodice'] = MEASUREMENT_FIELDS['shirt']
 MEASUREMENT_FIELDS['trousers'] = MEASUREMENT_FIELDS['pants']
 MEASUREMENT_FIELDS['dress'] = [
   { key: 'waist_cm', label: 'Waist', min: 50, max: 160 },
@@ -406,14 +408,17 @@ function ReviewStep({
 }: {
   features: GarmentFeatures
   measurements: Measurements
-  onGenerate: (f: GarmentFeatures, m: Measurements) => void
+  onGenerate: (f: GarmentFeatures, m: Measurements, shapeMode: ShapeMode) => void
   onBack: () => void
 }) {
   const [f, setF] = useState<GarmentFeatures>(features)
   const [m, setM] = useState<Measurements>(measurements)
+  const [shapeMode, setShapeMode] = useState<ShapeMode>('modifiers')
 
   const lowConfidence = f.confidence < 0.5
-  const isPatternSupported = ['skirt', 'shirt', 'blouse', 'pants', 'trousers', 'dress', 'jacket', 'blazer'].includes(f.garment_type)
+  const isPatternSupported = ['skirt', 'shirt', 'blouse', 'pants', 'trousers', 'dress', 'jacket', 'blazer', 'vest', 'bodice'].includes(f.garment_type)
+  // Shape-aware garments expose the silhouette-generation mode toggle.
+  const isShapeAware = ['vest', 'bodice'].includes(f.garment_type)
 
   return (
     <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-1">
@@ -559,12 +564,39 @@ function ReviewStep({
         </div>
       </div>
 
+      {/* Shape-generation mode (vest / bodice) — toggle + regenerate to compare strategies */}
+      {isShapeAware && (
+        <div className="pt-2 border-t border-gray-200">
+          <Label>Shape mode</Label>
+          <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs w-fit mt-1">
+            {([
+              ['modifiers', 'Modifiers'],
+              ['warp', 'Warp'],
+              ['fit_params', 'Fit-params'],
+            ] as [ShapeMode, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setShapeMode(key)}
+                className={`px-2.5 py-1 font-medium border-r last:border-r-0 border-gray-200 ${
+                  shapeMode === key ? 'bg-violet-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1">
+            How the silhouette/hem is generated. Regenerate after switching to compare.
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-2 justify-end pt-2 border-t border-gray-200">
         <button onClick={onBack}
           className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">
           ← Back
         </button>
-        <button onClick={() => onGenerate(f, m)}
+        <button onClick={() => onGenerate(f, m, shapeMode)}
           className="px-4 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700">
           {isPatternSupported ? 'Generate Pattern' : 'Load Measurements'}
         </button>
@@ -626,14 +658,14 @@ export default function AIAssistModal({ onClose }: Props) {
     setStep('review')
   }
 
-  const handleGenerate = async (f: GarmentFeatures, m: Measurements) => {
+  const handleGenerate = async (f: GarmentFeatures, m: Measurements, shapeMode: ShapeMode = 'modifiers') => {
     setStep('generating')
     setGenError('')
     try {
       const res = await fetch(`${API}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ features: f, measurements: m }),
+        body: JSON.stringify({ features: f, measurements: m, shape_mode: shapeMode }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
