@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import math
 import uuid
 
 from collections import namedtuple
@@ -229,35 +230,70 @@ def _make_waistband(features: GarmentFeatures, measurements: Measurements, offse
 
 # ── Seam connection computation ───────────────────────────────────────────────
 
+def _edge_length(elem: dict) -> float:
+    """Approximate length of a serialised outline edge (curves are sampled)."""
+    sx, sy = elem["start"]["x"], elem["start"]["y"]
+    ex, ey = elem["end"]["x"], elem["end"]["y"]
+    if elem.get("type") != "curve":
+        return math.hypot(ex - sx, ey - sy)
+    c1x, c1y = elem["cp1"]["x"], elem["cp1"]["y"]
+    c2x, c2y = elem["cp2"]["x"], elem["cp2"]["y"]
+    length = 0.0
+    px, py = sx, sy
+    n = 16
+    for i in range(1, n + 1):
+        t = i / n
+        mt = 1.0 - t
+        x = mt**3 * sx + 3 * mt**2 * t * c1x + 3 * mt * t**2 * c2x + t**3 * ex
+        y = mt**3 * sy + 3 * mt**2 * t * c1y + 3 * mt * t**2 * c2y + t**3 * ey
+        length += math.hypot(x - px, y - py)
+        px, py = x, y
+    return length
+
+
 def _compute_connections(all_elements: list[dict], all_pieces: list[dict]) -> list[dict]:
-    """Return pairs of edges that share the same non-empty seamLabel across different pieces."""
+    """Pair edges that share the same non-empty seamLabel across different pieces.
+
+    Edges are grouped per (label, piece) in outline order, and for each pair of
+    pieces sharing a label they are matched 1:1 by sequence — k-th edge with k-th
+    edge — NOT as a cross-product (a trouser side seam split over 4 edges per leg
+    previously produced 4x4 = 16 connections for one physical seam, and the
+    AssemblyView aligned on an arbitrary one). If the two pieces traverse the seam
+    in opposite outline directions, the reversed pairing is detected by total
+    length mismatch (sewn seam segments have matching lengths) and corrected.
+    With unequal edge counts the extras are left unconnected.
+    """
     from itertools import combinations
 
-    piece_by_id = {p["id"]: p for p in all_pieces}
-    # Group outline elements by seamLabel (skip empty / fold lines)
-    label_groups: dict[str, list[dict]] = {}
     outline_ids: set[str] = set()
     for p in all_pieces:
-        for eid in p["elementIds"]:
-            outline_ids.add(eid)
+        outline_ids.update(p["elementIds"])
 
+    # label -> pieceId -> edges in outline order (dicts preserve insertion order)
+    label_groups: dict[str, dict[str, list[dict]]] = {}
     for elem in all_elements:
         if elem["id"] not in outline_ids:
             continue
         label = elem.get("seamLabel", "")
         if not label or elem.get("isFold"):
             continue
-        label_groups.setdefault(label, []).append(elem)
+        label_groups.setdefault(label, {}).setdefault(elem["pieceId"], []).append(elem)
 
     connections: list[dict] = []
-    for label, edges in label_groups.items():
-        # Only pair edges that belong to different pieces
-        for a, b in combinations(edges, 2):
-            if a.get("pieceId") != b.get("pieceId"):
+    for label, by_piece in label_groups.items():
+        for pid_a, pid_b in combinations(by_piece.keys(), 2):
+            edges_a = by_piece[pid_a]
+            edges_b = by_piece[pid_b]
+            if len(edges_a) > 1 and len(edges_b) > 1:
+                forward = sum(abs(_edge_length(a) - _edge_length(b)) for a, b in zip(edges_a, edges_b))
+                reverse = sum(abs(_edge_length(a) - _edge_length(b)) for a, b in zip(edges_a, reversed(edges_b)))
+                if reverse < forward:
+                    edges_b = list(reversed(edges_b))
+            for a, b in zip(edges_a, edges_b):
                 connections.append({
                     "label": label,
-                    "from": {"pieceId": a["pieceId"], "edgeId": a["id"]},
-                    "to":   {"pieceId": b["pieceId"], "edgeId": b["id"]},
+                    "from": {"pieceId": pid_a, "edgeId": a["id"]},
+                    "to":   {"pieceId": pid_b, "edgeId": b["id"]},
                 })
     return connections
 

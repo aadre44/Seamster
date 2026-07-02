@@ -395,7 +395,7 @@ JSON with top-level keys: `version`, `elements`, `pieces`, `measurements`, `conn
 
 - Each `line` element has `isFold: boolean` and `seamLabel: string` fields.
 - Each `curve` element has a `seamLabel: string` field.
-- `connections` is an array of `{ label, from: { pieceId, edgeId }, to: { pieceId, edgeId } }` objects — generated automatically by the backend engine by matching edges with the same non-empty `seamLabel` across different pieces.
+- `connections` is an array of `{ label, from: { pieceId, edgeId }, to: { pieceId, edgeId } }` objects — generated automatically by the backend engine by matching edges with the same non-empty `seamLabel` across different pieces. Multi-edge seams (e.g. the trouser side seam, drawn as 4 segments per leg) are paired 1:1 in outline order — never as a cross-product — with reversed traversal detected by segment-length mismatch; each edge belongs to at most one connection per opposing piece.
 
 ---
 
