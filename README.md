@@ -349,7 +349,7 @@ Seamster/
         │   ├── pleats.py               Pleat geometry: PleatSpec, allowance rule, build_pleats, apply_pleats
         │   ├── skirts.py               Skirt block: 12 silhouettes, 6 lengths, 4 optional pieces (PieceSpec + DartSpec + PleatSpec)
         │   ├── shirts.py               Shirt/blouse block: 8 fit styles, 15 necklines, 9 sleeve types, halter/backless/open-front construction
-        │   ├── trousers.py             Trouser/pants block: 11 fit styles, 4 rise styles, 5 lengths, 9 optional pieces
+        │   ├── trousers.py             Trouser/pants block: 11 fit styles, 4 rise styles, 5 lengths, optional pieces; back seat tilt, applied fly (straight CF + J Fly Facing + Fly Shield), interpolated knee/scaled ankle, 3-D cargo bellows pocket (bag + shaped flap + gusset/flat variants + leg placement marks)
         │   ├── dresses.py              Dress block: 7 silhouettes, 10 necklines, 6 sleeve types, 6 optional pieces
         │   ├── jackets.py              Jacket/blazer block: 12 fit styles, 5 lengths, 5 sleeve types, 2 collar-type axes, 2 breast-style options, 16 conditional pieces
         │   ├── vests.py                Sleeveless vest block: 7 fit styles, notched/split-V neckline, contrast bindings, armhole/hem facings, welt pockets

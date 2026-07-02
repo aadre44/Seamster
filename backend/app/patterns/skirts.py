@@ -69,6 +69,25 @@ class DartSpec:
     center_x: float       # x-coordinate of dart tip (on waist line)
     width: float          # dart width at waist (amount taken in)
     depth: float          # dart depth (length of dart legs from waist line)
+    # Optional slanted/raised waist baseline the dart sits on. When None the legs are
+    # placed on y=0 (the default flat waistline). When set to a (left, right) waist
+    # segment, each leg's y is interpolated along it and the tip is measured `depth`
+    # below that — used by the tilted trouser back waist (seat tilt).
+    baseline: tuple[Point, Point] | None = None
+
+
+@dataclass
+class MarkSpec:
+    """Interior marking line/curve on a piece (not part of the sewn outline).
+
+    Used for construction guides such as the fly fold/topstitch and the trouser
+    pressed crease. Serialised as standalone interior elements that are excluded from
+    the outline (so they never form seam connections). Default-empty on every piece, so
+    garments that don't set it are unchanged.
+    """
+    points: list[Point | CurveSegment]   # polyline / bezier; CurveSegment = arc from prev point
+    label: str = ""                       # seamLabel applied to the emitted elements
+    dashed: bool = False                  # render as a fold line (dashed)
 
 
 @dataclass
@@ -85,6 +104,7 @@ class PieceSpec:
     notes: str = ""                # construction context shown to the instruction generator
     edge_labels: dict[int, str] = field(default_factory=dict)  # edge index → seam name
     pleats: list[PleatSpec] = field(default_factory=list)      # interior pleat markings (fold + placement)
+    marks: list[MarkSpec] = field(default_factory=list)        # interior construction marks (fly, crease)
 
 
 def _clamp(val: float, lo: float, hi: float) -> float:

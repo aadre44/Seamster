@@ -242,7 +242,19 @@ mermaid, tulip, tiered. **Lengths:** micro…maxi.
 ## Trousers / Pants / Shorts (`trousers.py`)
 
 **Pieces:** Front Leg + Back Leg + Waistband; conditional fly facing, fly shield, front
-pocket bag, back welt pocket, cargo pocket + flap, cuff band, ankle elastic, belt loops.
+pocket bag, back welt pocket, cargo pocket (bag + flap + optional gusset), cuff band,
+ankle elastic, belt loops.
+
+**Cargo (bellows) pocket** — a real 3-D pocket, not two flat rectangles. Three styles from
+the detail token: **bellows** (default, pleated — the bag is cut `W + 4·depth` wide ×
+`facing + H + 2·depth` tall and the side/bottom bellows folds, placement lines and the top
+facing fold are drawn as interior marks; bottom corners rounded), **gusset** (flat bag +
+a separate depth gusset strip), or **flat** (a flapped patch, the old behaviour). The
+**flap** uses the shared shaped-bottom builder (square/rounded/angled/pointed/curved). The
+Front Leg carries the pocket **placement outline + bartack ticks** at the top corners
+(interior marks). Construction: make the flap, finish the opening, press the bellows,
+topstitch the bag down leaving the top open, bartack the corners, then attach the flap —
+all on the flat leg before closing the inseam/outseam.
 
 **Fit:** straight, slim, skinny, cigarette, wide_leg, palazzo, bootcut, flared, jogger,
 relaxed. **Rise:** low/mid/high/ultra-high. **Lengths:** full_length…shorts.
@@ -250,11 +262,33 @@ relaxed. **Rise:** low/mid/high/ultra-high. **Lengths:** full_length…shorts.
 **Nuances**
 - **Crotch curve** is a Bézier, not a corner; its depth scales with fit (shallow for skinny,
   deep for palazzo/jogger to allow sitting). Front and back curves differ (back is deeper).
+- **Back seat tilt** — the back centre-back seam is **not vertical**: the CB waist corner
+  leans toward the side (`back_tilt`, ~1.2–2.5 cm by fit) and rises above the side waist
+  (`back_lift`, ~0.8–2.0 cm), so the CB seam is longer over the seat (room to sit/bend) and
+  the back fits like a tailored trouser, not a pyjama. The back waist quarter is preserved
+  along the now-slanted top edge, and the **back darts ride that slanted edge** (via the
+  optional `DartSpec.baseline`). Tighter/active fits tilt more; palazzo/jogger tilt least.
+- **Front fly (applied-facing model)** — for zip/button fly the **CF is cut straight**; a
+  separate **J-shaped Fly Facing** is applied to the **left** front and a **Fly Shield**
+  (underlap) backs the **right** front (both auto-emitted for any fly closure). The only
+  thing marked on the leg is the **fly topstitch "J"** (`fly_topstitch`, interior, not a
+  seam), `fly_ext` in from the CF (3.5 cm zip / 4.0 cm button) curving back to the CF at the
+  bottom of the fly. The facing width tracks `fly_ext` (`fly_ext + 3.0`). Elastic-waist /
+  side-zip have no fly pieces and no marks. *(An earlier build used a cut-on extension; it
+  was replaced by this applied-facing model to avoid double-counting the fly fabric.)*
+- **Leg silhouette** — the **knee is interpolated** between the thigh side-seam and the
+  ankle (not an independent multiplier), so the side seam is smooth and never balloons out
+  at the knee. **Ankle widths scale with the body** (`hip_qt × ankle_mult`, floored for
+  small frames). A per-fit `knee_nip` pulls the knee in for **flared/bootcut** (slim knee,
+  flares to the hem); wide_leg/palazzo are straight columns; tapered fits taper smoothly.
 - **Rise** sets the waist height above the crotch; pair with the waistband/closure.
 - **Pleated trousers** put 1–2 pleats near the crease, released by the hip (replacing the
   front dart). **Jogger/elastic** styles add an ankle band/elastic.
 - Closures map to construction: zip fly + fly shield, button fly, side zip, or elastic
   (no fly). Shorts are the short-length case of the same block.
+- **Interior marks** (`MarkSpec` on `PieceSpec`) are a shared, opt-in mechanism for
+  non-sewn construction guides (fly fold/topstitch now; trouser crease line planned). They
+  serialise as standalone interior elements and never form seam connections.
 
 ---
 

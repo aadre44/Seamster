@@ -73,8 +73,16 @@ _SHIRT_DETAILS: set[str] = {
 }
 
 # trousers + pants → _generate_trousers_pattern
+# Cargo synonyms (cargo/bellows/flap/utility, singular + plural) all map to the one native
+# Cargo Pocket + Flap pair (_CARGO_POCKET_TOKENS in engine.py), so the fallback never adds
+# a duplicate bag + flap for the same physical pocket.
 _TROUSER_DETAILS: set[str] = {
-    "patch_pockets", "side_pockets", "welt_pockets", "cargo_pocket",
+    "patch_pockets", "side_pockets", "welt_pockets",
+    "cargo_pocket", "cargo_pockets", "cargo",
+    "bellows_pocket", "bellows_pockets",
+    "flap_pocket", "flap_pockets", "pocket_flap", "patch_pocket_flap",
+    "utility_pocket", "utility_pockets",
+    "cargo_flat", "flat_cargo", "cargo_gusset", "gusset_cargo",
     "fly_shield", "cuffs", "elastic_waist", "belt_loops", "drawstring",
     "high_rise", "low_rise", "ultra_high_rise",
 }

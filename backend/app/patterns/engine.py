@@ -118,10 +118,27 @@ def _serialise_piece(
         outline_ids.append(elem["id"])
 
     # ── Dart markings (interior lines, NOT in outline_ids) ───────────────────
+    def _baseline_y(dart: "DartSpec", x: float) -> float:
+        """y of the waist edge at x: 0 by default, or interpolated along a slanted
+        baseline (used by the tilted trouser back waist)."""
+        base = getattr(dart, "baseline", None)
+        if base is None:
+            return 0.0
+        a, b = base
+        if abs(b.x - a.x) < 1e-9:
+            return a.y
+        t = (x - a.x) / (b.x - a.x)
+        return a.y + t * (b.y - a.y)
+
     for dart in spec.darts:
-        tip = shifted(Point(dart.center_x, dart.depth))
-        leg_l = shifted(Point(dart.center_x - dart.width / 2, 0.0))
-        leg_r = shifted(Point(dart.center_x + dart.width / 2, 0.0))
+        x_l = dart.center_x - dart.width / 2
+        x_r = dart.center_x + dart.width / 2
+        y_l = _baseline_y(dart, x_l)
+        y_r = _baseline_y(dart, x_r)
+        y_c = _baseline_y(dart, dart.center_x)
+        tip = shifted(Point(dart.center_x, y_c + dart.depth))
+        leg_l = shifted(Point(x_l, y_l))
+        leg_r = shifted(Point(x_r, y_r))
         elements.append(_make_line(leg_l, tip, piece_id))
         elements.append(_make_line(leg_r, tip, piece_id))
 
@@ -159,6 +176,23 @@ def _serialise_piece(
         )
         tick_el["seamLabel"] = "pleat_fold"
         elements.append(tick_el)
+
+    # ── Interior construction marks (fly fold/topstitch, crease) ─────────────
+    # Emitted as standalone interior elements; NOT added to outline_ids, so they are
+    # ignored by _compute_connections and never become seams.
+    for mark in getattr(spec, "marks", []):
+        pts = mark.points
+        for j in range(len(pts) - 1):
+            a = pts[j]
+            b = pts[j + 1]
+            s = shifted(Point(a.x, a.y))
+            e = shifted(Point(b.x, b.y))
+            if isinstance(b, CurveSegment):
+                el = _make_curve(s, shifted(b.cp1), shifted(b.cp2), e, piece_id)
+            else:
+                el = _make_line(s, e, piece_id, is_fold=mark.dashed)
+            el["seamLabel"] = mark.label
+            elements.append(el)
 
     # ── Grain line ────────────────────────────────────────────────────────────
     gl = _make_grain_line(shifted(spec.grain_start), shifted(spec.grain_end), piece_id)
@@ -615,6 +649,19 @@ def _generate_shirt_pattern(features: GarmentFeatures, measurements: Measurement
     }
 
 
+# Cargo / bellows / flap pocket synonyms the trouser block builds natively (Cargo Pocket
+# + Cargo Pocket Flap). Any of these maps to the one native pair so the LLM fallback does
+# not add a duplicate bag + flap. Kept in sync with _TROUSER_DETAILS in llm_fallback.py.
+_CARGO_POCKET_TOKENS = (
+    "cargo_pocket", "cargo_pockets", "cargo",
+    "bellows_pocket", "bellows_pockets",
+    "flap_pocket", "flap_pockets", "pocket_flap",
+    "patch_pocket_flap",  # a flapped patch pocket on trousers == a cargo pocket
+    "utility_pocket", "utility_pockets",
+    "cargo_flat", "flat_cargo", "cargo_gusset", "gusset_cargo",  # cargo style variants
+)
+
+
 def _generate_trousers_pattern(features: GarmentFeatures, measurements: Measurements) -> dict:
     details = features.details if features.details else []
 
@@ -654,6 +701,14 @@ def _generate_trousers_pattern(features: GarmentFeatures, measurements: Measurem
     if features.waistband and hasattr(features.waistband, "type") and features.waistband.type == "elastic":
         closure_type = "elastic_waist"
 
+    # Cargo pocket style: pleated bellows (default), separate gusset, or a flat patch.
+    if any(d in details for d in ("cargo_flat", "flat_cargo")):
+        cargo_style = "flat"
+    elif any(d in details for d in ("cargo_gusset", "gusset_cargo")):
+        cargo_style = "gusset"
+    else:
+        cargo_style = "bellows"
+
     base = build_trousers_block(
         measurements,
         fit_style=fit_style,
@@ -663,7 +718,9 @@ def _generate_trousers_pattern(features: GarmentFeatures, measurements: Measurem
         has_fly_shield="fly_shield" in details,
         has_front_pockets="side_pockets" in details or "patch_pockets" in details,
         has_back_pockets="welt_pockets" in details or "patch_pockets" in details,
-        has_cargo_pocket="cargo_pocket" in details,
+        has_cargo_pocket=any(d in details for d in _CARGO_POCKET_TOKENS),
+        cargo_style=cargo_style,
+        cargo_flap_shape=_pocket_shape(details),
         has_cuff_band="cuffs" in details,
         has_ankle_elastic="elastic_waist" in details or fit_style == "jogger",
         has_belt_loops="belt_loops" in details,
