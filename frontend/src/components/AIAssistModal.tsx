@@ -6,10 +6,9 @@
  */
 import { useState, useRef } from 'react'
 import { useEditor } from '../context/EditorContext'
+import { analyzeGarment, generatePattern } from '../api'
 import type { GarmentFeatures, GarmentType, Measurements, ShapeMode, WaistbandType } from '../types'
 import { GARMENT_TYPES } from '../types'
-
-const API = 'http://localhost:8000/api'
 
 type Step = 'upload' | 'review' | 'generating'
 
@@ -130,17 +129,7 @@ function UploadStep({
     if (!frontFile) { setError('Please select a front photo.'); return }
     setLoading(true); setError('')
     try {
-      const fd = new FormData()
-      fd.append('garment_type', garmentType)
-      fd.append('front_image', frontFile)
-      if (backFile) fd.append('back_image', backFile)
-
-      const res = await fetch(`${API}/analyze`, { method: 'POST', body: fd })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? `Server error ${res.status}`)
-      }
-      const features: GarmentFeatures = await res.json()
+      const features = await analyzeGarment(garmentType, frontFile, backFile)
       onAnalyzed(features)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
@@ -662,16 +651,7 @@ export default function AIAssistModal({ onClose }: Props) {
     setStep('generating')
     setGenError('')
     try {
-      const res = await fetch(`${API}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ features: f, measurements: m, shape_mode: shapeMode }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? `Server error ${res.status}`)
-      }
-      const psnap = await res.json()
+      const psnap = await generatePattern(f, m, shapeMode)
       if (!Array.isArray(psnap.elements)) throw new Error('Invalid pattern data')
 
       const hasContent = state.elements.length > 0 || state.pieces.length > 0

@@ -30,6 +30,7 @@ Seamster/
 │       ├── export/
 │       │   ├── svgExport.ts          Client-side SVG export
 │       │   └── pdfExport.ts          Backend-assisted tiled PDF (A4)
+│       ├── api.ts                    Single API client — typed wrappers; base URL VITE_API_URL ?? '/api' (Vite dev proxy)
 │       ├── utils/
 │       │   ├── formulaEval.ts        Sandboxed expression parser for parametric dims
 │       │   └── pieceTransforms.ts    Flip H/V, rotate, mirror-copy geometry

@@ -9,6 +9,7 @@ import InstructionsPanel from './components/InstructionsPanel'
 import AssemblyView from './components/AssemblyView'
 import ModelToggle from './components/ModelToggle'
 import { downloadSVG } from './export/svgExport'
+import { exportPdf } from './api'
 
 function StatusBar() {
   const { state } = useEditor()
@@ -49,19 +50,13 @@ function FileButtons() {
   const exportPDF = async (elements: typeof state.elements, pieces: typeof state.pieces,
                            paperSize: string, singlePage: boolean) => {
     try {
-      const res = await fetch('http://localhost:8000/api/export/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          elements,
-          pieces,
-          paper_size: paperSize,
-          single_page: singlePage,
-          ...(state.instructions ? { instructions: state.instructions } : {}),
-        }),
+      const blob = await exportPdf({
+        elements,
+        pieces,
+        paper_size: paperSize,
+        single_page: singlePage,
+        ...(state.instructions ? { instructions: state.instructions } : {}),
       })
-      if (!res.ok) throw new Error(`Server error ${res.status}`)
-      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

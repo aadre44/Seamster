@@ -7,19 +7,8 @@
  * uses whichever provider is selected here without a server restart.
  */
 import { useEffect, useState } from 'react'
-
-const API = 'http://localhost:8000/api'
-
-interface ProviderOption {
-  key: string
-  label: string
-}
-
-interface ProviderState {
-  active: string
-  model: string
-  providers: ProviderOption[]
-}
+import { getProvider, setProvider } from '../api'
+import type { ProviderState } from '../api'
 
 export default function ModelToggle() {
   const [state, setState] = useState<ProviderState | null>(null)
@@ -27,8 +16,7 @@ export default function ModelToggle() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch(`${API}/provider`)
-      .then(res => (res.ok ? res.json() : Promise.reject(new Error(`Server error ${res.status}`))))
+    getProvider()
       .then(setState)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
@@ -37,16 +25,7 @@ export default function ModelToggle() {
     if (busy || !state || key === state.active) return
     setBusy(true); setError('')
     try {
-      const res = await fetch(`${API}/provider`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: key }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? `Server error ${res.status}`)
-      }
-      setState(await res.json())
+      setState(await setProvider(key))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

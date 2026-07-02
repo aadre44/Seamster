@@ -312,6 +312,7 @@ Requires a configured LLM provider (Anthropic or Ollama) in the backend environm
 Seamster/
 ├── frontend/               React 18 + TypeScript + Tailwind + Vite
 │   └── src/
+│       ├── api.ts                      Single API client — typed wrappers for all backend calls; base URL from VITE_API_URL (default /api via Vite proxy)
 │       ├── components/
 │       │   ├── Canvas.tsx              Main SVG canvas — all drawing tools, snapping, rendering
 │       │   ├── Toolbar.tsx             Left tool-button column (8 tools + 3 toggles + help)
@@ -513,3 +514,4 @@ uv run pytest
 | `OLLAMA_MODEL` | No | `qwen2.5vl:7b` | Ollama model; must be vision-capable for `/analyze` |
 | `CORS_ORIGINS` | No | `http://localhost:5173` | Allowed frontend origins |
 | `DEFAULT_SEAM_ALLOWANCE_CM` | No | `1.5` | Default seam allowance for new pieces |
+| `VITE_API_URL` | No | `/api` | **Frontend** (build-time) — backend API base URL. Unset = same-origin `/api`, proxied to `http://localhost:8000` by the Vite dev server. Set to e.g. `http://192.168.1.20:8000/api` for LAN/phone testing (remember to add that origin to `CORS_ORIGINS`) |

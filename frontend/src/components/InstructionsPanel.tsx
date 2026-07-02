@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useEditor } from '../context/EditorContext'
+import { generateInstructions } from '../api'
 import type { InstructionSection } from '../types'
-
-const API = 'http://localhost:8000/api'
 
 interface Props {
   onClose: () => void
@@ -73,15 +72,10 @@ export default function InstructionsPanel({ onClose }: Props) {
     setError(null)
     dispatch({ type: 'SET_INSTRUCTIONS', instructions: null, loading: true })
 
-    fetch(`${API}/instructions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ features: lastFeatures, measurements: lastMeasurements, pieces }),
-    })
-      .then(r => r.ok ? r.json() : r.json().then((b: { detail?: string }) => Promise.reject(b.detail ?? 'Failed')))
+    generateInstructions(lastFeatures, lastMeasurements, pieces)
       .then(data => dispatch({ type: 'SET_INSTRUCTIONS', instructions: data, loading: false }))
-      .catch((msg: string) => {
-        setError(typeof msg === 'string' ? msg : 'Failed to generate instructions.')
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : 'Failed to generate instructions.')
         dispatch({ type: 'SET_INSTRUCTIONS', instructions: null, loading: false })
       })
   }
