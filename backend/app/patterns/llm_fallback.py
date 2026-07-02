@@ -6,10 +6,16 @@ When the engine detects a garment detail it cannot produce geometrically
   1. Checks the learned TemplateStore — if a template exists, uses it directly.
   2. If no template exists, calls Claude with a structured prompt that asks for
      piece dimensions as *parametric formulas* (not absolute coordinates).
-  3. Parses the LLM response, saves it as a PieceTemplate, and applies it.
+  3. Validates every returned piece (dimension bounds, self-intersection,
+     flounce attachment-edge length vs the real garment edge) and re-prompts
+     with the validation errors up to two repair rounds before falling back to
+     a clearly-marked placeholder rectangle.
+  4. Saves accepted pieces as PieceTemplates and applies them.
 
 Saving as a formula-based template means the piece can be re-used for any
 body size without another LLM call, and the parametric engine grows over time.
+Pieces that declare an attachment_label carry that seamLabel on their
+attachment edge, so the engine's connection pass sews them into the assembly.
 """
 from __future__ import annotations
 
@@ -21,10 +27,20 @@ from datetime import datetime, timezone
 from app.llm import LLMError, complete_with_retry, get_provider
 from app.models.features import GarmentFeatures
 from app.models.measurements import Measurements
-from app.patterns.learned_pieces import PieceTemplate, apply_template, get_store
+from app.patterns.learned_pieces import (
+    PieceTemplate,
+    _eval_formula,
+    _measurement_namespace,
+    apply_template,
+    get_store,
+)
+from app.patterns.novel_validation import ARC_TOLERANCE, ATTACHMENT_LABELS, validate_spec
 from app.patterns.skirts import PieceSpec
 
 logger = logging.getLogger(__name__)
+
+# 1 initial LLM call + 2 repair re-prompts per detail, then the placeholder fallback.
+_MAX_ATTEMPTS = 3
 
 # ── What the parametric engine already handles natively ───────────────────────
 # Details listed here are produced by the parametric builders and must NOT be
@@ -174,6 +190,7 @@ Required format:
       "top_width_formula": "<trapezoid only: top edge width — omit otherwise>",
       "curve_depth_formula": "<curved_band only: arc rise — omit otherwise>",
       "end_shape": "<shaped_rectangle only: square | rounded | angled | pointed | curved — omit otherwise>",
+      "attachment_label": "<the garment edge this piece is SEWN TO: hem | waist | neckline | armhole | wrist | side_seam — or null for applied/free-standing pieces (patch pockets, belts, epaulets)>",
       "reasoning": "<brief explanation of why these dimensions make sense>"
     }
   ]
@@ -238,8 +255,10 @@ def _user_prompt(
     detail: str,
     features: GarmentFeatures,
     measurements: Measurements,
+    edge_runs: dict[str, float] | None = None,
+    problems: list[str] | None = None,
 ) -> str:
-    return (
+    text = (
         f"Generate the missing pattern piece(s) for the feature '{detail}' "
         f"on this garment:\n\n"
         f"  garment_type: {features.garment_type.value}\n"
@@ -254,9 +273,23 @@ def _user_prompt(
         f"  shoulder_width_cm={measurements.shoulder_width_cm or 'not measured (use 38.0)'}\n"
         f"  arm_length_cm={measurements.arm_length_cm or 'not measured (use 60.0)'}\n"
         f"  length_cm={measurements.length_cm}\n"
-        f"  seam_allowance_cm={measurements.seam_allowance_cm}\n\n"
-        f"Return only the JSON object."
+        f"  seam_allowance_cm={measurements.seam_allowance_cm}\n"
     )
+    if edge_runs:
+        runs = ", ".join(f"{label}={run:.1f}" for label, run in sorted(edge_runs.items()))
+        text += (
+            f"\nGarment edge run-lengths as drafted (half pattern, cm): {runs}\n"
+            "If the piece sews to one of these edges, set attachment_label to that edge and size "
+            "the piece's attachment edge to match it (circular flounce inner edge = the run "
+            "exactly; gathered rectangle = 1.5-2.5x the run).\n"
+        )
+    if problems:
+        text += (
+            "\nYOUR PREVIOUS ATTEMPT WAS REJECTED for these reasons:\n"
+            + "\n".join(f"  - {p}" for p in problems)
+            + "\nFix every problem and return the corrected JSON object.\n"
+        )
+    return text + "\nReturn only the JSON object."
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -271,12 +304,19 @@ def generate_novel_pieces(
     unsupported_details: list[str],
     features: GarmentFeatures,
     measurements: Measurements,
+    edge_runs: dict[str, float] | None = None,
 ) -> list[PieceSpec]:
     """Produce PieceSpecs for each unsupported detail.
 
-    Template-first: hits the learned store before calling the LLM.
-    Newly generated templates are saved immediately so future requests are free.
+    Template-first: hits the learned store before calling the LLM. LLM output is
+    validated (dimensions, self-intersection, attachment-edge length) and repaired
+    via re-prompt up to _MAX_ATTEMPTS; only accepted pieces are persisted. When the
+    provider answers but never produces a valid piece, a clearly-marked placeholder
+    rectangle is emitted instead (never zero pieces for a responsive provider).
     Returns an empty list (not an error) if the provider is unconfigured or a call fails.
+
+    ``edge_runs`` maps attachment labels (hem/waist/neckline/…) to the drafted
+    edge run-length in cm, giving the LLM real numbers to size attachment edges to.
     """
     if not unsupported_details:
         return []
@@ -298,67 +338,195 @@ def generate_novel_pieces(
                 logger.exception("Failed to apply learned template '%s'", template.id)
             continue
 
-        # ── 2. Call the LLM ───────────────────────────────────────────────────
+        # ── 2. Call the LLM with a validate/repair loop ───────────────────────
         logger.info("LLM fallback: generating piece for detail='%s' on '%s'", detail, gtype)
+        result_specs.extend(
+            _generate_with_repair(detail, features, measurements, edge_runs, store, provider)
+        )
+
+    return result_specs
+
+
+def _generate_with_repair(
+    detail: str,
+    features: GarmentFeatures,
+    measurements: Measurements,
+    edge_runs: dict[str, float] | None,
+    store,
+    provider,
+) -> list[PieceSpec]:
+    """One detail's generate → validate → re-prompt loop.
+
+    Non-final attempts are all-or-nothing: any invalid piece rejects the whole
+    response and its problems are fed back into the next prompt. The final
+    attempt salvages what it can (auto-scaling flounce arcs, keeping valid
+    siblings) and falls back to a placeholder rectangle if nothing survives.
+    """
+    gtype = features.garment_type.value
+    ns = _measurement_namespace(measurements)
+    problems: list[str] = []
+
+    for attempt in range(_MAX_ATTEMPTS):
+        final = attempt == _MAX_ATTEMPTS - 1
         try:
             response = complete_with_retry(
                 provider,
                 system=_SYSTEM_PROMPT,
-                user_text=_user_prompt(detail, features, measurements),
+                user_text=_user_prompt(
+                    detail, features, measurements, edge_runs=edge_runs, problems=problems
+                ),
                 max_tokens=1024,
             )
-            raw_text = response.text
         except (LLMError, ValueError):
+            # Provider unconfigured/unreachable — repair re-prompts cannot help,
+            # and emitting placeholders here would surprise offline generation.
             logger.exception("LLM call failed for detail='%s'", detail)
-            continue
+            return []
 
-        # ── 3. Parse response ─────────────────────────────────────────────────
         try:
-            pieces_data = _parse_response(raw_text)
+            pieces_data = _parse_response(response.text)
         except Exception:
-            logger.exception(
-                "Failed to parse LLM response for detail='%s': %r", detail, raw_text
+            logger.warning(
+                "Attempt %d for detail='%s': response was not valid JSON", attempt + 1, detail
             )
+            problems = ["the response was not a single valid JSON object in the required format"]
+            continue
+        if not pieces_data:
+            problems = ["the 'pieces' array was empty — at least one piece is required"]
             continue
 
-        # ── 4. Save each returned piece as a template, then apply it ─────────
+        accepted: list[tuple[PieceTemplate, PieceSpec]] = []
+        errs: list[str] = []
         for idx, pd in enumerate(pieces_data):
-            suffix = "" if idx == 0 else f"_part{idx}"
-            tid = f"{detail}{suffix}-{gtype}-v1"
+            candidate = _template_from_dict(detail, gtype, idx, pd)
 
-            new_template = PieceTemplate(
-                id=tid,
-                trigger_detail=detail,
-                garment_types=[gtype],
-                name=pd.get("name", _humanise(detail)),
-                description=pd.get("description", ""),
-                geometry=pd.get("geometry", "rectangle"),
-                length_formula=pd.get("length_formula", "50.0"),
-                width_formula=pd.get("width_formula", "1.5"),
-                cut_qty=int(pd.get("cut_qty", 2)),
-                on_fold=bool(pd.get("on_fold", False)),
-                seam_allowance_formula=pd.get("seam_allowance_formula", "seam_allowance_cm"),
-                grain_direction=pd.get("grain_direction", "length"),
-                top_width_formula=pd.get("top_width_formula"),
-                curve_depth_formula=pd.get("curve_depth_formula"),
-                end_shape=pd.get("end_shape", "square"),
-                created_at=datetime.now(timezone.utc).isoformat(),
-                times_used=1,
-            )
+            mismatch = _arc_mismatch(candidate, ns, edge_runs)
+            if mismatch is not None:
+                actual, target = mismatch
+                if final:
+                    # Salvage: scale the arc formula onto the real edge (stays parametric).
+                    _autoscale_arc(candidate, actual, target)
+                else:
+                    errs.append(
+                        f"piece '{candidate.name}': its inner (attachment) edge measures "
+                        f"{actual:.1f} cm but the garment's {candidate.attachment_label} edge "
+                        f"measures {target:.1f} cm — size the attachment edge to match"
+                    )
+                    continue
 
-            # Apply BEFORE saving: a template whose formulas don't evaluate must not
-            # be persisted, or every future request replays the failure from the store.
             try:
-                spec = apply_template(new_template, measurements)
-            except Exception:
-                logger.exception("New template '%s' failed to apply — not saving it", tid)
+                spec = apply_template(candidate, measurements)
+            except Exception as exc:
+                errs.append(f"piece '{candidate.name}' failed to build: {exc}")
                 continue
 
-            store.add(new_template)
-            logger.info("Saved new template id='%s' (detail=%s, garment=%s)", tid, detail, gtype)
-            result_specs.append(spec)
+            piece_problems = validate_spec(spec, measurements)
+            if piece_problems:
+                errs.extend(piece_problems)
+                continue
+            accepted.append((candidate, spec))
 
-    return result_specs
+        if errs and not final:
+            logger.info(
+                "Attempt %d for detail='%s' rejected: %s", attempt + 1, detail, "; ".join(errs)
+            )
+            problems = errs
+            continue
+
+        if accepted:
+            for tmpl, _ in accepted:
+                store.add(tmpl)
+                logger.info(
+                    "Saved new template id='%s' (detail=%s, garment=%s)", tmpl.id, detail, gtype
+                )
+            return [spec for _, spec in accepted]
+        break  # the final attempt produced nothing usable
+
+    logger.warning("All attempts failed for detail='%s' — emitting placeholder", detail)
+    return [_fallback_piece(detail, measurements)]
+
+
+def _template_from_dict(detail: str, gtype: str, idx: int, pd: dict) -> PieceTemplate:
+    """Build a PieceTemplate from one piece dict of the LLM response."""
+    suffix = "" if idx == 0 else f"_part{idx}"
+    attachment = pd.get("attachment_label")
+    if attachment not in ATTACHMENT_LABELS:
+        attachment = None
+    return PieceTemplate(
+        id=f"{detail}{suffix}-{gtype}-v1",
+        trigger_detail=detail,
+        garment_types=[gtype],
+        name=pd.get("name", _humanise(detail)),
+        description=pd.get("description", ""),
+        geometry=pd.get("geometry", "rectangle"),
+        length_formula=pd.get("length_formula", "50.0"),
+        width_formula=pd.get("width_formula", "1.5"),
+        cut_qty=int(pd.get("cut_qty", 2)),
+        on_fold=bool(pd.get("on_fold", False)),
+        seam_allowance_formula=pd.get("seam_allowance_formula", "seam_allowance_cm"),
+        grain_direction=pd.get("grain_direction", "length"),
+        top_width_formula=pd.get("top_width_formula"),
+        curve_depth_formula=pd.get("curve_depth_formula"),
+        end_shape=pd.get("end_shape", "square"),
+        attachment_label=attachment,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        times_used=1,
+    )
+
+
+def _arc_mismatch(
+    template: PieceTemplate, ns: dict, edge_runs: dict[str, float] | None,
+) -> tuple[float, float] | None:
+    """Return (actual, target) when a circular flounce's inner arc misses the
+    garment edge it attaches to by more than ARC_TOLERANCE, else None."""
+    if template.geometry not in ("quarter_circle", "half_circle"):
+        return None
+    label = template.attachment_label
+    if not label or not edge_runs or label not in edge_runs:
+        return None
+    target = edge_runs[label]
+    if target <= 0:
+        return None
+    try:
+        actual = _eval_formula(template.length_formula, ns)
+    except ValueError:
+        return None  # unsafe formula — apply_template will reject it with a clearer error
+    if abs(actual - target) / target > ARC_TOLERANCE:
+        return actual, target
+    return None
+
+
+def _autoscale_arc(template: PieceTemplate, actual: float, target: float) -> None:
+    """Rescale a flounce's attachment-edge formula onto the real edge length.
+    Wrapping the original expression keeps the template parametric."""
+    ratio = target / actual
+    template.length_formula = f"({template.length_formula}) * {ratio:.4f}"
+    logger.info(
+        "Auto-scaled '%s' attachment edge %.1f -> %.1f cm (x%.4f)",
+        template.id, actual, target, ratio,
+    )
+
+
+def _fallback_piece(detail: str, measurements: Measurements) -> PieceSpec:
+    """Last-resort placeholder so a recognised detail never silently vanishes.
+    Deliberately NOT saved to the store — it is a guess, not a learned shape."""
+    template = PieceTemplate(
+        id=f"{detail}-fallback",
+        trigger_detail=detail,
+        garment_types=[],
+        name=_humanise(detail),
+        description="placeholder",
+        geometry="rectangle",
+        length_formula="25.0",
+        width_formula="12.0",
+        cut_qty=1,
+    )
+    spec = apply_template(template, measurements)
+    spec.notes = (
+        f"placeholder for '{_humanise(detail)}': the AI could not produce a valid piece; "
+        "this rectangle stands in — reshape it in the editor"
+    )
+    return spec
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -357,8 +357,9 @@ Seamster/
         │   ├── modifiers.py            Legacy silhouette modifiers (used by skirt tests only)
         │   ├── engine.py               generate_pattern() → full .psnap JSON dict; _compute_connections() auto-builds SeamConnection list from edge_labels
         │   ├── instruction_generator.py  LLM call → structured sewing instructions JSON
-        │   ├── llm_fallback.py         LLM-generated parametric pieces for unsupported details (template-cached)
-        │   └── learned_pieces.py       Template store + 7 formula-driven geometries (rectangle, shaped_rectangle, trapezoid, godet, quarter/half-circle flounce, curved_band)
+        │   ├── llm_fallback.py         LLM-generated parametric pieces for unsupported details (template-cached, validate/repair loop, placeholder fallback)
+        │   ├── learned_pieces.py       Template store + 7 formula-driven geometries (rectangle, shaped_rectangle, trapezoid, godet, quarter/half-circle flounce, curved_band)
+        │   └── novel_validation.py     Geometric checks for LLM pieces (dimension bounds, self-intersection, attachment-edge length)
         ├── llm/                        Provider-agnostic LLM layer (Anthropic + Ollama)
         │   ├── base.py                 LLMProvider ABC, LLMResponse, common error hierarchy
         │   ├── anthropic_provider.py   Anthropic Claude implementation (text + vision)

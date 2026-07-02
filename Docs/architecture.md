@@ -349,8 +349,30 @@ normalised into the +x/+y quadrant before serialisation. The LLM prompt
 documents when to choose each geometry (gathered ruffle = rectangle at 1.5–2.5×,
 circular flounce = quarter/half circle at exactly 1×).
 
-Planned next tiers (see `ai-novel-pieces` in FEATURES.json): validation +
-seam-length matching + self-repair re-prompts (tier 3), composing unknown
+**Validation + repair (tier 3).** LLM output is never trusted blind
+(`novel_validation.py` + `llm_fallback._generate_with_repair`):
+
+- Every returned piece is checked for degenerate (<0.5 cm) or implausible
+  (>250 cm) dimensions, near-zero area, and a self-intersecting outline
+  (beziers sampled to a polyline).
+- The engine passes real **edge run-lengths** into the prompt
+  (`engine._edge_run_lengths`: per attachment label, the longest per-piece
+  outline run — hem/waist/neckline/armhole/wrist/side_seam), and a circular
+  flounce whose inner arc misses its declared attachment edge by >15% is
+  rejected with the exact numbers.
+- Rejections are re-prompted with the validation errors (2 repair rounds).
+  On the final attempt an arc mismatch is salvaged by wrapping the formula in
+  a scale factor (`(expr) * k` — still parametric); pieces that still fail are
+  dropped, and if nothing survives a clearly-marked **placeholder rectangle**
+  is emitted (never zero pieces while the provider is answering; provider
+  failures still return nothing so offline generation is unchanged).
+- A piece may declare `attachment_label`; `apply_template` puts that seamLabel
+  on the geometry's intrinsic attachment edge(s) (top edge for the rectangular
+  family, inner arc for flounces, both sides for a godet), and
+  `_append_novel_pieces` **recomputes connections after appending** — so a hem
+  flounce is genuinely sewn to the hem in the AssemblyView.
+
+Planned next tiers (see `ai-novel-pieces` in FEATURES.json): composing unknown
 garment types from existing blocks (tier 4), formula-based custom point-list
 outlines (tier 2), and vision-derived contours with a user-edit→template
 feedback loop (tier 5).

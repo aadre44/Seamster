@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
+from app.patterns.novel_validation import ATTACHMENT_LABELS
 from app.patterns.pockets import VALID_SHAPES, make_patch_pocket
 from app.patterns.skirts import PieceSpec
 
@@ -80,6 +81,10 @@ class PieceTemplate(BaseModel):
     top_width_formula: str | None = None    # trapezoid: top edge width
     curve_depth_formula: str | None = None  # curved_band: arc rise (default length * 0.12)
     end_shape: str = "square"               # shaped_rectangle: square|rounded|angled|pointed|curved
+    # Garment edge this piece is sewn to (one of novel_validation.ATTACHMENT_LABELS, or
+    # None for applied/free-standing pieces). When set, the geometry's intrinsic
+    # attachment edge(s) get this seamLabel so _compute_connections pairs them.
+    attachment_label: str | None = None
 
 
 class TemplateStore:
@@ -336,6 +341,12 @@ def apply_template(template: PieceTemplate, m: Measurements) -> PieceSpec:
         )
         geometry = "rectangle"
 
+    # Outline edge indices that carry the attachment seamLabel, per geometry.
+    # Edge i runs from outline[i] to outline[i+1] (wrapping); index 0 is the top
+    # edge for the rectangular family, the inner arc for flounces, the two
+    # straight sides for a godet.
+    attach_edges: tuple[int, ...] = (0,)
+
     if geometry == "shaped_rectangle":
         shape = template.end_shape if template.end_shape in VALID_SHAPES else "square"
         spec = make_patch_pocket(
@@ -344,6 +355,8 @@ def apply_template(template: PieceTemplate, m: Measurements) -> PieceSpec:
             notes=template.description,
         )
         spec.on_fold = template.on_fold
+        if template.attachment_label in ATTACHMENT_LABELS:
+            spec.edge_labels = {0: template.attachment_label}
         return spec
 
     if geometry == "trapezoid":
@@ -354,9 +367,12 @@ def apply_template(template: PieceTemplate, m: Measurements) -> PieceSpec:
         outline, grain = _trapezoid_outline(length, width, max(top_w, 0.5))
     elif geometry == "godet":
         outline, grain = _godet_outline(length, width)
+        attach_edges = (0, 2)  # the two straight sides sew into the slit
     elif geometry in ("quarter_circle", "half_circle"):
         sweep = math.pi / 2 if geometry == "quarter_circle" else math.pi
         outline, grain = _annular_outline(length, width, sweep)
+        # inner arc = one bezier edge per 90° of sweep, starting at edge 0
+        attach_edges = tuple(range(max(1, math.ceil(sweep / (math.pi / 2 + 1e-9)))))
     elif geometry == "curved_band":
         depth = (
             _eval_formula(template.curve_depth_formula, ns)
@@ -367,6 +383,9 @@ def apply_template(template: PieceTemplate, m: Measurements) -> PieceSpec:
         outline, grain = _rectangle_outline(length, width, template.grain_direction)
 
     outline, grain = _normalise(outline, grain)
+    edge_labels: dict[int, str] = {}
+    if template.attachment_label in ATTACHMENT_LABELS:
+        edge_labels = {i: template.attachment_label for i in attach_edges}
     return PieceSpec(
         name=template.name,
         outline=outline,
@@ -377,6 +396,7 @@ def apply_template(template: PieceTemplate, m: Measurements) -> PieceSpec:
         on_fold=template.on_fold,
         seam_allowance=seam,
         notes=template.description,
+        edge_labels=edge_labels,
     )
 
 

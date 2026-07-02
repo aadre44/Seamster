@@ -345,5 +345,8 @@ def test_failed_apply_does_not_persist_template(tmp_path, monkeypatch):
     monkeypatch.setattr(fb, "complete_with_retry", lambda *a, **k: FakeResponse())
 
     specs = fb.generate_novel_pieces(["weird_detail"], _fake_features(), M)
-    assert specs == []
+    # The repair loop exhausts and emits a clearly-marked placeholder instead,
+    # but the broken template must never reach the store.
+    assert len(specs) == 1
+    assert "placeholder" in specs[0].notes
     assert store.find("weird_detail", "skirt") is None

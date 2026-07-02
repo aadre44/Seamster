@@ -1334,18 +1334,45 @@ def _generate_placeholder_pattern(features: GarmentFeatures, measurements: Measu
 
 # ── Novel-piece appender ──────────────────────────────────────────────────────
 
+def _edge_run_lengths(psnap: dict) -> dict[str, float]:
+    """Per attachment label (hem/waist/neckline/…), the longest per-piece run of
+    outline edges carrying that seamLabel — real numbers the LLM fallback uses to
+    size a novel piece's attachment edge."""
+    from app.patterns.novel_validation import ATTACHMENT_LABELS
+
+    outline_ids: set[str] = set()
+    for p in psnap.get("pieces", []):
+        outline_ids.update(p["elementIds"])
+
+    runs: dict[str, dict[str, float]] = {}
+    for elem in psnap.get("elements", []):
+        if elem["id"] not in outline_ids or elem.get("isFold"):
+            continue
+        label = elem.get("seamLabel", "")
+        if label not in ATTACHMENT_LABELS:
+            continue
+        by_piece = runs.setdefault(label, {})
+        by_piece[elem["pieceId"]] = by_piece.get(elem["pieceId"], 0.0) + _edge_length(elem)
+
+    return {label: max(by_piece.values()) for label, by_piece in runs.items()}
+
+
 def _append_novel_pieces(
     psnap: dict,
     features: GarmentFeatures,
     measurements: Measurements,
 ) -> dict:
     """Detect unsupported details, generate their pieces via LLM / learned store,
-    and append them to the right of the existing pattern layout."""
+    and append them to the right of the existing pattern layout. Connections are
+    recomputed afterwards so a novel piece with an attachment_label (e.g. a
+    flounce labelled 'hem') is sewn into the assembly."""
     unsupported = detect_unsupported_details(features)
     if not unsupported:
         return psnap
 
-    extra_specs = generate_novel_pieces(unsupported, features, measurements)
+    extra_specs = generate_novel_pieces(
+        unsupported, features, measurements, edge_runs=_edge_run_lengths(psnap)
+    )
     if not extra_specs:
         return psnap
 
@@ -1371,7 +1398,12 @@ def _append_novel_pieces(
             all_pieces.append(piece_dict)
         cursor_x += spec_max_x + gap
 
-    return {**psnap, "elements": all_elements, "pieces": all_pieces}
+    return {
+        **psnap,
+        "elements": all_elements,
+        "pieces": all_pieces,
+        "connections": _compute_connections(all_elements, all_pieces),
+    }
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
