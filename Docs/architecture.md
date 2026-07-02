@@ -317,6 +317,46 @@ details from the vision analysis:
 
 ---
 
+## Novel-Piece Fallback (learned templates)
+
+When the vision analysis emits a detail token no parametric builder handles
+(`llm_fallback.detect_unsupported_details`, checked against the per-garment
+`_PARAMETRIC_DETAILS` registry), the engine asks the LLM to describe the missing
+piece as **size-parametric formulas**, not absolute coordinates
+(`llm_fallback.generate_novel_pieces`). The result is saved as a `PieceTemplate`
+in a JSON store (`learned_pieces.py`, `templates/learned.json`) and re-evaluated
+locally for every future request — the parametric engine grows over time without
+repeat LLM calls. A template is only persisted after it successfully applies, so
+a bad formula can never poison the store.
+
+`apply_template` assembles the evaluated formulas into a `PieceSpec` using one of
+seven geometry primitives (`VALID_GEOMETRIES`; unknown values fall back to
+rectangle):
+
+| Geometry | Use | Dimension semantics |
+|----------|-----|---------------------|
+| `rectangle` | straps, ties, bands, casings | length × width, `grain_direction` picks the axis |
+| `shaped_rectangle` | flaps, tabs, shaped belt ends | height × width; `end_shape` = pointed/rounded/angled/curved (reuses `make_patch_pocket`) |
+| `trapezoid` | gores, panels wider at one end | height; bottom edge = width, top edge = `top_width_formula` (default width/2) |
+| `godet` | flare inserts | side/slit length; hem width (clamped < 1.8×length); circular hem arc |
+| `quarter_circle` | 90° annular flounce/ruffle | inner arc = attachment edge length **exactly**; width = flounce depth |
+| `half_circle` | 180° flounce, cascade | as quarter_circle |
+| `curved_band` | contoured collars/waistbands | band run × height; `curve_depth_formula` = arc rise (default 12% of run) |
+
+Arcs are emitted as ≤90° cubic beziers (`_arc_segments`) so they serialise
+through the existing `CurveSegment` path; every non-rectangle piece is
+normalised into the +x/+y quadrant before serialisation. The LLM prompt
+documents when to choose each geometry (gathered ruffle = rectangle at 1.5–2.5×,
+circular flounce = quarter/half circle at exactly 1×).
+
+Planned next tiers (see `ai-novel-pieces` in FEATURES.json): validation +
+seam-length matching + self-repair re-prompts (tier 3), composing unknown
+garment types from existing blocks (tier 4), formula-based custom point-list
+outlines (tier 2), and vision-derived contours with a user-edit→template
+feedback loop (tier 5).
+
+---
+
 ## LLM Provider Layer
 
 The `backend/app/llm/` package decouples all AI calls from any single vendor. A

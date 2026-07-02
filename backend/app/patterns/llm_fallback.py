@@ -164,13 +164,16 @@ Required format:
     {
       "name": "<piece name shown on the pattern, e.g. Strap>",
       "description": "<one sentence for the pattern maker>",
-      "geometry": "rectangle",
+      "geometry": "<rectangle | shaped_rectangle | trapezoid | godet | quarter_circle | half_circle | curved_band>",
       "length_formula": "<arithmetic expression using measurement variables>",
       "width_formula": "<arithmetic expression or numeric literal>",
       "cut_qty": <integer — how many pieces to cut from fabric>,
       "on_fold": <true | false>,
       "seam_allowance_formula": "seam_allowance_cm",
       "grain_direction": "<'length' runs the grain along the longer dimension | 'width'>",
+      "top_width_formula": "<trapezoid only: top edge width — omit otherwise>",
+      "curve_depth_formula": "<curved_band only: arc rise — omit otherwise>",
+      "end_shape": "<shaped_rectangle only: square | rounded | angled | pointed | curved — omit otherwise>",
       "reasoning": "<brief explanation of why these dimensions make sense>"
     }
   ]
@@ -186,12 +189,30 @@ Available measurement variables (all in cm, use 0-safe fallback constants if nee
 Allowed in formulas: the variables above, numeric literals, +, -, *, /, (, ), max(), min().
 No other functions or identifiers are permitted.
 
-Geometry rules:
-- "rectangle" is the only supported geometry for now.
-- length_formula: the longer dimension (the piece's height when upright).
-- width_formula: the shorter dimension (the piece's width when upright).
-- grain_direction "length": grain arrow runs parallel to the length axis (vertical).
-- grain_direction "width": grain arrow runs parallel to the width axis (horizontal).
+Geometry options — pick the one that matches the REAL pattern-piece shape:
+- "rectangle": straps, ties, simple bands, casings, plain patch pockets.
+  length_formula = longer dimension, width_formula = shorter dimension.
+  grain_direction "length" = grain along the length axis; "width" = along the width axis.
+- "shaped_rectangle": a rectangle whose bottom end is shaped — set "end_shape" to
+  pointed | rounded | angled | curved. Use for flaps, tabs, shaped belt/tie ends.
+  length_formula = height (shaped end at the bottom), width_formula = width.
+- "trapezoid": a band/gore/panel wider at one end. width_formula = bottom edge,
+  "top_width_formula" = top edge, length_formula = height.
+- "godet": triangular flare insert with a curved hem. length_formula = the slit/side
+  length it is sewn into, width_formula = hem width (must be < 1.8 x length).
+- "quarter_circle": annular flounce/ruffle/circle-cut piece spanning 90 degrees.
+  length_formula = the attachment (inner) edge length — EXACTLY the edge run it is
+  sewn to, NOT gathered; width_formula = the flounce depth.
+- "half_circle": as quarter_circle but spanning 180 degrees (fuller flounce, cascade,
+  cape-like pieces).
+- "curved_band": contoured band (shaped collar, contoured waistband, curved yoke band).
+  length_formula = band run, width_formula = band height,
+  "curve_depth_formula" = arc rise (omit for a gentle default of length * 0.12).
+Shape selection guidance:
+- A GATHERED ruffle is a rectangle with length 1.5–2.5x the edge it attaches to;
+  a CIRCULAR flounce (ungathered, fluid drape) is quarter_circle/half_circle with
+  length = the attachment edge exactly.
+- Only use plain "rectangle" when the real piece genuinely is one.
 
 Key sewing conventions to follow:
 - Straps: cut_qty=4 (cut 2 pairs so they can be sewn together); narrow width ~1.5–2 cm finished.
@@ -318,17 +339,24 @@ def generate_novel_pieces(
                 on_fold=bool(pd.get("on_fold", False)),
                 seam_allowance_formula=pd.get("seam_allowance_formula", "seam_allowance_cm"),
                 grain_direction=pd.get("grain_direction", "length"),
+                top_width_formula=pd.get("top_width_formula"),
+                curve_depth_formula=pd.get("curve_depth_formula"),
+                end_shape=pd.get("end_shape", "square"),
                 created_at=datetime.now(timezone.utc).isoformat(),
                 times_used=1,
             )
 
+            # Apply BEFORE saving: a template whose formulas don't evaluate must not
+            # be persisted, or every future request replays the failure from the store.
+            try:
+                spec = apply_template(new_template, measurements)
+            except Exception:
+                logger.exception("New template '%s' failed to apply — not saving it", tid)
+                continue
+
             store.add(new_template)
             logger.info("Saved new template id='%s' (detail=%s, garment=%s)", tid, detail, gtype)
-
-            try:
-                result_specs.append(apply_template(new_template, measurements))
-            except Exception:
-                logger.exception("Failed to apply new template '%s'", tid)
+            result_specs.append(spec)
 
     return result_specs
 
