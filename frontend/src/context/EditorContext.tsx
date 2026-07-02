@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
-import type { CanvasElement, EditorState, GarmentFeatures, Measurements, PatternPiece, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
+import type { CanvasElement, EditorSnapshot, EditorState, GarmentFeatures, Measurements, PatternPiece, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
 import { mirrorPiece } from '../utils/pieceTransforms'
 
 type Action =
@@ -48,10 +48,31 @@ const initialState: EditorState = {
   unitSystem: 'metric',
   undoStack: [],
   redoStack: [],
+  liveBase: null,
+  undoTag: null,
   instructions: null,
   instructionsLoading: false,
   lastFeatures: null,
   lastMeasurements: null,
+}
+
+function snapshot(state: EditorState): EditorSnapshot {
+  return { elements: state.elements, pieces: state.pieces, connections: state.connections }
+}
+
+// Push the current state onto the undo stack (before applying a mutation).
+// A non-null `tag` coalesces consecutive edits: while state.undoTag matches,
+// no new entry is pushed, so e.g. spinner clicks on cut-quantity form ONE undo step.
+function pushUndo(state: EditorState, tag: string | null = null): Pick<EditorState, 'undoStack' | 'redoStack' | 'liveBase' | 'undoTag'> {
+  if (tag !== null && state.undoTag === tag) {
+    return { undoStack: state.undoStack, redoStack: [], liveBase: null, undoTag: tag }
+  }
+  return {
+    undoStack: [...state.undoStack, snapshot(state)].slice(-MAX_UNDO),
+    redoStack: [],
+    liveBase: null,
+    undoTag: tag,
+  }
 }
 
 function reducer(state: EditorState, action: Action): EditorState {
@@ -75,53 +96,75 @@ function reducer(state: EditorState, action: Action): EditorState {
       return { ...state, unitSystem: action.unit }
 
     case 'SET_ACTIVE_TOOL':
-      return { ...state, activeTool: action.tool, selectedIds: [], selectedPieceId: null }
+      return { ...state, activeTool: action.tool, selectedIds: [], selectedPieceId: null, undoTag: null }
 
     case 'ADD_ELEMENT': {
       const newElements = [...state.elements, action.element]
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
-      return { ...state, elements: newElements, undoStack: newUndo, redoStack: [] }
+      return { ...state, ...pushUndo(state), elements: newElements }
     }
 
     case 'UPDATE_ELEMENT': {
       const newElements = state.elements.map(el =>
         el.id === action.element.id ? action.element : el
       )
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
-      return { ...state, elements: newElements, undoStack: newUndo, redoStack: [] }
+      return { ...state, ...pushUndo(state), elements: newElements }
     }
 
     case 'DELETE_ELEMENTS': {
       const ids = new Set(action.ids)
       const newElements = state.elements.filter(el => !ids.has(el.id))
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
-      return { ...state, elements: newElements, selectedIds: [], undoStack: newUndo, redoStack: [] }
+      // Drop connections whose edge no longer exists
+      const newConnections = state.connections.filter(
+        c => !ids.has(c.from.edgeId) && !ids.has(c.to.edgeId)
+      )
+      return { ...state, ...pushUndo(state), elements: newElements, connections: newConnections, selectedIds: [] }
     }
 
     case 'SET_SELECTED':
-      return { ...state, selectedIds: action.ids, selectedPieceId: null }
+      return { ...state, selectedIds: action.ids, selectedPieceId: null, undoTag: null }
 
     case 'DESELECT_ALL':
-      return { ...state, selectedIds: [], selectedPieceId: null }
+      return { ...state, selectedIds: [], selectedPieceId: null, undoTag: null }
 
     case 'ADD_PIECE': {
       const idSet = new Set(action.piece.elementIds)
       const updatedElements = state.elements.map(el =>
         idSet.has(el.id) ? { ...el, pieceId: action.piece.id } : el
       )
-      return { ...state, pieces: [...state.pieces, action.piece], elements: updatedElements }
+      return { ...state, ...pushUndo(state), pieces: [...state.pieces, action.piece], elements: updatedElements }
     }
 
     case 'UPDATE_PIECE':
-      return { ...state, pieces: state.pieces.map(p => p.id === action.piece.id ? action.piece : p) }
+      return {
+        ...state,
+        ...pushUndo(state, `piece:${action.piece.id}`),
+        pieces: state.pieces.map(p => p.id === action.piece.id ? action.piece : p),
+      }
 
     case 'DELETE_PIECE': {
-      const keepPieceId = state.selectedPieceId === action.id ? null : state.selectedPieceId
-      return { ...state, pieces: state.pieces.filter(p => p.id !== action.id), selectedPieceId: keepPieceId }
+      const piece = state.pieces.find(p => p.id === action.id)
+      if (!piece) return state
+      // Remove the outline elements AND any interior elements tagged with this
+      // piece (grain line, dart/pleat markings from generated patterns).
+      const outlineIds = new Set(piece.elementIds)
+      const newElements = state.elements.filter(
+        el => !outlineIds.has(el.id) && !('pieceId' in el && el.pieceId === action.id)
+      )
+      const newConnections = state.connections.filter(
+        c => c.from.pieceId !== action.id && c.to.pieceId !== action.id
+      )
+      return {
+        ...state,
+        ...pushUndo(state),
+        elements: newElements,
+        pieces: state.pieces.filter(p => p.id !== action.id),
+        connections: newConnections,
+        selectedPieceId: state.selectedPieceId === action.id ? null : state.selectedPieceId,
+      }
     }
 
     case 'SELECT_PIECE':
-      return { ...state, selectedPieceId: action.id, selectedIds: [] }
+      return { ...state, selectedPieceId: action.id, selectedIds: [], undoTag: null }
 
     case 'SET_MEASUREMENT':
       return { ...state, measurements: { ...state.measurements, [action.name]: action.value } }
@@ -129,15 +172,16 @@ function reducer(state: EditorState, action: Action): EditorState {
     case 'BATCH_UPDATE_ELEMENTS': {
       const updateMap = new Map(action.elements.map(el => [el.id, el]))
       const newElements = state.elements.map(el => updateMap.has(el.id) ? updateMap.get(el.id)! : el)
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
-      return { ...state, elements: newElements, undoStack: newUndo, redoStack: [] }
+      return { ...state, ...pushUndo(state), elements: newElements }
     }
 
     case 'LIVE_UPDATE_ELEMENTS': {
-      // Like BATCH_UPDATE_ELEMENTS but does NOT push to the undo stack (used during live drag/rotate)
+      // Applied on every mousemove during a drag/rotate. Does NOT push an undo
+      // entry per frame — instead the first frame captures the pre-gesture
+      // snapshot in liveBase, which PUSH_UNDO commits on mouseup.
       const updateMap = new Map(action.elements.map(el => [el.id, el]))
       const newElements = state.elements.map(el => updateMap.has(el.id) ? updateMap.get(el.id)! : el)
-      return { ...state, elements: newElements }
+      return { ...state, elements: newElements, liveBase: state.liveBase ?? snapshot(state) }
     }
 
     case 'REMOVE_SIDE_FROM_PIECE': {
@@ -147,14 +191,16 @@ function reducer(state: EditorState, action: Action): EditorState {
       const updatedElements = state.elements.map(el =>
         piece.elementIds.includes(el.id) ? { ...el, pieceId: undefined } : el
       )
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
+      const newConnections = state.connections.filter(
+        c => c.from.pieceId !== action.pieceId && c.to.pieceId !== action.pieceId
+      )
       return {
         ...state,
+        ...pushUndo(state),
         elements: updatedElements,
         pieces: state.pieces.filter(p => p.id !== action.pieceId),
+        connections: newConnections,
         selectedPieceId: state.selectedPieceId === action.pieceId ? null : state.selectedPieceId,
-        undoStack: newUndo,
-        redoStack: [],
       }
     }
 
@@ -163,14 +209,12 @@ function reducer(state: EditorState, action: Action): EditorState {
       if (!srcPiece) return state
       const { newElements, newPiece } = mirrorPiece(srcPiece, state.elements, action.op)
       const taggedElements = newElements.map(el => ({ ...el, pieceId: newPiece.id }))
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
       return {
         ...state,
+        ...pushUndo(state),
         elements: [...state.elements, ...taggedElements],
         pieces: [...state.pieces, newPiece],
         selectedPieceId: newPiece.id,
-        undoStack: newUndo,
-        redoStack: [],
       }
     }
 
@@ -184,8 +228,6 @@ function reducer(state: EditorState, action: Action): EditorState {
         instructions: action.instructions ?? null,
         lastFeatures: action.lastFeatures ?? null,
         lastMeasurements: action.lastMeasurements ?? null,
-        undoStack: [],
-        redoStack: [],
       }
 
     case 'SET_INSTRUCTIONS':
@@ -198,8 +240,17 @@ function reducer(state: EditorState, action: Action): EditorState {
       }
 
     case 'PUSH_UNDO': {
-      const newUndo = [...state.undoStack, state.elements].slice(-MAX_UNDO)
-      return { ...state, undoStack: newUndo, redoStack: [] }
+      // Commit the drag gesture that just ended: the undo entry is the state
+      // captured BEFORE the first live update. Without live updates (a plain
+      // click, no movement) there is nothing to undo — push nothing.
+      if (state.liveBase === null) return state
+      return {
+        ...state,
+        undoStack: [...state.undoStack, state.liveBase].slice(-MAX_UNDO),
+        redoStack: [],
+        liveBase: null,
+        undoTag: null,
+      }
     }
 
     case 'UNDO': {
@@ -207,10 +258,15 @@ function reducer(state: EditorState, action: Action): EditorState {
       const prev = state.undoStack[state.undoStack.length - 1]
       return {
         ...state,
-        elements: prev,
+        elements: prev.elements,
+        pieces: prev.pieces,
+        connections: prev.connections,
         undoStack: state.undoStack.slice(0, -1),
-        redoStack: [state.elements, ...state.redoStack].slice(0, MAX_UNDO),
+        redoStack: [snapshot(state), ...state.redoStack].slice(0, MAX_UNDO),
         selectedIds: [],
+        selectedPieceId: null,
+        liveBase: null,
+        undoTag: null,
       }
     }
 
@@ -219,10 +275,15 @@ function reducer(state: EditorState, action: Action): EditorState {
       const next = state.redoStack[0]
       return {
         ...state,
-        elements: next,
-        undoStack: [...state.undoStack, state.elements].slice(-MAX_UNDO),
+        elements: next.elements,
+        pieces: next.pieces,
+        connections: next.connections,
+        undoStack: [...state.undoStack, snapshot(state)].slice(-MAX_UNDO),
         redoStack: state.redoStack.slice(1),
         selectedIds: [],
+        selectedPieceId: null,
+        liveBase: null,
+        undoTag: null,
       }
     }
 
@@ -230,6 +291,10 @@ function reducer(state: EditorState, action: Action): EditorState {
       return state
   }
 }
+
+// Exported for unit tests (the reducer is pure).
+export { reducer, initialState }
+export type { Action }
 
 const EditorContext = createContext<{
   state: EditorState

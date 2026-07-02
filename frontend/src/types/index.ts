@@ -73,6 +73,15 @@ export type ToolType = 'select' | 'line' | 'curve' | 'seam-allowance' | 'grain-l
 
 export type UnitSystem = 'metric' | 'imperial'
 
+// One undo/redo history entry. Pieces and connections must be versioned together
+// with elements — restoring elements alone leaves pieces referencing deleted
+// element ids (dangling pieces).
+export interface EditorSnapshot {
+  elements: CanvasElement[]
+  pieces: PatternPiece[]
+  connections: SeamConnection[]
+}
+
 export interface EditorState {
   elements: CanvasElement[]
   pieces: PatternPiece[]
@@ -87,8 +96,14 @@ export interface EditorState {
   snapEnabled: boolean
   showSeamAllowance: boolean
   unitSystem: UnitSystem // all internal values always in cm; this controls display only
-  undoStack: CanvasElement[][]
-  redoStack: CanvasElement[][]
+  undoStack: EditorSnapshot[]
+  redoStack: EditorSnapshot[]
+  // Pre-gesture snapshot captured on the first LIVE_UPDATE_ELEMENTS of a drag;
+  // PUSH_UNDO commits it as the undo entry so a whole drag is one undo step.
+  liveBase: EditorSnapshot | null
+  // Coalescing tag: consecutive UPDATE_PIECE edits on the same piece share one
+  // undo entry until the selection or action type changes.
+  undoTag: string | null
   instructions: SewingInstructions | null
   instructionsLoading: boolean
   lastFeatures: GarmentFeatures | null

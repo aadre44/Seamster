@@ -77,9 +77,16 @@ Seamster/
 | `showGrid` | `boolean` | Grid visibility toggle |
 | `snapEnabled` | `boolean` | Snap-to-point toggle |
 | `showSeamAllowance` | `boolean` | Seam allowance overlay toggle |
-| `undoStack` / `redoStack` | `EditorState[][]` | 50-level history snapshots |
+| `undoStack` / `redoStack` | `EditorSnapshot[]` | 50-level history; each entry versions `{elements, pieces, connections}` together |
+| `liveBase` | `EditorSnapshot \| null` | Pre-gesture snapshot captured on the first `LIVE_UPDATE_ELEMENTS` of a drag |
+| `undoTag` | `string \| null` | Coalescing tag — consecutive `UPDATE_PIECE` edits on the same piece share one undo entry |
 
-Actions are dispatched via `useReducer`. The undo stack snapshots the full state on every mutating action.
+Actions are dispatched via `useReducer`. Undo semantics:
+
+- Every discrete mutating action (`ADD_ELEMENT`, `ADD_PIECE`, `DELETE_PIECE`, `BATCH_UPDATE_ELEMENTS`, …) pushes a snapshot of `{elements, pieces, connections}` **before** applying the change — pieces and connections are versioned with elements so an undo can never leave a piece referencing deleted element ids.
+- Continuous drags (move, rotate, node/endpoint reshape) dispatch `LIVE_UPDATE_ELEMENTS` per mousemove; the first frame stores the pre-drag snapshot in `liveBase`, and `PUSH_UNDO` on mouseup commits it as **one** undo entry. A click with no movement pushes nothing.
+- `DELETE_PIECE` removes the piece, its outline elements, its interior markings (grain line, darts, pleat folds) and any connections that reference it — one undoable step.
+- Piece property edits (`UPDATE_PIECE`) coalesce per piece via `undoTag`: spinner clicks on cut-quantity form a single undo step; changing selection starts a new one.
 
 ---
 

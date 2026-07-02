@@ -613,12 +613,9 @@ export default function Canvas() {
             dispatch({ type: 'DELETE_ELEMENTS', ids: selectedIdsRef.current })
           }
         } else if (selectedPieceIdRef.current) {
-          // Delete the whole piece and its elements
-          const piece = piecesRef.current.find(p => p.id === selectedPieceIdRef.current)
-          if (piece) {
-            dispatch({ type: 'DELETE_ELEMENTS', ids: piece.elementIds })
-            dispatch({ type: 'DELETE_PIECE', id: piece.id })
-          }
+          // Delete the whole piece — the reducer removes its outline elements,
+          // interior markings and connections in one undoable step
+          dispatch({ type: 'DELETE_PIECE', id: selectedPieceIdRef.current })
         }
       }
 
@@ -1116,14 +1113,14 @@ export default function Canvas() {
         const nextId = piece.elementIds[(nodeIdx + 1) % n]
         const prevOrig = nodeDragSnapshot.current.get(prevId)
         const nextOrig = nodeDragSnapshot.current.get(nextId)
+        const reshaped: CanvasElement[] = []
         if (prevOrig && (prevOrig.type === 'line' || prevOrig.type === 'curve')) {
-          const updated = { ...prevOrig, end: { x: prevOrig.end.x + dcm.x, y: prevOrig.end.y + dcm.y } }
-          dispatch({ type: 'UPDATE_ELEMENT', element: updated as CanvasElement })
+          reshaped.push({ ...prevOrig, end: { x: prevOrig.end.x + dcm.x, y: prevOrig.end.y + dcm.y } } as CanvasElement)
         }
         if (nextOrig && (nextOrig.type === 'line' || nextOrig.type === 'curve')) {
-          const updated = { ...nextOrig, start: { x: nextOrig.start.x + dcm.x, y: nextOrig.start.y + dcm.y } }
-          dispatch({ type: 'UPDATE_ELEMENT', element: updated as CanvasElement })
+          reshaped.push({ ...nextOrig, start: { x: nextOrig.start.x + dcm.x, y: nextOrig.start.y + dcm.y } } as CanvasElement)
         }
+        if (reshaped.length > 0) dispatch({ type: 'LIVE_UPDATE_ELEMENTS', elements: reshaped })
       }
       return
     }
@@ -1134,6 +1131,7 @@ export default function Canvas() {
       const rect = svgRef.current!.getBoundingClientRect()
       const cmPt = screenToCm(e.clientX - rect.left, e.clientY - rect.top, pan, scale)
       const dcm = { x: cmPt.x - pieceDragStart.current.cmX, y: cmPt.y - pieceDragStart.current.cmY }
+      const moved: CanvasElement[] = []
       for (const [, origEl] of pieceElementsSnapshot.current) {
         let updated: CanvasElement
         if (origEl.type === 'line') {
@@ -1156,8 +1154,9 @@ export default function Canvas() {
         } else {
           updated = { ...origEl, position: { x: (origEl as any).position.x + dcm.x, y: (origEl as any).position.y + dcm.y } }
         }
-        dispatch({ type: 'UPDATE_ELEMENT', element: updated })
+        moved.push(updated)
       }
+      dispatch({ type: 'LIVE_UPDATE_ELEMENTS', elements: moved })
       return
     }
 
@@ -1210,6 +1209,7 @@ export default function Canvas() {
           x: cmPt.x - selectDragStart.current.cmX,
           y: cmPt.y - selectDragStart.current.cmY,
         }
+        const moved: CanvasElement[] = []
         for (const el of elements) {
           if (!state.selectedIds.includes(el.id)) continue
           const origin = draggedElementsOrigin.current.get(el.id)
@@ -1243,8 +1243,9 @@ export default function Canvas() {
           } else {
             updated = { ...el, position: { x: origin.x + dx, y: origin.y + dy } }
           }
-          dispatch({ type: 'UPDATE_ELEMENT', element: updated })
+          moved.push(updated)
         }
+        if (moved.length > 0) dispatch({ type: 'LIVE_UPDATE_ELEMENTS', elements: moved })
       } else {
         // Update box-select rect (screen coords)
         const ds = selectDragStart.current

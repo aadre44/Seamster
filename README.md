@@ -385,7 +385,7 @@ Seamster/
 - `selectedIds` / `selectedPieceId` — selection state
 - `zoom`, `pan` — viewport state
 - `showGrid`, `snapEnabled`, `showSeamAllowance` — toggles
-- `undoStack`, `redoStack` — 50-level snapshots
+- `undoStack`, `redoStack` — 50-level snapshots of `{elements, pieces, connections}`; drags collapse to one entry via `liveBase`, piece-property edits coalesce via `undoTag`
 - `instructions` / `instructionsLoading` — sewing instructions state (null until generated)
 - `lastFeatures` / `lastMeasurements` — the inputs used for the last generate call (used to regenerate instructions)
 
