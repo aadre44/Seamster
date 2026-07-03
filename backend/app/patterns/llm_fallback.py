@@ -153,15 +153,20 @@ _PARAMETRIC_DETAILS: dict[str, set[str]] = {
                  "kick_pleat", "side_slits", "ruffle", "elastic_waist"} | _TECHNIQUES,
     "trousers": _TROUSER_DETAILS | _TECHNIQUES,
     "pants":    _TROUSER_DETAILS | _TECHNIQUES,
-    "shorts":   {"patch_pockets", "side_pockets", "cuffs", "elastic_waist"} | _TECHNIQUES,
     "jacket":   _JACKET_DETAILS | _TECHNIQUES,
     "blazer":   _JACKET_DETAILS | _TECHNIQUES,
     "vest":     _VEST_DETAILS | _TECHNIQUES,
     "bodice":   set() | _TECHNIQUES,
-    "coat":     set() | _TECHNIQUES,
     # Dress generator natively builds a collar, belt/sash, and side pocket bag.
     "dress":    {"collar", "belt", "sash", "tie_back",
                  "side_pockets", "patch_pockets"} | _TECHNIQUES,
+    # Composed garments (patterns/compositions.py) inherit the detail sets of the
+    # builders they are composed from, or the fallback duplicates component pieces.
+    "shorts":   _TROUSER_DETAILS | _TECHNIQUES,
+    "coat":     _JACKET_DETAILS | _TECHNIQUES,
+    "tunic":    _SHIRT_DETAILS | _TECHNIQUES,
+    "romper":   _SHIRT_DETAILS | _TROUSER_DETAILS | _TECHNIQUES,
+    "jumpsuit": _SHIRT_DETAILS | _TROUSER_DETAILS | _TECHNIQUES,
 }
 
 # ── LLM prompt ────────────────────────────────────────────────────────────────

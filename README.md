@@ -359,7 +359,8 @@ Seamster/
         │   ├── instruction_generator.py  LLM call → structured sewing instructions JSON
         │   ├── llm_fallback.py         LLM-generated parametric pieces for unsupported details (template-cached, validate/repair loop, placeholder fallback)
         │   ├── learned_pieces.py       Template store + 7 formula-driven geometries (rectangle, shaped_rectangle, trapezoid, godet, quarter/half-circle flounce, curved_band)
-        │   └── novel_validation.py     Geometric checks for LLM pieces (dimension bounds, self-intersection, attachment-edge length)
+        │   ├── novel_validation.py     Geometric checks for LLM pieces (dimension bounds, self-intersection, attachment-edge length)
+        │   └── compositions.py         Composed garments: shorts/coat/tunic/romper/jumpsuit built from existing blocks (static plans + LLM planner)
         ├── llm/                        Provider-agnostic LLM layer (Anthropic + Ollama)
         │   ├── base.py                 LLMProvider ABC, LLMResponse, common error hierarchy
         │   ├── anthropic_provider.py   Anthropic Claude implementation (text + vision)

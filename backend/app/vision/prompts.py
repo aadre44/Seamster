@@ -331,6 +331,45 @@ _GARMENT_VOCAB: dict[str, dict] = {
         "has_waistband": True,
         "has_darts": False,
     },
+    # ── Composed garments (patterns/compositions.py) ──────────────────────────
+    # tunic → shirt block; romper/jumpsuit → shirt top + trouser bottom joined
+    # at a waist seam. Vocab mirrors the component builders so detected values
+    # route straight into them.
+    "tunic": {
+        "silhouettes": ["slim", "fitted", "regular", "relaxed", "boxy", "oversized", "longline"],
+        "sleeve_lengths": ["sleeveless", "cap", "short", "three_quarter", "bell", "long"],
+        "necklines": ["crew", "v_neck", "scoop", "round", "square", "mandarin", "boat", "halter"],
+        "length_categories": ["tunic", "longline", "knee"],
+        "details": ["collar", "button_placket", "cuffs", "patch_pockets", "chest_pocket",
+                    "topstitching", "yoke", "tie_front", "smocking", "elastic_hem", "ruffles"],
+        "closures": ["button_front", "none"],
+        "has_waistband": False,
+        "has_darts": True,
+    },
+    "romper": {
+        "silhouettes": ["fitted", "regular", "relaxed", "utility"],
+        "sleeve_lengths": ["sleeveless", "cap", "short", "three_quarter", "long"],
+        "necklines": ["crew", "v_neck", "scoop", "round", "square", "halter", "strapless"],
+        "length_categories": ["micro", "short", "mid_thigh"],
+        "details": ["collar", "button_placket", "cuffs", "patch_pockets", "chest_pocket",
+                    "side_pockets", "belt_loops", "elastic_waist", "drawstring",
+                    "tie_front", "smocking", "topstitching"],
+        "closures": ["button_front", "center_front_zip", "center_back_zip", "none"],
+        "has_waistband": False,
+        "has_darts": True,
+    },
+    "jumpsuit": {
+        "silhouettes": ["fitted", "regular", "relaxed", "wide_leg", "utility", "tapered"],
+        "sleeve_lengths": ["sleeveless", "cap", "short", "three_quarter", "long"],
+        "necklines": ["crew", "v_neck", "scoop", "round", "square", "halter", "strapless"],
+        "length_categories": ["full_length", "ankle", "cropped", "capri"],
+        "details": ["collar", "button_placket", "cuffs", "patch_pockets", "chest_pocket",
+                    "side_pockets", "cargo_pocket", "belt_loops", "elastic_waist",
+                    "drawstring", "belt", "tie_front", "smocking", "topstitching"],
+        "closures": ["button_front", "center_front_zip", "center_back_zip", "none"],
+        "has_waistband": False,
+        "has_darts": True,
+    },
 }
 
 # Fallback for any type not explicitly listed

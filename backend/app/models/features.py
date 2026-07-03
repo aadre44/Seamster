@@ -17,6 +17,12 @@ class GarmentType(str, Enum):
     BODICE = "bodice"
     COAT = "coat"
     SHORTS = "shorts"
+    # Composed garments — no dedicated block; built by patterns/compositions.py
+    # from existing builders (tunic = longline shirt; romper/jumpsuit = shirt
+    # top + trouser bottom joined at a waist seam).
+    TUNIC = "tunic"
+    ROMPER = "romper"
+    JUMPSUIT = "jumpsuit"
 
 
 class WaistbandFeature(BaseModel):

@@ -1408,6 +1408,31 @@ def _append_novel_pieces(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _generate_base(
+    features: GarmentFeatures,
+    measurements: Measurements,
+    shape_mode: ShapeMode = "modifiers",
+) -> dict | None:
+    """Dispatch to the native per-garment generator, or None when the garment type
+    has no dedicated block (the caller then tries composition, then the placeholder).
+    Also called by compositions.py to draft each component of a composed garment."""
+    if features.garment_type == GarmentType.SKIRT:
+        return _generate_skirt_pattern(features, measurements)
+    if features.garment_type in (GarmentType.SHIRT, GarmentType.BLOUSE):
+        return _generate_shirt_pattern(features, measurements)
+    if features.garment_type in (GarmentType.PANTS, GarmentType.TROUSERS):
+        return _generate_trousers_pattern(features, measurements)
+    if features.garment_type == GarmentType.DRESS:
+        return _generate_dress_pattern(features, measurements)
+    if features.garment_type in (GarmentType.JACKET, GarmentType.BLAZER):
+        return _generate_jacket_pattern(features, measurements)
+    if features.garment_type == GarmentType.VEST:
+        return _generate_vest_pattern(features, measurements, shape_mode)
+    if features.garment_type == GarmentType.BODICE:
+        return _generate_bodice_pattern(features, measurements, shape_mode)
+    return None
+
+
 def generate_pattern(
     features: GarmentFeatures,
     measurements: Measurements,
@@ -1417,22 +1442,17 @@ def generate_pattern(
 
     ``shape_mode`` selects the silhouette-generation strategy for shape-aware garments
     (vest / bodice): "modifiers" (default), "warp", or "fit_params".
+
+    Garment types without a native block are composed from existing builders
+    (compositions.py: static plans, then the LLM planner); the measurements-only
+    placeholder is returned only when composition genuinely fails.
     """
-    if features.garment_type == GarmentType.SKIRT:
-        psnap = _generate_skirt_pattern(features, measurements)
-    elif features.garment_type in (GarmentType.SHIRT, GarmentType.BLOUSE):
-        psnap = _generate_shirt_pattern(features, measurements)
-    elif features.garment_type in (GarmentType.PANTS, GarmentType.TROUSERS):
-        psnap = _generate_trousers_pattern(features, measurements)
-    elif features.garment_type == GarmentType.DRESS:
-        psnap = _generate_dress_pattern(features, measurements)
-    elif features.garment_type in (GarmentType.JACKET, GarmentType.BLAZER):
-        psnap = _generate_jacket_pattern(features, measurements)
-    elif features.garment_type == GarmentType.VEST:
-        psnap = _generate_vest_pattern(features, measurements, shape_mode)
-    elif features.garment_type == GarmentType.BODICE:
-        psnap = _generate_bodice_pattern(features, measurements, shape_mode)
-    else:
+    psnap = _generate_base(features, measurements, shape_mode)
+    if psnap is None:
+        from app.patterns.compositions import compose_pattern
+
+        psnap = compose_pattern(features, measurements, shape_mode)
+    if psnap is None:
         psnap = _generate_placeholder_pattern(features, measurements)
 
     return _append_novel_pieces(psnap, features, measurements)

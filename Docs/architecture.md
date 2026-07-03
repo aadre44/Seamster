@@ -372,10 +372,33 @@ circular flounce = quarter/half circle at exactly 1×).
   `_append_novel_pieces` **recomputes connections after appending** — so a hem
   flounce is genuinely sewn to the hem in the AssemblyView.
 
-Planned next tiers (see `ai-novel-pieces` in FEATURES.json): composing unknown
-garment types from existing blocks (tier 4), formula-based custom point-list
-outlines (tier 2), and vision-derived contours with a user-edit→template
-feedback loop (tier 5).
+**Garment composition (tier 4).** Garment types with no dedicated block no
+longer return an empty placeholder (`compositions.py`, called from
+`generate_pattern` when `_generate_base` has no native generator):
+
+1. **Static plans** route near-miss types onto existing builders with feature
+   rewrites — `shorts` → trousers (length defaulted to shorts), `coat` → jacket
+   (midi/maxi translated to knee), `tunic` → longline shirt, and
+   `romper`/`jumpsuit` → shirt top + trouser bottom. No LLM call.
+2. **The LLM planner** handles types without a static plan: it returns a
+   constrained-JSON plan (1–3 components, builder names, whitelisted feature
+   overrides, `join`), which is validated and re-prompted once with the
+   errors before giving up.
+3. The measurements-only **placeholder** is returned only when both fail.
+
+Execution reuses the trusted per-garment generators for each component, offsets
+the component layouts side by side, and relabels the joined edges (previous
+component's `hem` + next component's `waist` → `waist_seam`, the dress
+bodice/skirt convention) before recomputing connections — so a jumpsuit's top
+is genuinely sewn to its trousers in the AssemblyView. `GarmentType` gained
+`TUNIC`/`ROMPER`/`JUMPSUIT`, the vision vocab describes them with their
+component builders' vocabulary, and `_PARAMETRIC_DETAILS` gives composed types
+the union of their components' detail sets so the novel-piece fallback never
+duplicates component pieces.
+
+Planned next tiers (see `ai-novel-pieces` in FEATURES.json): formula-based
+custom point-list outlines (tier 2), and vision-derived contours with a
+user-edit→template feedback loop (tier 5).
 
 ---
 

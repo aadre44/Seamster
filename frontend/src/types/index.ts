@@ -115,10 +115,12 @@ export interface EditorState {
 export type GarmentType =
   | 'skirt' | 'dress' | 'trousers' | 'pants' | 'shirt'
   | 'blouse' | 'jacket' | 'blazer' | 'vest' | 'bodice' | 'coat' | 'shorts'
+  | 'tunic' | 'romper' | 'jumpsuit'
 
 export const GARMENT_TYPES: GarmentType[] = [
   'skirt', 'dress', 'trousers', 'pants', 'shirt',
   'blouse', 'jacket', 'blazer', 'vest', 'bodice', 'coat', 'shorts',
+  'tunic', 'romper', 'jumpsuit',
 ]
 
 // Silhouette-generation strategy for shape-aware garments (vest / bodice).
