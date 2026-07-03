@@ -402,8 +402,30 @@ raise clear ValueErrors that feed straight into the tier-3 repair re-prompt,
 and the built outline passes through the same self-intersection/bounds checks
 as every other geometry.
 
-Planned next tier (see `ai-novel-pieces` in FEATURES.json): vision-derived
-contours with a user-edit→template feedback loop (tier 5).
+**Vision contours + feedback loop (tier 5).** For pieces the vocabulary cannot
+name at all, the photo itself is the source:
+
+- The vision prompt exposes a `piece_contours` escape hatch — a normalized
+  outline polygon plus a scale hint (`width_frac` of a reference measurement)
+  per unnameable piece. `POST /api/analyze` accepts `debug_force_contours`
+  (surfaced as a dev-only checkbox in the AI modal) which makes the model trace
+  EVERY visible piece, so the contour path can be exercised on any photo.
+- `vision_contours.py` patternizes each contour: re-normalize (aspect
+  preserved), Ramer-Douglas-Peucker simplification, symmetrize near-mirror
+  shapes, snap near-axis edges straight, scale to cm, clamp, and validate with
+  the tier-3 checks. **All tuning knobs are module constants at the top of the
+  file** (`RDP_EPSILON_FRAC`, `SNAP_ANGLE_DEG`, `SYMMETRY_TOLERANCE`,
+  `MIN_CONTOUR_CONFIDENCE`, width-frac/size clamps).
+- Vision pieces are appended before the LLM fallback and their detail tokens
+  are excluded from it, so one physical feature never yields two pieces.
+- Every generated piece now carries `source` (`engine` / `template` / `llm` /
+  `vision`); the canvas renders non-engine pieces amber with an "(AI draft)"
+  label, and the Properties panel offers **Save as template** on drafts —
+  `POST /api/templates` converts the user-corrected outline into a parametric
+  custom template (coordinates stored as `reference * ratio` formulas) that
+  REPLACES the AI's original guess for future generations.
+- `TemplateStore.find` now matches normalized synonyms (plural stemming, token
+  order, a small synonym map: `utility_pockets` hits a `cargo_pocket` template).
 
 ---
 

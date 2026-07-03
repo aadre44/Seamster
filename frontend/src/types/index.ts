@@ -67,6 +67,11 @@ export interface PatternPiece {
   seamAllowance: number // cm
   closed: boolean
   notes?: string
+  // Provenance of generated pieces: 'engine' (parametric builder), 'template'
+  // (learned store), 'llm' (AI-guessed draft), 'vision' (traced from the photo).
+  // Non-engine pieces render amber on the canvas and offer "Save as template".
+  source?: string
+  detail?: string // the detail token that produced a non-engine piece
 }
 
 export type ToolType = 'select' | 'line' | 'curve' | 'seam-allowance' | 'grain-line' | 'notch' | 'point' | 'eraser'
@@ -173,6 +178,18 @@ export interface DartFeature {
   back: number
 }
 
+export interface PieceContour {
+  detail: string
+  name?: string
+  points: { x: number; y: number }[]
+  width_frac: number
+  reference: string
+  cut_qty?: number
+  attachment_label?: string | null
+  attachment_edges?: number[] | null
+  confidence?: number
+}
+
 export interface GarmentFeatures {
   garment_type: GarmentType
   silhouette: string
@@ -183,6 +200,7 @@ export interface GarmentFeatures {
   details: string[]
   shape?: ShapeFeature
   asymmetry?: AsymmetryFeature
+  piece_contours?: PieceContour[]
   confidence: number
   notes: string
 }

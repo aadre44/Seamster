@@ -105,6 +105,11 @@ class PieceSpec:
     edge_labels: dict[int, str] = field(default_factory=dict)  # edge index → seam name
     pleats: list[PleatSpec] = field(default_factory=list)      # interior pleat markings (fold + placement)
     marks: list[MarkSpec] = field(default_factory=list)        # interior construction marks (fly, crease)
+    # Provenance: "engine" (parametric builder), "template" (learned store),
+    # "llm" (fresh LLM piece / placeholder), or "vision" (photo contour).
+    # Serialised onto the .psnap piece so the canvas can style AI drafts distinctly.
+    source: str = "engine"
+    detail: str = ""               # the detail token that produced a non-engine piece
 
 
 def _clamp(val: float, lo: float, hi: float) -> float:

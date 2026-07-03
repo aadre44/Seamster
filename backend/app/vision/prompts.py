@@ -27,6 +27,32 @@ _POCKET_SHAPE_NOTE = (
     "Look closely: heritage/streetwear chest pockets are frequently pointed, not square."
 )
 
+# Piece-contour escape hatch: when a clearly visible pattern piece matches NO
+# vocabulary token, the model traces its flat outline instead of dropping it.
+_CONTOUR_NOTE = (
+    "piece_contours — an escape hatch for pieces the vocabulary cannot name. Usually an "
+    "empty array. ONLY when you can clearly see a distinct pattern piece (a panel, drape, "
+    "unusual flap, cape-like layer, appliqued shape) that NO details token describes, add:\n"
+    '{ "detail": "<short_snake_case_name>", "name": "<Display Name>", '
+    '"points": [{"x": 0-1, "y": 0-1}, ...], "width_frac": number, '
+    '"reference": "chest_cm" | "waist_cm" | "hip_cm" | "length_cm", "cut_qty": number, '
+    '"attachment_label": "hem" | "waist" | "neckline" | "armhole" | "wrist" | "side_seam" '
+    'or null, "attachment_edges": [edge indices] or null, "confidence": 0-1 }\n'
+    "points: 4-16 outline vertices of the FLAT piece (as it would lie on a cutting table, "
+    "not as worn), in order, y grows downward, normalized so the outline fits in a 0-1 box; "
+    "the outline closes automatically from the last point to the first. width_frac: the "
+    "piece's real width as a fraction of the reference measurement (e.g. a hood panel "
+    "~0.25 of chest_cm). attachment_edges: which 0-based outline edges (edge i runs from "
+    "point i to point i+1) sew to attachment_label. Estimate honestly and use confidence "
+    "to say how sure you are."
+)
+
+_FORCED_CONTOUR_NOTE = (
+    "DEBUG MODE — piece_contours is MANDATORY for this analysis: return a piece_contours "
+    "entry for EVERY distinct pattern piece you can identify in the photo, even pieces "
+    "that a details token already describes. This output is used to test contour tracing."
+)
+
 # Pleat taxonomy appended to the system prompt for any garment that can be pleated.
 _PLEAT_NOTE = (
     "Pleat types: 'knife' = all folds pressed the same direction; 'box' = two folds "
@@ -384,7 +410,7 @@ _DEFAULT_VOCAB = {
 }
 
 
-def build_system_prompt(garment_type: GarmentType) -> str:
+def build_system_prompt(garment_type: GarmentType, force_contours: bool = False) -> str:
     gtype = garment_type.value
     vocab = _GARMENT_VOCAB.get(gtype, _DEFAULT_VOCAB)
 
@@ -508,6 +534,10 @@ def build_system_prompt(garment_type: GarmentType) -> str:
     closures = vocab.get("closures", _DEFAULT_VOCAB["closures"])
     closure_options = " | ".join(f'"{c}"' for c in closures)
 
+    contour_note = f"\n{_CONTOUR_NOTE}\n"
+    if force_contours:
+        contour_note += f"\n{_FORCED_CONTOUR_NOTE}\n"
+
     return (
         f'You are a garment analysis expert. Analyze the provided {gtype} photograph(s) '
         f'and return ONLY a JSON object with no additional text. Identify:\n\n'
@@ -536,6 +566,7 @@ def build_system_prompt(garment_type: GarmentType) -> str:
         f'{asymmetry_note}'
         f'{pleat_line}'
         f'{_PLEAT_NOTE}\n'
+        f'{contour_note}'
         f'{confidence_num}. confidence: number 0-1 representing overall confidence\n'
         f'{notes_num}. notes: string with any additional observations relevant to pattern making\n\n'
         f'If you cannot determine a feature, use your best judgment and note uncertainty in the '

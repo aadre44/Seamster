@@ -4,7 +4,41 @@ import { evaluateFormula } from '../utils/formulaEval'
 import { transformPieceElements } from '../utils/pieceTransforms'
 import { throughPointToCP } from './Canvas'
 import { toDisplay, fromDisplay, unitLabel } from '../utils/units'
-import type { LineElement, CurveElement, PatternPiece, Point, UnitSystem } from '../types'
+import { saveTemplate, type TemplatePointOut } from '../api'
+import type { CanvasElement, LineElement, CurveElement, PatternPiece, Point, UnitSystem } from '../types'
+
+// Editor measurement keys → backend formula variable names, in preference order
+// for picking the reference measurement a saved template scales with.
+const REFERENCE_CANDIDATES: [string, string][] = [
+  ['waist', 'waist_cm'],
+  ['bust', 'chest_cm'],
+  ['hip', 'hip_cm'],
+  ['garmentLength', 'length_cm'],
+]
+
+/** Rebuild the ordered outline vertex list of a piece from its edge elements.
+ *  Vertex i = start of edge i; a curve edge contributes its control points to
+ *  the vertex it ENDS at (the backend custom-geometry contract), wrapping so
+ *  a curved closing edge attaches its cps to vertex 0. */
+function pieceOutlinePoints(piece: PatternPiece, elements: CanvasElement[]): TemplatePointOut[] | null {
+  const byId = new Map(elements.map(e => [e.id, e]))
+  const edges: (LineElement | CurveElement)[] = []
+  for (const id of piece.elementIds) {
+    const el = byId.get(id)
+    if (!el || (el.type !== 'line' && el.type !== 'curve')) return null
+    edges.push(el)
+  }
+  if (edges.length < 3) return null
+  const points: TemplatePointOut[] = edges.map(e => ({ x: e.start.x, y: e.start.y }))
+  edges.forEach((e, i) => {
+    if (e.type === 'curve') {
+      const target = points[(i + 1) % points.length]
+      target.cp1x = e.cp1.x; target.cp1y = e.cp1.y
+      target.cp2x = e.cp2.x; target.cp2y = e.cp2.y
+    }
+  })
+  return points
+}
 
 export default function PropertiesPanel() {
   const { state, dispatch } = useEditor()
@@ -309,11 +343,47 @@ function PieceProps({ piece, unit }: { piece: PatternPiece; unit: UnitSystem }) 
   const [name, setName] = useState(piece.name)
   const [seamInput, setSeamInput] = useState(String(toDisplay(piece.seamAllowance, unit)))
   const [customAngle, setCustomAngle] = useState('0')
+  const [tplStatus, setTplStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [tplError, setTplError] = useState('')
+
+  const isDraft = piece.source === 'llm' || piece.source === 'vision'
 
   useEffect(() => { setName(piece.name) }, [piece.id, piece.name])
   useEffect(() => {
     setSeamInput(String(toDisplay(piece.seamAllowance, unit)))
   }, [piece.id, piece.seamAllowance, unit])
+  useEffect(() => { setTplStatus('idle'); setTplError('') }, [piece.id])
+
+  const handleSaveTemplate = async () => {
+    const outline = pieceOutlinePoints(piece, state.elements)
+    if (!outline) {
+      setTplStatus('error')
+      setTplError('The piece outline could not be read from the canvas.')
+      return
+    }
+    const refPair = REFERENCE_CANDIDATES.find(([k]) => (state.measurements[k] ?? 0) > 0)
+    const [refKey, refVar] = refPair ?? ['waist', 'waist_cm']
+    const refValue = state.measurements[refKey] ?? 80
+    setTplStatus('saving'); setTplError('')
+    try {
+      await saveTemplate({
+        trigger_detail: piece.detail
+          ?? piece.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
+        garment_type: state.lastFeatures?.garment_type ?? 'shirt',
+        name: piece.name,
+        description: `user-corrected ${piece.name}`,
+        cut_qty: piece.cutQty,
+        on_fold: piece.onFold,
+        outline,
+        reference: refVar,
+        reference_value: refValue,
+      })
+      setTplStatus('saved')
+    } catch (e: unknown) {
+      setTplStatus('error')
+      setTplError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const commitSeam = () => {
     const v = parseFloat(seamInput)
@@ -416,6 +486,28 @@ function PieceProps({ piece, unit }: { piece: PatternPiece; unit: UnitSystem }) 
           </button>
         </div>
       </div>
+
+      {isDraft && (
+        <div className="border-t border-amber-200 pt-2 space-y-2">
+          <div className="text-[10px] text-amber-700 font-medium uppercase tracking-wide">
+            AI draft — {piece.source === 'vision' ? 'traced from photo' : 'LLM generated'}
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Verify and correct the shape, then save it so future patterns reuse your
+            corrected piece instead of the AI's guess.
+          </p>
+          <button
+            onClick={handleSaveTemplate}
+            disabled={tplStatus === 'saving'}
+            className="w-full border border-amber-300 bg-amber-50 text-amber-800 rounded px-2 py-1.5 text-[11px] font-medium hover:bg-amber-100 active:bg-amber-200 disabled:opacity-50"
+          >
+            {tplStatus === 'saving' ? 'Saving…' : tplStatus === 'saved' ? 'Saved as template ✓' : 'Save as template'}
+          </button>
+          {tplStatus === 'error' && (
+            <p className="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{tplError}</p>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-between text-gray-400">
         <span>Segments</span>

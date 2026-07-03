@@ -1502,6 +1502,9 @@ export default function Canvas() {
               const isSel = selectedPieceId === piece.id
               const isSeamTool = activeTool === 'seam-allowance'
               const saPath = piece.seamAllowance > 0 ? computeSeamAllowancePath(piece, elMap) : ''
+              // AI-draft pieces (LLM-guessed or traced from the photo) render amber
+              // so the user knows to verify them before cutting fabric.
+              const isDraft = piece.source === 'llm' || piece.source === 'vision'
               return (
                 <g key={piece.id}>
                   {/* Seam allowance offset outline (dashed red, behind fill) */}
@@ -1518,8 +1521,8 @@ export default function Canvas() {
                   {/* Piece fill */}
                   <path
                     d={d}
-                    fill={isSel ? 'rgba(99,102,241,0.18)' : 'rgba(186,230,253,0.25)'}
-                    stroke={isSel ? '#6366f1' : '#93c5fd'}
+                    fill={isSel ? 'rgba(99,102,241,0.18)' : isDraft ? 'rgba(251,191,36,0.20)' : 'rgba(186,230,253,0.25)'}
+                    stroke={isSel ? '#6366f1' : isDraft ? '#f59e0b' : '#93c5fd'}
                     strokeWidth={1.5 / scale}
                     strokeDasharray={isSel ? undefined : `${3 / scale} ${2 / scale}`}
                     onMouseDown={(e) => {
@@ -1561,10 +1564,10 @@ export default function Canvas() {
                     x={center.x} y={center.y - 0.45}
                     textAnchor="middle" dominantBaseline="middle"
                     fontSize={0.65}
-                    fill={isSel ? '#3730a3' : '#1e40af'}
+                    fill={isSel ? '#3730a3' : isDraft ? '#b45309' : '#1e40af'}
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
-                    {piece.name}
+                    {isDraft ? `${piece.name} (AI draft)` : piece.name}
                   </text>
                   <text
                     x={center.x} y={center.y + 0.45}

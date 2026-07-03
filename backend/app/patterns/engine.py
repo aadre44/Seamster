@@ -207,7 +207,10 @@ def _serialise_piece(
         "seamAllowance": spec.seam_allowance,
         "closed": True,
         "notes": spec.notes,
+        "source": spec.source,
     }
+    if spec.detail:
+        piece_dict["detail"] = spec.detail
 
     return elements, piece_dict
 
@@ -1357,23 +1360,10 @@ def _edge_run_lengths(psnap: dict) -> dict[str, float]:
     return {label: max(by_piece.values()) for label, by_piece in runs.items()}
 
 
-def _append_novel_pieces(
-    psnap: dict,
-    features: GarmentFeatures,
-    measurements: Measurements,
-) -> dict:
-    """Detect unsupported details, generate their pieces via LLM / learned store,
-    and append them to the right of the existing pattern layout. Connections are
-    recomputed afterwards so a novel piece with an attachment_label (e.g. a
-    flounce labelled 'hem') is sewn into the assembly."""
-    unsupported = detect_unsupported_details(features)
-    if not unsupported:
-        return psnap
-
-    extra_specs = generate_novel_pieces(
-        unsupported, features, measurements, edge_runs=_edge_run_lengths(psnap)
-    )
-    if not extra_specs:
+def _append_specs(psnap: dict, specs: list) -> dict:
+    """Serialise extra PieceSpecs to the right of the existing layout and
+    recompute connections so labelled attachment edges are sewn into assembly."""
+    if not specs:
         return psnap
 
     # Find the rightmost x already on the canvas to position new pieces beside it
@@ -1390,7 +1380,7 @@ def _append_novel_pieces(
     all_elements = list(psnap.get("elements", []))
     all_pieces = list(psnap.get("pieces", []))
 
-    for spec in extra_specs:
+    for spec in specs:
         spec_max_x = max(p.x for p in spec.outline)
         elems, piece_dict = _serialise_piece(spec, offset_x=cursor_x, offset_y=2.0)
         all_elements.extend(elems)
@@ -1404,6 +1394,43 @@ def _append_novel_pieces(
         "pieces": all_pieces,
         "connections": _compute_connections(all_elements, all_pieces),
     }
+
+
+def _append_vision_pieces(
+    psnap: dict,
+    features: GarmentFeatures,
+    measurements: Measurements,
+) -> tuple[dict, set[str]]:
+    """Patternize vision-detected contours into pieces. Returns the updated psnap
+    plus the detail tokens the contours covered, so the LLM fallback does not
+    generate a second piece for the same physical feature."""
+    # getattr: the legacy SkirtFeatures model has no piece_contours field
+    if not getattr(features, "piece_contours", None):
+        return psnap, set()
+    from app.patterns.vision_contours import generate_vision_pieces
+
+    specs = generate_vision_pieces(features, measurements)
+    handled = {spec.detail for spec in specs if spec.detail}
+    return _append_specs(psnap, specs), handled
+
+
+def _append_novel_pieces(
+    psnap: dict,
+    features: GarmentFeatures,
+    measurements: Measurements,
+    exclude: set[str] | frozenset = frozenset(),
+) -> dict:
+    """Detect unsupported details, generate their pieces via LLM / learned store,
+    and append them to the right of the existing pattern layout. ``exclude`` lists
+    details already covered elsewhere (e.g. by a vision contour)."""
+    unsupported = [d for d in detect_unsupported_details(features) if d not in exclude]
+    if not unsupported:
+        return psnap
+
+    extra_specs = generate_novel_pieces(
+        unsupported, features, measurements, edge_runs=_edge_run_lengths(psnap)
+    )
+    return _append_specs(psnap, extra_specs)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -1455,4 +1482,7 @@ def generate_pattern(
     if psnap is None:
         psnap = _generate_placeholder_pattern(features, measurements)
 
-    return _append_novel_pieces(psnap, features, measurements)
+    # Vision contours first — a detail covered by a traced contour must not also
+    # get an LLM-guessed piece for the same physical feature.
+    psnap, handled = _append_vision_pieces(psnap, features, measurements)
+    return _append_novel_pieces(psnap, features, measurements, exclude=handled)

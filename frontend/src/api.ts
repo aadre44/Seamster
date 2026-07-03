@@ -45,11 +45,13 @@ export function analyzeGarment(
   garmentType: string,
   frontImage: File,
   backImage?: File | null,
+  forceContours = false,
 ): Promise<GarmentFeatures> {
   const fd = new FormData()
   fd.append('garment_type', garmentType)
   fd.append('front_image', frontImage)
   if (backImage) fd.append('back_image', backImage)
+  if (forceContours) fd.append('debug_force_contours', 'true')
   return request<GarmentFeatures>('/analyze', { method: 'POST', body: fd })
 }
 
@@ -112,6 +114,37 @@ export async function exportPdf(payload: ExportPdfRequest): Promise<Blob> {
   const res = await fetch(`${API_BASE}/export/pdf`, jsonInit(payload))
   if (!res.ok) throw new Error(`Server error ${res.status}`)
   return res.blob()
+}
+
+// ── /templates ────────────────────────────────────────────────────────────────
+
+/** One outline vertex in absolute cm; cp* describe the bezier INTO this vertex. */
+export interface TemplatePointOut {
+  x: number
+  y: number
+  cp1x?: number
+  cp1y?: number
+  cp2x?: number
+  cp2y?: number
+}
+
+export interface SaveTemplateRequest {
+  trigger_detail: string
+  garment_type: string
+  name: string
+  description?: string
+  cut_qty?: number
+  on_fold?: boolean
+  outline: TemplatePointOut[]
+  reference: string        // measurement the shape scales with, e.g. 'waist_cm'
+  reference_value: number  // that measurement's value for this pattern (cm)
+  attachment_label?: string | null
+  attachment_edges?: number[] | null
+}
+
+/** Save a user-corrected AI-draft piece as a reusable parametric template. */
+export function saveTemplate(payload: SaveTemplateRequest): Promise<{ id: string; points: number }> {
+  return request<{ id: string; points: number }>('/templates', jsonInit(payload))
 }
 
 // ── /provider ─────────────────────────────────────────────────────────────────

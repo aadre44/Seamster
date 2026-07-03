@@ -348,7 +348,10 @@ def generate_novel_pieces(
             logger.info("Learned template hit: id=%s for detail='%s'", template.id, detail)
             store.record_use(template.id)
             try:
-                result_specs.append(apply_template(template, measurements))
+                spec = apply_template(template, measurements)
+                spec.source = "template"
+                spec.detail = detail
+                result_specs.append(spec)
             except Exception:
                 logger.exception("Failed to apply learned template '%s'", template.id)
             continue
@@ -449,8 +452,10 @@ def _generate_with_repair(
             continue
 
         if accepted:
-            for tmpl, _ in accepted:
+            for tmpl, spec in accepted:
                 store.add(tmpl)
+                spec.source = "llm"
+                spec.detail = detail
                 logger.info(
                     "Saved new template id='%s' (detail=%s, garment=%s)", tmpl.id, detail, gtype
                 )
@@ -549,6 +554,8 @@ def _fallback_piece(detail: str, measurements: Measurements) -> PieceSpec:
         f"placeholder for '{_humanise(detail)}': the AI could not produce a valid piece; "
         "this rectangle stands in — reshape it in the editor"
     )
+    spec.source = "llm"
+    spec.detail = detail
     return spec
 
 

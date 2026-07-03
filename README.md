@@ -360,7 +360,8 @@ Seamster/
         │   ├── llm_fallback.py         LLM-generated parametric pieces for unsupported details (template-cached, validate/repair loop, placeholder fallback)
         │   ├── learned_pieces.py       Template store + 7 formula-driven geometries (rectangle, shaped_rectangle, trapezoid, godet, quarter/half-circle flounce, curved_band)
         │   ├── novel_validation.py     Geometric checks for LLM pieces (dimension bounds, self-intersection, attachment-edge length)
-        │   └── compositions.py         Composed garments: shorts/coat/tunic/romper/jumpsuit built from existing blocks (static plans + LLM planner)
+        │   ├── compositions.py         Composed garments: shorts/coat/tunic/romper/jumpsuit built from existing blocks (static plans + LLM planner)
+        │   └── vision_contours.py      Photo-contour patternizer: simplify/symmetrize/snap + scale (tunable constants at the top)
         ├── llm/                        Provider-agnostic LLM layer (Anthropic + Ollama)
         │   ├── base.py                 LLMProvider ABC, LLMResponse, common error hierarchy
         │   ├── anthropic_provider.py   Anthropic Claude implementation (text + vision)

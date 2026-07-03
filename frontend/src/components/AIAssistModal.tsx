@@ -124,12 +124,13 @@ function UploadStep({
   const [fixtureText, setFixtureText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [forceContours, setForceContours] = useState(false)
 
   const handleAnalyze = async () => {
     if (!frontFile) { setError('Please select a front photo.'); return }
     setLoading(true); setError('')
     try {
-      const features = await analyzeGarment(garmentType, frontFile, backFile)
+      const features = await analyzeGarment(garmentType, frontFile, backFile, forceContours)
       onAnalyzed(features)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
@@ -242,6 +243,23 @@ function UploadStep({
               onChange={e => setBackFile(e.target.files?.[0] ?? null)}
             />
           </div>
+
+          {/* Dev-only: force the vision model to trace every piece as a contour,
+              so the contour-patternizing path can be tested on any photo. */}
+          {import.meta.env.DEV && (
+            <label className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-[11px] text-amber-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={forceContours}
+                onChange={e => setForceContours(e.target.checked)}
+                className="w-3.5 h-3.5 accent-amber-600"
+              />
+              <span>
+                <span className="font-semibold">Force vision contours (dev)</span> — trace every
+                visible piece as a photo contour so vision drafts can be inspected
+              </span>
+            </label>
+          )}
         </>
       )}
 

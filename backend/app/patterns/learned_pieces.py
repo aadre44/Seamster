@@ -97,6 +97,30 @@ class PieceTemplate(BaseModel):
     attachment_edges: list[int] | None = None
 
 
+# Detail-token synonyms folded together during normalized template lookup.
+# Keep this conservative: only tokens that name the SAME physical piece.
+_TOKEN_SYNONYMS: dict[str, str] = {
+    "utility": "cargo",
+    "bellows": "cargo",
+    "cami": "camisole",
+    "necktie": "tie",
+    "drawcord": "drawstring",
+}
+
+
+def _normalise_detail(detail: str) -> tuple[str, ...]:
+    """Normalize a detail token for fuzzy template matching: split on separators,
+    strip simple plurals, map synonyms, and sort so token order doesn't matter."""
+    tokens: list[str] = []
+    for t in re.split(r"[_\-\s]+", detail.lower()):
+        if not t:
+            continue
+        if len(t) > 3 and t.endswith("s") and not t.endswith("ss"):
+            t = t[:-1]
+        tokens.append(_TOKEN_SYNONYMS.get(t, t))
+    return tuple(sorted(tokens))
+
+
 class TemplateStore:
     """JSON-backed store for PieceTemplates.
 
@@ -120,9 +144,18 @@ class TemplateStore:
         self._path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def find(self, detail: str, garment_type: str) -> PieceTemplate | None:
-        """Return the first template matching the detail + garment type, or None."""
+        """Return the first template matching the detail + garment type.
+
+        Exact trigger_detail match wins; otherwise details are compared after
+        normalization (token sort, plural stemming, synonym mapping) so
+        'utility_pockets' hits a 'cargo_pocket' template instead of a fresh LLM call.
+        """
         for t in self._templates:
             if t.trigger_detail == detail and garment_type in t.garment_types:
+                return t
+        wanted = _normalise_detail(detail)
+        for t in self._templates:
+            if garment_type in t.garment_types and _normalise_detail(t.trigger_detail) == wanted:
                 return t
         return None
 

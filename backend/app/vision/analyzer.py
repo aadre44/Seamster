@@ -505,9 +505,14 @@ async def analyze_garment(
     garment_type: GarmentType,
     front_bytes: bytes,
     back_bytes: bytes | None = None,
+    force_contours: bool = False,
 ) -> GarmentFeatures:
-    """Call the configured LLM's vision API and return structured features for any garment type."""
-    system_prompt = build_system_prompt(garment_type)
+    """Call the configured LLM's vision API and return structured features for any garment type.
+
+    ``force_contours`` (dev/testing) makes the prompt demand a piece_contours entry
+    for EVERY visible piece so the contour-patternizing path can be exercised on
+    photos where the vocabulary would normally cover everything."""
+    system_prompt = build_system_prompt(garment_type, force_contours=force_contours)
     user_prompt = build_user_prompt(garment_type)
 
     images = [front_bytes] if back_bytes is None else [front_bytes, back_bytes]

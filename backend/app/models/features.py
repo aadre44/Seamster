@@ -227,6 +227,26 @@ class AsymmetryFeature(BaseModel):
     closure_drop_frac: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
+class ContourPoint(BaseModel):
+    x: float
+    y: float
+
+
+class PieceContour(BaseModel):
+    """Normalized 2D outline of a garment piece the vision model saw but could not
+    describe with any vocabulary token (novel-piece tier 5). The backend
+    patternizes it into a real piece (vision_contours.py)."""
+    detail: str                              # snake_case token, e.g. "cascade_panel"
+    name: str = ""                           # display name; defaults from detail
+    points: list[ContourPoint] = Field(default_factory=list)  # outline, y down, any scale
+    width_frac: float = 0.25                 # piece width as a fraction of `reference`
+    reference: str = "chest_cm"              # measurement that scales the piece
+    cut_qty: int = 1
+    attachment_label: str | None = None      # garment edge it sews to (hem/neckline/…)
+    attachment_edges: list[int] | None = None  # 0-based outline edges carrying the label
+    confidence: float = 0.5
+
+
 class GarmentFeatures(BaseModel):
     """Generic feature set returned by vision analysis for any garment type."""
     garment_type: GarmentType
@@ -246,6 +266,7 @@ class GarmentFeatures(BaseModel):
     shape: ShapeFeature | None = None         # silhouette/contour (hem style + taper/flare)
     silhouette_path: SilhouettePath | None = None  # normalized control-point hull (warp shape mode)
     asymmetry: AsymmetryFeature | None = None      # asymmetric wrap front (distinct overlap/underlap panels)
+    piece_contours: list[PieceContour] = Field(default_factory=list)  # unnameable pieces as outlines
     confidence: float = Field(ge=0, le=1)
     notes: str = ""
 

@@ -16,6 +16,10 @@ async def analyze(
     garment_type: GarmentType = Form(default=GarmentType.SKIRT),
     front_image: UploadFile = File(..., description="Front-view photo of the garment"),
     back_image: UploadFile | None = File(default=None, description="Optional back-view photo"),
+    debug_force_contours: bool = Form(
+        default=False,
+        description="Dev/testing: demand a piece_contours entry for every visible piece",
+    ),
 ) -> GarmentFeatures:
     for img in [front_image, back_image]:
         if img is None:
@@ -31,7 +35,9 @@ async def analyze(
     back_bytes = back_image._data if back_image else None
 
     try:
-        features = await analyze_garment(garment_type, front_bytes, back_bytes)
+        features = await analyze_garment(
+            garment_type, front_bytes, back_bytes, force_contours=debug_force_contours
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
