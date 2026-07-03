@@ -185,7 +185,7 @@ Required format:
     {
       "name": "<piece name shown on the pattern, e.g. Strap>",
       "description": "<one sentence for the pattern maker>",
-      "geometry": "<rectangle | shaped_rectangle | trapezoid | godet | quarter_circle | half_circle | curved_band>",
+      "geometry": "<rectangle | shaped_rectangle | trapezoid | godet | quarter_circle | half_circle | curved_band | custom>",
       "length_formula": "<arithmetic expression using measurement variables>",
       "width_formula": "<arithmetic expression or numeric literal>",
       "cut_qty": <integer — how many pieces to cut from fabric>,
@@ -196,6 +196,8 @@ Required format:
       "curve_depth_formula": "<curved_band only: arc rise — omit otherwise>",
       "end_shape": "<shaped_rectangle only: square | rounded | angled | pointed | curved — omit otherwise>",
       "attachment_label": "<the garment edge this piece is SEWN TO: hem | waist | neckline | armhole | wrist | side_seam — or null for applied/free-standing pieces (patch pockets, belts, epaulets)>",
+      "points": "<custom only: array of point objects — omit otherwise>",
+      "attachment_edges": "<custom only: array of 0-based edge indices that sew to attachment_label — omit otherwise>",
       "reasoning": "<brief explanation of why these dimensions make sense>"
     }
   ]
@@ -230,6 +232,14 @@ Geometry options — pick the one that matches the REAL pattern-piece shape:
 - "curved_band": contoured band (shaped collar, contoured waistband, curved yoke band).
   length_formula = band run, width_formula = band height,
   "curve_depth_formula" = arc rise (omit for a gentle default of length * 0.12).
+- "custom": ONLY when no primitive above fits. Provide "points": an ordered array of
+  3-24 outline vertices, each {"x": "<formula>", "y": "<formula>"} — y grows downward,
+  keep coordinates near the origin. To reach a vertex along a cubic bezier from the
+  previous vertex, add "cp1x"/"cp1y"/"cp2x"/"cp2y" formulas to that vertex. The outline
+  closes automatically from the last point back to the first. Still give length_formula/
+  width_formula as the approximate overall dimensions. With attachment_label, also give
+  "attachment_edges": the 0-based edge indices that sew to that garment edge (edge i runs
+  from point i to point i+1).
 Shape selection guidance:
 - A GATHERED ruffle is a rectangle with length 1.5–2.5x the edge it attaches to;
   a CIRCULAR flounce (ungathered, fluid drape) is quarter_circle/half_circle with
@@ -457,6 +467,12 @@ def _template_from_dict(detail: str, gtype: str, idx: int, pd: dict) -> PieceTem
     attachment = pd.get("attachment_label")
     if attachment not in ATTACHMENT_LABELS:
         attachment = None
+    raw_edges = pd.get("attachment_edges")
+    attachment_edges = (
+        [int(i) for i in raw_edges if isinstance(i, (int, float))]
+        if isinstance(raw_edges, list) else None
+    )
+    points = pd.get("points")
     return PieceTemplate(
         id=f"{detail}{suffix}-{gtype}-v1",
         trigger_detail=detail,
@@ -474,6 +490,8 @@ def _template_from_dict(detail: str, gtype: str, idx: int, pd: dict) -> PieceTem
         curve_depth_formula=pd.get("curve_depth_formula"),
         end_shape=pd.get("end_shape", "square"),
         attachment_label=attachment,
+        points=points if isinstance(points, list) else None,
+        attachment_edges=attachment_edges,
         created_at=datetime.now(timezone.utc).isoformat(),
         times_used=1,
     )

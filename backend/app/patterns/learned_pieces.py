@@ -35,6 +35,7 @@ VALID_GEOMETRIES = (
     "quarter_circle",   # 90° annular flounce / circle-cut piece
     "half_circle",      # 180° annular flounce / cascade
     "curved_band",      # contoured band (shaped collar / curved waistband)
+    "custom",           # formula-based point list — any flat piece no primitive fits
 )
 
 # All field names that are valid in formula expressions
@@ -85,6 +86,15 @@ class PieceTemplate(BaseModel):
     # None for applied/free-standing pieces). When set, the geometry's intrinsic
     # attachment edge(s) get this seamLabel so _compute_connections pairs them.
     attachment_label: str | None = None
+    # Custom geometry only: the outline as ordered points whose coordinates are
+    # formula strings — {"x": "...", "y": "..."} plus optional "cp1x"/"cp1y"/
+    # "cp2x"/"cp2y" to reach the vertex along a cubic bezier from the previous
+    # one. The outline closes automatically from the last point to the first.
+    points: list[dict] | None = None
+    # Custom geometry only: 0-based outline edge indices (edge i runs from point i
+    # to point i+1) that carry attachment_label. Other geometries know their
+    # attachment edges intrinsically.
+    attachment_edges: list[int] | None = None
 
 
 class TemplateStore:
@@ -298,6 +308,58 @@ def _curved_band_outline(length: float, width: float, depth: float) -> tuple[Out
     return outline, grain
 
 
+_CP_KEYS = ("cp1x", "cp1y", "cp2x", "cp2y")
+
+
+def _custom_outline(points: list[dict] | None, ns: dict) -> tuple[Outline, _Grain]:
+    """Evaluate a formula-based point list into an outline (custom geometry).
+
+    Raises ValueError with a repair-loop-friendly message for malformed input:
+    fewer than 3 points, non-object points, missing coordinates, or unsafe
+    formulas (via _eval_formula). An explicit closing duplicate of the first
+    point is dropped — the outline closes implicitly.
+    """
+    if not isinstance(points, list) or len(points) < 3:
+        raise ValueError(
+            "custom geometry requires a 'points' array of at least 3 point objects"
+        )
+    if len(points) > 24:
+        raise ValueError("custom geometry supports at most 24 points")
+
+    outline: Outline = []
+    for i, pt in enumerate(points):
+        if not isinstance(pt, dict) or "x" not in pt or "y" not in pt:
+            raise ValueError(
+                f"custom point {i} must be an object with 'x' and 'y' formula strings"
+            )
+        x = _eval_formula(str(pt["x"]), ns)
+        y = _eval_formula(str(pt["y"]), ns)
+        if all(k in pt for k in _CP_KEYS):
+            outline.append(CurveSegment(
+                x, y,
+                cp1=Point(_eval_formula(str(pt["cp1x"]), ns), _eval_formula(str(pt["cp1y"]), ns)),
+                cp2=Point(_eval_formula(str(pt["cp2x"]), ns), _eval_formula(str(pt["cp2y"]), ns)),
+            ))
+        else:
+            outline.append(Point(x, y))
+
+    first, last = outline[0], outline[-1]
+    if (
+        len(outline) > 3
+        and isinstance(last, Point)
+        and abs(last.x - first.x) < 1e-6
+        and abs(last.y - first.y) < 1e-6
+    ):
+        outline.pop()
+
+    xs = [v.x for v in outline]
+    ys = [v.y for v in outline]
+    cx = (min(xs) + max(xs)) / 2
+    span = max(ys) - min(ys)
+    grain = (Point(cx, min(ys) + span * 0.15), Point(cx, min(ys) + span * 0.85))
+    return outline, grain
+
+
 def _normalise(outline: Outline, grain: _Grain) -> tuple[Outline, _Grain]:
     """Translate the piece so its vertex bounding box starts at (0, 0)."""
     min_x = min(v.x for v in outline)
@@ -359,7 +421,13 @@ def apply_template(template: PieceTemplate, m: Measurements) -> PieceSpec:
             spec.edge_labels = {0: template.attachment_label}
         return spec
 
-    if geometry == "trapezoid":
+    if geometry == "custom":
+        outline, grain = _custom_outline(template.points, ns)
+        attach_edges = tuple(
+            int(i) for i in (template.attachment_edges or [])
+            if isinstance(i, (int, float)) and 0 <= int(i) < len(outline)
+        )
+    elif geometry == "trapezoid":
         top_w = (
             _eval_formula(template.top_width_formula, ns)
             if template.top_width_formula else width * 0.5

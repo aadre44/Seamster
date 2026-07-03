@@ -342,6 +342,7 @@ rectangle):
 | `quarter_circle` | 90° annular flounce/ruffle | inner arc = attachment edge length **exactly**; width = flounce depth |
 | `half_circle` | 180° flounce, cascade | as quarter_circle |
 | `curved_band` | contoured collars/waistbands | band run × height; `curve_depth_formula` = arc rise (default 12% of run) |
+| `custom` | any flat piece no primitive fits | `points`: 3–24 ordered vertices with formula coordinates (optional bezier `cp1x/cp1y/cp2x/cp2y` per vertex); closes implicitly; `attachment_edges` declares which edges carry `attachment_label` |
 
 Arcs are emitted as ≤90° cubic beziers (`_arc_segments`) so they serialise
 through the existing `CurveSegment` path; every non-rectangle piece is
@@ -396,9 +397,13 @@ component builders' vocabulary, and `_PARAMETRIC_DETAILS` gives composed types
 the union of their components' detail sets so the novel-piece fallback never
 duplicates component pieces.
 
-Planned next tiers (see `ai-novel-pieces` in FEATURES.json): formula-based
-custom point-list outlines (tier 2), and vision-derived contours with a
-user-edit→template feedback loop (tier 5).
+Malformed custom point lists (<3 points, missing coordinates, unsafe formulas)
+raise clear ValueErrors that feed straight into the tier-3 repair re-prompt,
+and the built outline passes through the same self-intersection/bounds checks
+as every other geometry.
+
+Planned next tier (see `ai-novel-pieces` in FEATURES.json): vision-derived
+contours with a user-edit→template feedback loop (tier 5).
 
 ---
 
