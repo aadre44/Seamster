@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import math
 
+from app.debug_trace import add_event
 from app.models.features import GarmentFeatures, PieceContour
 from app.models.measurements import Measurements
 from app.patterns.geometry import Point
@@ -234,12 +235,21 @@ def generate_vision_pieces(
             spec = patternize_contour(contour, measurements)
         except ValueError as exc:
             logger.info("Skipping vision contour '%s': %s", contour.detail, exc)
+            add_event("vision_contour_skipped", detail=contour.detail, reason=str(exc))
             continue
         problems = validate_spec(spec, measurements)
         if problems:
             logger.info(
                 "Vision contour '%s' failed validation: %s", contour.detail, "; ".join(problems)
             )
+            add_event("vision_contour_skipped", detail=contour.detail, reason="; ".join(problems))
             continue
+        xs = [p.x for p in spec.outline]
+        ys = [p.y for p in spec.outline]
+        add_event(
+            "vision_contour_accepted", detail=contour.detail, name=spec.name,
+            raw_points=len(contour.points), cleaned_points=len(spec.outline),
+            width_cm=round(max(xs) - min(xs), 2), height_cm=round(max(ys) - min(ys), 2),
+        )
         specs.append(spec)
     return specs

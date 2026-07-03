@@ -27,6 +27,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from app.debug_trace import add_event
 from app.llm import LLMError, complete_with_retry, get_provider
 from app.models.features import ClosureFeature, GarmentFeatures, GarmentType
 from app.models.measurements import Measurements
@@ -115,15 +116,26 @@ def compose_pattern(
     """Return a composed .psnap dict for a garment type with no dedicated block,
     or None when no valid composition can be found (caller shows the placeholder)."""
     plan = STATIC_PLANS.get(features.garment_type.value)
-    if plan is None:
+    if plan is not None:
+        add_event(
+            "composition_static_plan",
+            garment_type=features.garment_type.value,
+            builders=[c.builder for c in plan.components],
+        )
+    else:
         plan = _plan_from_llm(features)
     if plan is None:
+        add_event("composition_no_plan", garment_type=features.garment_type.value)
         return None
     try:
         return _execute_plan(plan, features, measurements, shape_mode)
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "Composition failed for garment_type='%s'", features.garment_type.value
+        )
+        add_event(
+            "composition_execution_failed",
+            garment_type=features.garment_type.value, error=str(exc),
         )
         return None
 
@@ -351,9 +363,20 @@ def _plan_from_llm(features: GarmentFeatures) -> CompositionPlan | None:
             data = json.loads(_strip_fences(response.text))
         except Exception:
             problems = ["the response was not a single valid JSON object"]
+            add_event(
+                "composition_planner_attempt",
+                garment_type=features.garment_type.value, attempt=attempt + 1,
+                raw_response=response.text, errors=problems, builders=[],
+            )
             continue
 
         plan, errors = _validate_plan(data)
+        add_event(
+            "composition_planner_attempt",
+            garment_type=features.garment_type.value, attempt=attempt + 1,
+            raw_response=response.text, errors=errors,
+            builders=[c.builder for c in plan.components] if plan else [],
+        )
         if plan is not None:
             logger.info(
                 "Planner composed '%s' from %s",

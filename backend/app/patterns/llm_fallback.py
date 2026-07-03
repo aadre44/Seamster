@@ -24,6 +24,7 @@ import logging
 import re
 from datetime import datetime, timezone
 
+from app.debug_trace import add_event
 from app.llm import LLMError, complete_with_retry, get_provider
 from app.models.features import GarmentFeatures
 from app.models.measurements import Measurements
@@ -346,6 +347,10 @@ def generate_novel_pieces(
         template = store.find(detail, gtype)
         if template:
             logger.info("Learned template hit: id=%s for detail='%s'", template.id, detail)
+            add_event(
+                "template_hit", detail=detail, template_id=template.id,
+                geometry=template.geometry,
+            )
             store.record_use(template.id)
             try:
                 spec = apply_template(template, measurements)
@@ -386,6 +391,7 @@ def _generate_with_repair(
 
     for attempt in range(_MAX_ATTEMPTS):
         final = attempt == _MAX_ATTEMPTS - 1
+        problems_sent = list(problems)
         try:
             response = complete_with_retry(
                 provider,
@@ -399,6 +405,7 @@ def _generate_with_repair(
             # Provider unconfigured/unreachable — repair re-prompts cannot help,
             # and emitting placeholders here would surprise offline generation.
             logger.exception("LLM call failed for detail='%s'", detail)
+            add_event("llm_fallback_provider_error", detail=detail, attempt=attempt + 1)
             return []
 
         try:
@@ -408,9 +415,19 @@ def _generate_with_repair(
                 "Attempt %d for detail='%s': response was not valid JSON", attempt + 1, detail
             )
             problems = ["the response was not a single valid JSON object in the required format"]
+            add_event(
+                "llm_fallback_attempt", detail=detail, attempt=attempt + 1,
+                problems_sent=problems_sent, raw_response=response.text,
+                errors=problems, accepted=[],
+            )
             continue
         if not pieces_data:
             problems = ["the 'pieces' array was empty — at least one piece is required"]
+            add_event(
+                "llm_fallback_attempt", detail=detail, attempt=attempt + 1,
+                problems_sent=problems_sent, raw_response=response.text,
+                errors=problems, accepted=[],
+            )
             continue
 
         accepted: list[tuple[PieceTemplate, PieceSpec]] = []
@@ -444,6 +461,12 @@ def _generate_with_repair(
                 continue
             accepted.append((candidate, spec))
 
+        add_event(
+            "llm_fallback_attempt", detail=detail, attempt=attempt + 1,
+            problems_sent=problems_sent, raw_response=response.text,
+            errors=errs, accepted=[t.name for t, _ in accepted],
+        )
+
         if errs and not final:
             logger.info(
                 "Attempt %d for detail='%s' rejected: %s", attempt + 1, detail, "; ".join(errs)
@@ -463,6 +486,7 @@ def _generate_with_repair(
         break  # the final attempt produced nothing usable
 
     logger.warning("All attempts failed for detail='%s' — emitting placeholder", detail)
+    add_event("llm_fallback_placeholder", detail=detail)
     return [_fallback_piece(detail, measurements)]
 
 

@@ -12,3 +12,5 @@ backend/venv/
 /harness
 .claude/
 .agents/
+# Most-recent AI run trace (app/debug_trace.py) — dev analysis output, one file per run
+backend/debug/

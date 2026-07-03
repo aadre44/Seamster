@@ -1,5 +1,6 @@
 import logging
 
+from app.debug_trace import trace_analyze
 from app.llm import acomplete_with_retry, get_provider, parse_json_response
 from app.models.features import (
     AsymmetryFeature,
@@ -514,46 +515,67 @@ async def analyze_garment(
     photos where the vocabulary would normally cover everything."""
     system_prompt = build_system_prompt(garment_type, force_contours=force_contours)
     user_prompt = build_user_prompt(garment_type)
+    trace_request = {
+        "garment_type": garment_type.value,
+        "force_contours": force_contours,
+        "front_image_bytes": len(front_bytes),
+        "back_image_bytes": len(back_bytes) if back_bytes else None,
+    }
+    raw_text: str | None = None
 
-    images = [front_bytes] if back_bytes is None else [front_bytes, back_bytes]
-    # Constrained decoding (Ollama) + deterministic temperature curb the
-    # out-of-enum closures and hallucinated details a small local model emits.
-    # The schema is ignored by providers that don't support it (Anthropic).
-    response = await acomplete_with_retry(
-        get_provider(),
-        system=system_prompt,
-        user_text=user_prompt,
-        max_tokens=2048,
-        images=images,
-        response_format=GarmentFeatures.model_json_schema(),
-        temperature=0,
-    )
-    raw_text = response.text
-
-    logger.debug("LLM raw response: %s", raw_text[:500])
-    data = parse_json_response(raw_text)
-
-    notes: str = data.get("notes", "")
-    gtype = garment_type.value
-    if f"no {gtype}" in notes.lower() or "cannot identify" in notes.lower():
-        raise ValueError(
-            f"We couldn't identify a {gtype} in this photo. "
-            f"Please upload a clear front-view photo of a {gtype}."
-        )
-
-    data["garment_type"] = gtype
     try:
-        features = GarmentFeatures.model_validate(data)
-    except Exception as exc:
-        raise ValueError(f"Could not parse the LLM's response into garment features: {exc}") from exc
+        images = [front_bytes] if back_bytes is None else [front_bytes, back_bytes]
+        # Constrained decoding (Ollama) + deterministic temperature curb the
+        # out-of-enum closures and hallucinated details a small local model emits.
+        # The schema is ignored by providers that don't support it (Anthropic).
+        response = await acomplete_with_retry(
+            get_provider(),
+            system=system_prompt,
+            user_text=user_prompt,
+            max_tokens=2048,
+            images=images,
+            response_format=GarmentFeatures.model_json_schema(),
+            temperature=0,
+        )
+        raw_text = response.text
 
-    features = _infer_pockets_from_notes(features)
-    features = _infer_construction_from_notes(features)
-    features = _refine_front_split(features)
-    features = _refine_strap_style(features)
-    features = _clamp_spaghetti_back(features)
-    features = _refine_strap_width(features)
-    features = _infer_vest_finishes_from_notes(features)
-    features = _infer_shape_from_notes(features)
-    features = _infer_asymmetry_from_notes(features)
+        logger.debug("LLM raw response: %s", raw_text[:500])
+        data = parse_json_response(raw_text)
+
+        notes: str = data.get("notes", "")
+        gtype = garment_type.value
+        if f"no {gtype}" in notes.lower() or "cannot identify" in notes.lower():
+            raise ValueError(
+                f"We couldn't identify a {gtype} in this photo. "
+                f"Please upload a clear front-view photo of a {gtype}."
+            )
+
+        data["garment_type"] = gtype
+        try:
+            features = GarmentFeatures.model_validate(data)
+        except Exception as exc:
+            raise ValueError(
+                f"Could not parse the LLM's response into garment features: {exc}"
+            ) from exc
+
+        features = _infer_pockets_from_notes(features)
+        features = _infer_construction_from_notes(features)
+        features = _refine_front_split(features)
+        features = _refine_strap_style(features)
+        features = _clamp_spaghetti_back(features)
+        features = _refine_strap_width(features)
+        features = _infer_vest_finishes_from_notes(features)
+        features = _infer_shape_from_notes(features)
+        features = _infer_asymmetry_from_notes(features)
+    except Exception as exc:
+        trace_analyze(
+            trace_request, system_prompt, user_prompt, raw_text,
+            features=None, error=str(exc),
+        )
+        raise
+
+    trace_analyze(
+        trace_request, system_prompt, user_prompt, raw_text,
+        features=features.model_dump(mode="json"),
+    )
     return features

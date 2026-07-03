@@ -427,6 +427,20 @@ name at all, the photo itself is the source:
 - `TemplateStore.find` now matches normalized synonyms (plural stemming, token
   order, a small synonym map: `utility_pockets` hits a `cargo_pocket` template).
 
+**Debug trace of the most recent run** (`app/debug_trace.py` →
+`backend/debug/last_run.json`, gitignored, overwritten per run). Every
+`/api/analyze` starts a fresh trace recording the request info, the exact
+system/user prompts sent to the vision model, the raw LLM response, and the
+parsed+backfilled features. Every `/api/generate` fills in the generate half:
+the request (features/measurements/shape_mode), a chronological event log of
+each AI decision (learned-template hits, every LLM-fallback attempt with the
+problems fed in / raw response / validation errors / accepted pieces,
+composition static plans and planner attempts, vision-contour accept/skip with
+reasons), a piece summary with `source` per piece, and the full .psnap output.
+Regenerating replaces only the generate half, so an analyze → generate flow is
+always captured end to end. Tracing failures are swallowed — a broken trace
+never breaks the API.
+
 ---
 
 ## LLM Provider Layer

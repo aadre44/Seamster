@@ -362,6 +362,7 @@ Seamster/
         │   ├── novel_validation.py     Geometric checks for LLM pieces (dimension bounds, self-intersection, attachment-edge length)
         │   ├── compositions.py         Composed garments: shorts/coat/tunic/romper/jumpsuit built from existing blocks (static plans + LLM planner)
         │   └── vision_contours.py      Photo-contour patternizer: simplify/symmetrize/snap + scale (tunable constants at the top)
+        ├── debug_trace.py              Most-recent AI run trace → backend/debug/last_run.json (analyze prompts/response/features + generate events/output)
         ├── llm/                        Provider-agnostic LLM layer (Anthropic + Ollama)
         │   ├── base.py                 LLMProvider ABC, LLMResponse, common error hierarchy
         │   ├── anthropic_provider.py   Anthropic Claude implementation (text + vision)
