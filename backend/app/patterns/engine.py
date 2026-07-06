@@ -88,9 +88,14 @@ def _serialise_piece(
     spec: PieceSpec,
     offset_x: float = 0.0,
     offset_y: float = 0.0,
+    piece_id: str | None = None,
 ) -> tuple[list[dict], dict]:
-    """Convert a PieceSpec to (elements_list, piece_dict) in .psnap format."""
-    piece_id = _uid()
+    """Convert a PieceSpec to (elements_list, piece_dict) in .psnap format.
+
+    ``piece_id`` lets a caller keep an existing piece's identity when replacing
+    its geometry in place (the photo-refine pass); by default a fresh id is minted.
+    """
+    piece_id = piece_id or _uid()
     elements: list[dict] = []
     outline_ids: list[str] = []
 

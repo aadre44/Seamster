@@ -103,3 +103,26 @@ def test_generate_endpoint_writes_trace(trace_path):
     assert gen["request"]["features"]["garment_type"] == "skirt"
     assert gen["summary"]["piece_count"] >= 2
     assert gen["output"]["pieces"]  # the full psnap is stored
+
+
+def test_trace_refine_attaches_third_half_and_keeps_others(trace_path):
+    dt.trace_analyze({"garment_type": "vest"}, "SYS", "USER", "{}", {})
+    dt.begin_generate()
+    dt.trace_generate({"shape_mode": "modifiers"}, {"pieces": [], "elements": []})
+    dt.begin_refine()
+    dt.add_event("refine_piece_accepted", name="Overlap Front")
+    dt.trace_refine(
+        {"garment_type": "vest", "piece_count": 6},
+        "REFINE-SYS", ["USER-1", "USER-2"], ["{}", '{"pieces": []}'],
+        {"changed": ["Overlap Front"], "rejected": [], "unchanged": ["Back Bodice"]},
+    )
+    data = _read(trace_path)
+    assert data["analyze"] is not None and data["generate"] is not None
+    ref = data["refine"]
+    assert ref["request"]["piece_count"] == 6
+    assert ref["system_prompt"] == "REFINE-SYS"
+    assert ref["user_prompts"] == ["USER-1", "USER-2"]
+    assert len(ref["raw_responses"]) == 2
+    assert ref["events"][0]["stage"] == "refine_piece_accepted"
+    assert ref["summary"]["changed"] == ["Overlap Front"]
+    assert ref["error"] is None

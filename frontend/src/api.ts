@@ -78,6 +78,39 @@ export function generatePattern(
   )
 }
 
+// ── /refine ───────────────────────────────────────────────────────────────────
+
+export interface RefineSummary {
+  changed: string[]
+  rejected: { name: string; reason: string }[]
+  unchanged: string[]
+}
+
+export interface RefineResponse {
+  psnap: GeneratedPattern
+  summary: RefineSummary
+}
+
+/** Photo-driven refine pass: the vision LLM compares the drafted pieces to the
+ * photo and reshapes the ones whose flat shape disagrees. */
+export function refinePattern(
+  garmentType: string,
+  psnap: GeneratedPattern,
+  measurements: Measurements,
+  frontImage: File,
+  backImage?: File | null,
+  notes = '',
+): Promise<RefineResponse> {
+  const fd = new FormData()
+  fd.append('garment_type', garmentType)
+  fd.append('psnap', JSON.stringify(psnap))
+  fd.append('measurements', JSON.stringify(measurements))
+  fd.append('front_image', frontImage)
+  if (backImage) fd.append('back_image', backImage)
+  if (notes) fd.append('notes', notes)
+  return request<RefineResponse>('/refine', { method: 'POST', body: fd })
+}
+
 // ── /instructions ─────────────────────────────────────────────────────────────
 
 /** Piece summary the instruction generator expects (snake_case API contract). */

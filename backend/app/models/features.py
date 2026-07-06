@@ -228,8 +228,19 @@ class AsymmetryFeature(BaseModel):
 
 
 class ContourPoint(BaseModel):
+    """One outline vertex of a PieceContour, in the contour's normalized space.
+
+    The optional control points make the edge ARRIVING at this vertex (from the
+    previous vertex) a cubic bezier — the same convention as tier-2 custom
+    geometry and CurveSegment: cp1 sits near the previous vertex, cp2 near this
+    one. Give all four values or none; a partial set is treated as a plain point.
+    """
     x: float
     y: float
+    cp1x: float | None = None
+    cp1y: float | None = None
+    cp2x: float | None = None
+    cp2y: float | None = None
 
 
 class PieceContour(BaseModel):

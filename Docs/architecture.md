@@ -43,6 +43,8 @@ Seamster/
 │       ├── api/export.py             POST /api/export/pdf — returns tiled PDF binary
 │       ├── api/analyze.py            Phase 2: POST /api/analyze (LLM vision)
 │       ├── api/generate.py           Phase 2: POST /api/generate (parametric engine)
+│       ├── api/refine.py             Phase 2: POST /api/refine (photo refine pass)
+│       ├── vision/refine.py          Photo refine: vision LLM edits drafted outlines
 │       ├── llm/                      Provider-agnostic LLM layer (Anthropic + Ollama)
 │       └── export/pdf_tiler.py       reportlab tiled PDF with registration marks
 │
@@ -151,6 +153,7 @@ JSON with top-level keys:
 | `/api/export/pdf` | POST | Accepts SVG string + page size, returns tiled PDF binary |
 | `/api/analyze` | POST | Phase 2: LLM vision — analyzes a garment photo |
 | `/api/generate` | POST | Phase 2: Generates parametric pattern from measurements |
+| `/api/refine` | POST | Phase 2: Photo refine — the vision LLM reshapes drafted pieces to match the photo |
 | `/api/health` | GET | Reports `{status, llm_provider, llm_model}` for the active config |
 
 ---
@@ -423,7 +426,16 @@ name at all, the photo itself is the source:
   the tier-3 checks. **All tuning knobs are module constants at the top of the
   file** (`RDP_EPSILON_FRAC`, `SNAP_ANGLE_DEG`, `SYMMETRY_TOLERANCE`,
   `MIN_CONTOUR_CONFIDENCE`, width-frac/size clamps, `SQUARE_BOX_ASPECT`,
-  `NOTION_WORDS`, `CORE_ROLE_WORDS`).
+  `NOTION_WORDS`, `CORE_ROLE_WORDS`, `MAX_CP_BBOX_FACTOR`).
+- **Contours can carry curves**: a `ContourPoint` with all four optional
+  `cp1x/cp1y/cp2x/cp2y` values makes the edge arriving at it a cubic bezier
+  (the tier-2 convention; the prompt teaches it). Control points scale and
+  translate WITH the vertices (`_affine`); a curve-bearing contour skips the
+  Point-only cleanup stages (RDP / symmetrize / axis-snap) — a model emitting
+  beziers is tracing deliberately. Partial cp sets degrade to plain points;
+  control points far outside the vertex bbox reject the contour as noise.
+  Validation (`sample_outline`) and `.psnap` serialization were already
+  curve-capable.
 - Three guards keep junk contours off the canvas (each skip is trace-logged
   with its reason): **notion filter** — contours naming hardware/notions
   (button, frog, zip, …) are never patternized; **bounding-box filter** — a
@@ -449,6 +461,40 @@ name at all, the photo itself is the source:
 - `TemplateStore.find` now matches normalized synonyms (plural stemming, token
   order, a small synonym map: `utility_pockets` hits a `cargo_pocket` template).
 
+**Photo refine pass (`app/vision/refine.py`, `POST /api/refine`).** The
+parametric engine drafts measurement-true pieces, but their shapes are only as
+garment-specific as the vocabulary — the generic path for photo-accurate
+outlines is a refine pass that mirrors how a user corrects a draft by hand
+(the blueVest reference, harness/blueVestCorrected.svg):
+
+- Triggered by the **"Refine Shapes from Photo"** button on the AI modal's done
+  step (the modal now stays open after generate and keeps the uploaded photo).
+  `/api/generate` never sees the photo, so refine is its own multipart endpoint:
+  garment_type + psnap JSON + measurements JSON + the photo(s).
+- The psnap pieces are serialized to a compact per-piece JSON (cm, local
+  coordinates, per-edge seam labels, bezier cps on curve endpoints) and sent to
+  the vision LLM with the photo. The model returns complete replacement
+  outlines ONLY for pieces whose flat shape disagrees with the photo
+  (`{"pieces": []}` when everything matches).
+- Hard guards per returned piece: the name must match an existing piece; the
+  distinct seam-label set must equal the original's (protects
+  `_compute_connections`); bbox width/height within ±`REFINE_MAX_DELTA` (30%)
+  of the draft; control points within `MAX_CP_BBOX_FACTOR`× the bbox; on-fold
+  pieces keep a straight closing edge with anchored first/last vertices; then
+  the shared tier-3 geometry validation. Model habits are normalized rather
+  than rejected: an explicit closing duplicate of the first point is dropped
+  (it would create a zero-length edge and falsely trip the self-intersection
+  check) and degenerate cps (cp == its own vertex) become plain points.
+- One repair re-prompt carries the rejection reasons back; on the final
+  attempt valid pieces are kept and invalid dropped. The worst case is always
+  an unchanged pattern.
+- Accepted outlines are spliced in place: same piece id (`_serialise_piece`
+  gained an optional `piece_id`), same canvas position (original bbox offset),
+  interior elements (darts, marks, the original grain line) untouched,
+  connections recomputed, `source="vision"` so the canvas styles the piece as
+  an amber AI draft. The response returns the updated psnap plus a
+  changed/rejected/unchanged summary the modal displays.
+
 **Debug trace of the most recent run** (`app/debug_trace.py` →
 `backend/debug/last_run.json`, gitignored, overwritten per run). Every
 `/api/analyze` starts a fresh trace recording the request info, the exact
@@ -459,9 +505,12 @@ each AI decision (learned-template hits, every LLM-fallback attempt with the
 problems fed in / raw response / validation errors / accepted pieces,
 composition static plans and planner attempts, vision-contour accept/skip with
 reasons), a piece summary with `source` per piece, and the full .psnap output.
-Regenerating replaces only the generate half, so an analyze → generate flow is
-always captured end to end. Tracing failures are swallowed — a broken trace
-never breaks the API.
+Every `/api/refine` fills in a third `refine` section: the request summary, the
+exact system prompt and per-attempt user prompts / raw responses, per-piece
+accepted/rejected events with reasons, and the changed/rejected/unchanged
+summary. Regenerating replaces only the generate half, so an analyze →
+generate → refine flow is always captured end to end. Tracing failures are
+swallowed — a broken trace never breaks the API.
 
 ---
 

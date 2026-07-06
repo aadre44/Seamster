@@ -1,16 +1,19 @@
 /**
- * Phase 2 AI Assist workflow — modal with three steps:
+ * Phase 2 AI Assist workflow — modal with four steps:
  *   Step 1: Select garment type + upload photo(s) → POST /api/analyze
  *   Step 2: Review / correct detected features
  *   Step 3: Generating pattern → POST /api/generate → load into editor
+ *   Step 4: Done — optional photo refine (POST /api/refine reshapes drafted
+ *           pieces whose flat shape disagrees with the photo)
  */
 import { useState, useRef } from 'react'
 import { useEditor } from '../context/EditorContext'
-import { analyzeGarment, generatePattern } from '../api'
+import { analyzeGarment, generatePattern, refinePattern } from '../api'
+import type { GeneratedPattern, RefineSummary } from '../api'
 import type { GarmentFeatures, GarmentType, Measurements, ShapeMode, WaistbandType } from '../types'
 import { GARMENT_TYPES } from '../types'
 
-type Step = 'upload' | 'review' | 'generating'
+type Step = 'upload' | 'review' | 'generating' | 'done'
 
 interface Props {
   onClose: () => void
@@ -110,17 +113,23 @@ type UploadMode = 'photo' | 'fixture'
 function UploadStep({
   onAnalyzed,
   onClose,
+  frontFile,
+  backFile,
+  setFrontFile,
+  setBackFile,
 }: {
   onAnalyzed: (f: GarmentFeatures) => void
   onClose: () => void
+  frontFile: File | null
+  backFile: File | null
+  setFrontFile: (f: File | null) => void
+  setBackFile: (f: File | null) => void
 }) {
   const frontRef = useRef<HTMLInputElement>(null)
   const backRef = useRef<HTMLInputElement>(null)
   const fixtureFileRef = useRef<HTMLInputElement>(null)
   const [mode, setMode] = useState<UploadMode>('photo')
   const [garmentType, setGarmentType] = useState<GarmentType>('skirt')
-  const [frontFile, setFrontFile] = useState<File | null>(null)
-  const [backFile, setBackFile] = useState<File | null>(null)
   const [fixtureText, setFixtureText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -149,6 +158,10 @@ function UploadStep({
     setError('')
     try {
       const features = parseFixtureFeatures(fixtureText)
+      // Fixture mode has no photo — clear any picked files so the done step
+      // doesn't offer a photo refine against an unrelated image.
+      setFrontFile(null)
+      setBackFile(null)
       onAnalyzed(features)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
@@ -638,6 +651,15 @@ export default function AIAssistModal({ onClose }: Props) {
   const [step, setStep] = useState<Step>('upload')
   const [features, setFeatures] = useState<GarmentFeatures | null>(null)
   const [genError, setGenError] = useState('')
+  // Photo files live here (not in UploadStep) so the done step can refine with them.
+  const [frontFile, setFrontFile] = useState<File | null>(null)
+  const [backFile, setBackFile] = useState<File | null>(null)
+  // The last generated pattern + measurements, kept for the refine call.
+  const [lastPsnap, setLastPsnap] = useState<GeneratedPattern | null>(null)
+  const [lastMeasurements, setLastMeasurements] = useState<Measurements | null>(null)
+  const [refining, setRefining] = useState(false)
+  const [refineSummary, setRefineSummary] = useState<RefineSummary | null>(null)
+  const [refineError, setRefineError] = useState('')
 
   const baseMeasurements: Measurements = {
     waist_cm: state.measurements['waist'] ?? 76,
@@ -688,10 +710,40 @@ export default function AIAssistModal({ onClose }: Props) {
 
       // Cache features/measurements so the Instructions panel can generate on demand
       dispatch({ type: 'SET_INSTRUCTIONS', instructions: null, loading: false, features: f, measurements: m })
-      onClose()
+      setFeatures(f)
+      setLastPsnap(psnap)
+      setLastMeasurements(m)
+      setRefineSummary(null)
+      setRefineError('')
+      setStep('done')
     } catch (e: unknown) {
       setGenError(e instanceof Error ? e.message : String(e))
       setStep('review')
+    }
+  }
+
+  const handleRefine = async () => {
+    if (!features || !lastPsnap || !lastMeasurements || !frontFile) return
+    setRefining(true)
+    setRefineError('')
+    try {
+      const r = await refinePattern(
+        features.garment_type, lastPsnap, lastMeasurements,
+        frontFile, backFile, features.notes ?? '',
+      )
+      dispatch({
+        type: 'LOAD_STATE',
+        elements: r.psnap.elements,
+        pieces: r.psnap.pieces ?? [],
+        measurements: r.psnap.measurements ?? {},
+        connections: r.psnap.connections ?? [],
+      })
+      setLastPsnap(r.psnap)
+      setRefineSummary(r.summary)
+    } catch (e: unknown) {
+      setRefineError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRefining(false)
     }
   }
 
@@ -706,9 +758,10 @@ export default function AIAssistModal({ onClose }: Props) {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">AI Pattern Assistant</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              {step === 'upload' && 'Step 1 of 2 — Select type & upload photo'}
-              {step === 'review' && 'Step 2 of 2 — Review detected features'}
+              {step === 'upload' && 'Step 1 — Select type & upload photo'}
+              {step === 'review' && 'Step 2 — Review detected features'}
               {step === 'generating' && 'Generating your pattern…'}
+              {step === 'done' && 'Step 3 — Optional photo refine'}
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
@@ -717,7 +770,14 @@ export default function AIAssistModal({ onClose }: Props) {
         {/* Body */}
         <div className="px-5 py-4 flex-1 overflow-y-auto">
           {step === 'upload' && (
-            <UploadStep onAnalyzed={handleAnalyzed} onClose={onClose} />
+            <UploadStep
+              onAnalyzed={handleAnalyzed}
+              onClose={onClose}
+              frontFile={frontFile}
+              backFile={backFile}
+              setFrontFile={setFrontFile}
+              setBackFile={setBackFile}
+            />
           )}
           {step === 'review' && features && (
             <>
@@ -737,6 +797,80 @@ export default function AIAssistModal({ onClose }: Props) {
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-sm text-gray-600">Building your pattern…</p>
               <p className="text-xs text-gray-400">This usually takes a few seconds.</p>
+            </div>
+          )}
+          {step === 'done' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded px-3 py-2">
+                <span className="text-green-600 text-base leading-none">✓</span>
+                <p className="text-xs text-green-800">
+                  Pattern loaded onto the canvas
+                  {lastPsnap?.pieces ? ` — ${lastPsnap.pieces.length} pieces` : ''}.
+                </p>
+              </div>
+
+              {frontFile && !refineSummary && (
+                <div className="bg-violet-50 border border-violet-200 rounded px-3 py-2.5 space-y-2">
+                  <p className="text-xs text-violet-900 font-medium">Refine shapes from photo</p>
+                  <p className="text-[11px] text-violet-700">
+                    The AI compares each drafted piece against your photo and reshapes the
+                    edges that disagree (curved necklines, wrap edges, hems). Reshaped
+                    pieces appear amber as AI drafts — verify them before cutting.
+                  </p>
+                </div>
+              )}
+
+              {refineSummary && (
+                <div className="bg-gray-50 border border-gray-200 rounded px-3 py-2.5 space-y-1.5 text-xs">
+                  {refineSummary.changed.length > 0 ? (
+                    <p className="text-violet-800">
+                      <span className="font-semibold">Reshaped:</span> {refineSummary.changed.join(', ')}
+                    </p>
+                  ) : (
+                    <p className="text-gray-600">No pieces needed reshaping — the draft already matches the photo.</p>
+                  )}
+                  {refineSummary.unchanged.length > 0 && (
+                    <p className="text-gray-500">
+                      Unchanged: {refineSummary.unchanged.join(', ')}
+                    </p>
+                  )}
+                  {refineSummary.rejected.length > 0 && (
+                    <div className="text-amber-700">
+                      <p className="font-semibold">Skipped (failed validation):</p>
+                      {refineSummary.rejected.map(r => (
+                        <p key={r.name} className="text-[11px] ml-2">• {r.name}: {r.reason}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {refineError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{refineError}</p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-gray-200">
+                <button
+                  onClick={onClose}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                {frontFile && (
+                  <button
+                    onClick={handleRefine}
+                    disabled={refining}
+                    className="px-4 py-1.5 text-xs bg-violet-600 text-white rounded hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {refining ? (
+                      <>
+                        <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Comparing with photo…
+                      </>
+                    ) : refineSummary ? 'Refine Again' : 'Refine Shapes from Photo'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -17,6 +17,7 @@ from app.api.generate import router as generate_router
 from app.api.instructions import router as instructions_router
 from app.api.patterns import router as patterns_router
 from app.api.provider import router as provider_router
+from app.api.refine import router as refine_router
 from app.api.templates import router as templates_router
 from app.database import Base, engine
 
@@ -48,6 +49,7 @@ app.include_router(generate_router, prefix="/api")
 app.include_router(instructions_router, prefix="/api")
 app.include_router(patterns_router, prefix="/api")
 app.include_router(provider_router, prefix="/api")
+app.include_router(refine_router, prefix="/api")
 app.include_router(templates_router, prefix="/api")
 
 

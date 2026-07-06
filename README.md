@@ -138,10 +138,11 @@ Requires a configured LLM provider (Anthropic by default, or local Ollama — se
 
 ## AI Assist (Phase 2)
 
-The **AI Assist** button in the header opens a two-step workflow:
+The **AI Assist** button in the header opens a three-step workflow:
 
 1. **Upload photo** — select a garment type, then upload a JPEG/PNG front-view photo (back photo optional). The app calls `/api/analyze` which uses the configured LLM's vision API (Claude or a vision-capable Ollama model) to detect silhouette, waistband, closure, dart count, and details.
 2. **Review & generate** — confirm or correct the detected features and enter your measurements, then click "Generate Pattern". The app calls `/api/generate` which runs the Aldrich parametric engine and returns a `.psnap` file that loads directly into the editor.
+3. **Refine shapes from photo (optional)** — after generating, the modal stays open with a **Refine Shapes from Photo** button. `/api/refine` sends the photo plus the drafted outlines back to the vision LLM, which returns corrected outlines (bezier curves allowed) only for pieces whose flat shape disagrees with the photo — e.g. a curved wrap edge the parametric block drew straight. Replacements are strictly validated (piece names, seam labels, size deltas, fold edges, self-intersection); anything invalid is dropped, so the worst case is an unchanged pattern. Reshaped pieces render amber as AI drafts.
 
 A **Dev — load saved analysis** mode lets you paste or load a saved analysis JSON response to skip the LLM call (useful for testing).
 
@@ -341,6 +342,7 @@ Seamster/
         ├── api/export.py               POST /api/export/pdf — returns tiled PDF binary
         ├── api/analyze.py              POST /api/analyze — LLM vision → GarmentFeatures JSON
         ├── api/generate.py             POST /api/generate — parametric engine → .psnap JSON
+        ├── api/refine.py               POST /api/refine — photo + psnap → vision-reshaped psnap
         ├── api/instructions.py         POST /api/instructions — features+pieces → sewing instructions JSON
         ├── patterns/
         │   ├── geometry.py             Point, offset_polygon, cubic/quadratic bezier
@@ -361,8 +363,8 @@ Seamster/
         │   ├── learned_pieces.py       Template store + 7 formula-driven geometries (rectangle, shaped_rectangle, trapezoid, godet, quarter/half-circle flounce, curved_band)
         │   ├── novel_validation.py     Geometric checks for LLM pieces (dimension bounds, self-intersection, attachment-edge length)
         │   ├── compositions.py         Composed garments: shorts/coat/tunic/romper/jumpsuit built from existing blocks (static plans + LLM planner)
-        │   └── vision_contours.py      Photo-contour patternizer: simplify/symmetrize/snap + scale (tunable constants at the top)
-        ├── debug_trace.py              Most-recent AI run trace → backend/debug/last_run.json (analyze prompts/response/features + generate events/output)
+        │   └── vision_contours.py      Photo-contour patternizer: simplify/symmetrize/snap + scale, optional bezier curves (tunable constants at the top)
+        ├── debug_trace.py              Most-recent AI run trace → backend/debug/last_run.json (analyze prompts/response/features + generate events/output + refine attempts/summary)
         ├── llm/                        Provider-agnostic LLM layer (Anthropic + Ollama)
         │   ├── base.py                 LLMProvider ABC, LLMResponse, common error hierarchy
         │   ├── anthropic_provider.py   Anthropic Claude implementation (text + vision)
@@ -370,6 +372,7 @@ Seamster/
         │   └── factory.py              get_provider() + shared retry & JSON-parse helpers
         ├── vision/
         │   ├── analyzer.py             LLM vision call + JSON parse (retry via llm layer)
+        │   ├── refine.py               Photo refine pass: vision LLM edits drafted outlines (guards + repair loop + in-place splice)
         │   └── prompts.py              System + user prompt templates
         └── export/pdf_tiler.py         reportlab tiled PDF with registration marks
 ```

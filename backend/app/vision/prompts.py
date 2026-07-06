@@ -44,7 +44,12 @@ _CONTOUR_NOTE = (
     "other axis PRESERVES the piece's true proportions — a 45x5 cm collar strip is x 0-1, "
     "y 0-0.11, NOT a square. Never stretch the outline to fill the 0-1 box and never return "
     "a plain 4-corner bounding box: trace the real silhouette (neckline curves, shoulder "
-    "slopes, hem shaping). Only pieces CUT FROM FABRIC — never notions or hardware "
+    "slopes, hem shaping). Curved edges: when an edge is genuinely curved (neckline scoop, "
+    'armscye, curved hem, flared side) draw it as a cubic bezier by adding "cp1x","cp1y",'
+    '"cp2x","cp2y" to a point — these curve the edge ARRIVING at that point from the '
+    "PREVIOUS point (cp1 near the previous point, cp2 near this one), in the same 0-1 "
+    "coordinate space. Give either all four cp values or none; straight seams stay plain "
+    "points. Only pieces CUT FROM FABRIC — never notions or hardware "
     "(buttons, frog/knot closures, buckles, zips, drawcords, ties). width_frac: the "
     "piece's real width as a fraction of the reference measurement (e.g. a hood panel "
     "~0.25 of chest_cm). attachment_edges: which 0-based outline edges (edge i runs from "

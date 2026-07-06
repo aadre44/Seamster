@@ -17,6 +17,7 @@ from app.models.features import (
     PieceContour,
 )
 from app.models.measurements import Measurements
+from app.patterns.geometry import CurveSegment
 from app.patterns.learned_pieces import PieceTemplate, TemplateStore, apply_template
 from app.patterns.vision_contours import (
     MIN_CONTOUR_CONFIDENCE,
@@ -186,6 +187,86 @@ def test_generate_vision_pieces_dedupes_against_engine_pieces():
     ])
     specs = generate_vision_pieces(f, M, existing_names={"Back Bodice", "Overlap Front"})
     assert [s.detail for s in specs] == ["cascade_panel"]
+
+
+# ── Bezier curve support ──────────────────────────────────────────────────────
+
+def _curved_points() -> list[ContourPoint]:
+    """A panel whose right edge dips inward on a bezier (like a scooped side)."""
+    return [
+        ContourPoint(x=0.0, y=0.0),
+        ContourPoint(x=1.0, y=0.0),
+        ContourPoint(x=1.0, y=1.4, cp1x=0.8, cp1y=0.4, cp2x=0.8, cp2y=1.0),
+        ContourPoint(x=0.0, y=1.4),
+    ]
+
+
+def test_curved_contour_yields_curve_segments_scaled_with_vertices():
+    spec = patternize_contour(contour(points=_curved_points()), M)
+    curves = [v for v in spec.outline if isinstance(v, CurveSegment)]
+    assert len(curves) == 1
+    c = curves[0]
+    # width = chest 90 × 0.25 = 22.5; the whole outline (cps included) scales by it
+    w = 90 * 0.25
+    assert c.x == pytest.approx(1.0 * w) and c.y == pytest.approx(1.4 * w)
+    assert c.cp1.x == pytest.approx(0.8 * w) and c.cp1.y == pytest.approx(0.4 * w)
+    assert c.cp2.x == pytest.approx(0.8 * w) and c.cp2.y == pytest.approx(1.0 * w)
+
+
+def test_curved_contour_bypasses_cleanup_stages():
+    # Near-vertical/near-symmetric wobble that the Point pipeline would snap or
+    # mirror; with a curve present the vertices must come through only scaled.
+    pts = [
+        ContourPoint(x=0.0, y=0.0),
+        ContourPoint(x=1.0, y=0.02),   # would be snapped horizontal by _snap_axes
+        ContourPoint(x=1.0, y=1.4, cp1x=0.9, cp1y=0.5, cp2x=0.9, cp2y=1.0),
+        ContourPoint(x=0.04, y=1.4),
+    ]
+    spec = patternize_contour(contour(points=pts), M)
+    w = 90 * 0.25
+    assert spec.outline[1].y == pytest.approx(0.02 * w)   # NOT snapped to 0
+    assert spec.outline[3].x == pytest.approx(0.04 * w)   # NOT symmetrized/snapped
+
+
+def test_partial_cp_keys_stay_a_plain_point():
+    pts = [
+        ContourPoint(x=0.0, y=0.0),
+        ContourPoint(x=1.0, y=0.0, cp1x=0.5),   # partial set → plain point
+        ContourPoint(x=1.0, y=1.4),
+        ContourPoint(x=0.0, y=1.4),
+    ]
+    spec = patternize_contour(contour(points=pts), M)
+    assert all(not isinstance(v, CurveSegment) for v in spec.outline)
+
+
+def test_runaway_control_point_rejected():
+    pts = [
+        ContourPoint(x=0.0, y=0.0),
+        ContourPoint(x=1.0, y=0.0),
+        ContourPoint(x=1.0, y=1.4, cp1x=5.0, cp1y=-4.0, cp2x=0.9, cp2y=1.0),
+        ContourPoint(x=0.0, y=1.4),
+    ]
+    with pytest.raises(ValueError, match="runaway"):
+        patternize_contour(contour(points=pts), M)
+
+
+def test_square_box_guard_skipped_for_curved_outline():
+    # A near-square 4-vertex outline WITH a curve is a deliberate trace, not a box.
+    pts = [
+        ContourPoint(x=0.0, y=0.0),
+        ContourPoint(x=1.0, y=0.0),
+        ContourPoint(x=1.0, y=1.0, cp1x=0.7, cp1y=0.3, cp2x=0.7, cp2y=0.8),
+        ContourPoint(x=0.0, y=1.0),
+    ]
+    spec = patternize_contour(contour(points=pts), M)
+    assert any(isinstance(v, CurveSegment) for v in spec.outline)
+
+
+def test_contour_prompt_mentions_bezier_control_points():
+    from app.models.features import GarmentType as GT
+    from app.vision.prompts import build_system_prompt
+
+    assert "cp1x" in build_system_prompt(GT.VEST)
 
 
 # ── engine wiring ─────────────────────────────────────────────────────────────

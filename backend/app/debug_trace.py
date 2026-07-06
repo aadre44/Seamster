@@ -145,3 +145,45 @@ def trace_generate(request: dict, psnap: dict | None, error: str | None = None) 
             _events.clear()
     except Exception:
         logger.debug("debug_trace.trace_generate failed", exc_info=True)
+
+
+def begin_refine() -> None:
+    """Reset the event buffer at the start of a photo-refine call."""
+    try:
+        with _lock:
+            _events.clear()
+    except Exception:
+        logger.debug("debug_trace.begin_refine failed", exc_info=True)
+
+
+def trace_refine(
+    request: dict,
+    system_prompt: str,
+    user_prompts: list[str],
+    raw_responses: list[str],
+    summary: dict | None,
+    error: str | None = None,
+) -> None:
+    """Attach the photo-refine half to the trace, keeping analyze + generate.
+
+    ``user_prompts``/``raw_responses`` hold one entry per LLM attempt (the repair
+    re-prompt shows up as the second user prompt)."""
+    try:
+        with _lock:
+            data = _read()
+            data.setdefault("analyze", None)
+            data.setdefault("generate", None)
+            data["refine"] = {
+                "timestamp": _now(),
+                "request": request,
+                "system_prompt": system_prompt,
+                "user_prompts": user_prompts,
+                "raw_responses": raw_responses,
+                "events": list(_events),
+                "summary": summary,
+                "error": error,
+            }
+            _write(data)
+            _events.clear()
+    except Exception:
+        logger.debug("debug_trace.trace_refine failed", exc_info=True)
