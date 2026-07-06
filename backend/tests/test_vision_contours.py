@@ -150,6 +150,44 @@ def test_generate_vision_pieces_skips_bad_keeps_good():
     assert [s.detail for s in specs] == ["cascade_panel"]
 
 
+def test_notion_contour_rejected():
+    with pytest.raises(ValueError, match="notion"):
+        patternize_contour(
+            contour(detail="frog_button_closure", name="Chinese Frog Button / Knot Closure"),
+            M,
+        )
+
+
+def test_square_bounding_box_rejected():
+    unit_square = [
+        ContourPoint(x=0.0, y=0.0), ContourPoint(x=1.0, y=0.0),
+        ContourPoint(x=1.0, y=1.0), ContourPoint(x=0.0, y=1.0),
+    ]
+    with pytest.raises(ValueError, match="bounding box"):
+        patternize_contour(contour(points=unit_square), M)
+
+
+def test_strip_rectangle_still_accepted():
+    # A genuinely rectangular piece (collar stand / binding strip) has a strip-like
+    # aspect and must NOT be caught by the square-bounding-box guard.
+    strip = [
+        ContourPoint(x=0.0, y=0.0), ContourPoint(x=1.0, y=0.0),
+        ContourPoint(x=1.0, y=0.12), ContourPoint(x=0.0, y=0.12),
+    ]
+    spec = patternize_contour(contour(points=strip, width_frac=0.35), M)
+    ys = [p.y for p in spec.outline]
+    assert max(ys) - min(ys) == pytest.approx(90 * 0.35 * 0.12)
+
+
+def test_generate_vision_pieces_dedupes_against_engine_pieces():
+    f = features(piece_contours=[
+        contour(detail="back_panel", name="Back Panel"),     # engine drafted the back
+        contour(),                                           # genuinely novel: kept
+    ])
+    specs = generate_vision_pieces(f, M, existing_names={"Back Bodice", "Overlap Front"})
+    assert [s.detail for s in specs] == ["cascade_panel"]
+
+
 # ── engine wiring ─────────────────────────────────────────────────────────────
 
 def test_vision_pieces_appended_with_source_and_detail():

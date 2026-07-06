@@ -1122,6 +1122,11 @@ def _resolve_vest_finishes(features: GarmentFeatures) -> tuple[tuple[str, ...], 
     if "neckline_facing" in details and "neckline" not in facings:
         facings.append("neckline")
 
+    # An edge is EITHER bound (visible lip) OR faced (clean inside finish) — when
+    # the analysis contradicts itself and lists both, the facing wins: it is the
+    # conservative finish that adds no visible design element the photo may lack.
+    binding_edges = [e for e in binding_edges if e not in set(facings)]
+
     # Welt pockets
     welt_count = 0
     welt_width = 14.0
@@ -1409,7 +1414,8 @@ def _append_vision_pieces(
         return psnap, set()
     from app.patterns.vision_contours import generate_vision_pieces
 
-    specs = generate_vision_pieces(features, measurements)
+    existing_names = {p.get("name", "") for p in psnap.get("pieces", [])}
+    specs = generate_vision_pieces(features, measurements, existing_names=existing_names)
     handled = {spec.detail for spec in specs if spec.detail}
     return _append_specs(psnap, specs), handled
 

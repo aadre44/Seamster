@@ -415,9 +415,24 @@ name at all, the photo itself is the source:
   shapes, snap near-axis edges straight, scale to cm, clamp, and validate with
   the tier-3 checks. **All tuning knobs are module constants at the top of the
   file** (`RDP_EPSILON_FRAC`, `SNAP_ANGLE_DEG`, `SYMMETRY_TOLERANCE`,
-  `MIN_CONTOUR_CONFIDENCE`, width-frac/size clamps).
+  `MIN_CONTOUR_CONFIDENCE`, width-frac/size clamps, `SQUARE_BOX_ASPECT`,
+  `NOTION_WORDS`, `CORE_ROLE_WORDS`).
+- Three guards keep junk contours off the canvas (each skip is trace-logged
+  with its reason): **notion filter** — contours naming hardware/notions
+  (button, frog, zip, …) are never patternized; **bounding-box filter** — a
+  4-point near-square axis-aligned rectangle is an untraced bounding box, not
+  an outline (real rectangular pieces are strips, far from 1:1); **engine
+  dedupe** — a contour sharing a core piece-role word (back/front/collar/…)
+  with an already-drafted piece re-traces it and is skipped, which matters in
+  forced-contour debug mode where the model traces every visible piece. The
+  contour prompt also demands true aspect ratio (never stretch the outline to
+  fill the 0-1 box), traced silhouettes over bounding boxes, and fabric pieces
+  only.
 - Vision pieces are appended before the LLM fallback and their detail tokens
   are excluded from it, so one physical feature never yields two pieces.
+- Edge finishes are reconciled in `_resolve_vest_finishes`: binding and facing
+  are mutually exclusive per edge (the prompt says so too) — when a
+  contradictory analysis lists an edge in both, the facing wins.
 - Every generated piece now carries `source` (`engine` / `template` / `llm` /
   `vision`); the canvas renders non-engine pieces amber with an "(AI draft)"
   label, and the Properties panel offers **Save as template** on drafts —

@@ -39,8 +39,13 @@ _CONTOUR_NOTE = (
     '"attachment_label": "hem" | "waist" | "neckline" | "armhole" | "wrist" | "side_seam" '
     'or null, "attachment_edges": [edge indices] or null, "confidence": 0-1 }\n'
     "points: 4-16 outline vertices of the FLAT piece (as it would lie on a cutting table, "
-    "not as worn), in order, y grows downward, normalized so the outline fits in a 0-1 box; "
-    "the outline closes automatically from the last point to the first. width_frac: the "
+    "not as worn), in order, y grows downward; the outline closes automatically from the "
+    "last point to the first. Normalize so the LONGER side of the piece spans 0-1 and the "
+    "other axis PRESERVES the piece's true proportions — a 45x5 cm collar strip is x 0-1, "
+    "y 0-0.11, NOT a square. Never stretch the outline to fill the 0-1 box and never return "
+    "a plain 4-corner bounding box: trace the real silhouette (neckline curves, shoulder "
+    "slopes, hem shaping). Only pieces CUT FROM FABRIC — never notions or hardware "
+    "(buttons, frog/knot closures, buckles, zips, drawcords, ties). width_frac: the "
     "piece's real width as a fraction of the reference measurement (e.g. a hood panel "
     "~0.25 of chest_cm). attachment_edges: which 0-based outline edges (edge i runs from "
     "point i to point i+1) sew to attachment_label. Estimate honestly and use confidence "
@@ -50,7 +55,9 @@ _CONTOUR_NOTE = (
 _FORCED_CONTOUR_NOTE = (
     "DEBUG MODE — piece_contours is MANDATORY for this analysis: return a piece_contours "
     "entry for EVERY distinct pattern piece you can identify in the photo, even pieces "
-    "that a details token already describes. This output is used to test contour tracing."
+    "that a details token already describes. This output is used to test contour tracing. "
+    "All the outline rules above still apply: true aspect ratio, traced silhouettes (no "
+    "bounding boxes), fabric pieces only (no notions)."
 )
 
 # Pleat taxonomy appended to the system prompt for any garment that can be pleated.
@@ -134,6 +141,8 @@ _EDGE_FINISH_NOTE = (
     "  facings: edges finished by a facing turned fully to the INSIDE (no visible trim) — list "
     "any of neckline / armhole / hem. A clean sleeveless armhole with no topstitched lip is "
     "usually faced. Empty array when none.\n"
+    "  binding and facings are MUTUALLY EXCLUSIVE per edge: an edge either shows a bound lip "
+    "or is faced clean — never list the same edge in both.\n"
     "  welt_pockets: bound/besom pockets set INTO the garment (a fabric lip at the opening, no "
     "patch visible). For each, give position (lower_front / chest / side_front / back), the "
     "opening width in cm, how many appear (count), and besom=true for a double-lip besom. "

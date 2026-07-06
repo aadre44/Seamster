@@ -58,6 +58,24 @@ MIN_CONTOUR_CONFIDENCE = 0.3
 #: Accepted vertex-count window for the raw contour.
 MIN_CONTOUR_POINTS = 3
 MAX_CONTOUR_POINTS = 24
+#: A 4-point axis-aligned rectangle whose height/width ratio falls in this window
+#: is treated as an untraced bounding box (the model filled the 0-1 square instead
+#: of tracing the outline) and rejected. Genuine rectangular pieces — collar
+#: stands, bindings, waistbands — are strips, far outside this window.
+SQUARE_BOX_ASPECT = (0.85, 1.15)
+#: Contours whose detail/name contains one of these words describe notions or
+#: hardware, not cut fabric pieces, and are never patternized.
+NOTION_WORDS = frozenset({
+    "button", "buttons", "frog", "knot", "toggle", "buckle", "zip", "zipper",
+    "snap", "hook", "eyelet", "grommet", "rivet", "stud", "clasp", "drawstring",
+    "drawcord", "cord", "lace", "velcro",
+})
+#: Piece-role words used to detect a contour that re-traces a piece the engine
+#: already drafted (see ``generate_vision_pieces`` ``existing_names``).
+CORE_ROLE_WORDS = frozenset({
+    "back", "front", "bodice", "collar", "sleeve", "cuff", "waistband", "yoke",
+    "placket", "skirt", "leg", "binding", "facing", "pocket", "hood",
+})
 # ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -149,21 +167,54 @@ def _snap_axes(pts: list[Point]) -> list[Point]:
     return out
 
 
+def _contour_words(contour: PieceContour) -> set[str]:
+    text = f"{contour.detail or ''} {contour.name or ''}".lower()
+    return {w for w in text.replace("_", " ").replace("/", " ").split() if w}
+
+
+def _is_square_box(pts: list[Point]) -> bool:
+    """True when the contour is a 4-vertex axis-aligned rectangle whose aspect is
+    near 1:1 — the signature of a model that filled the normalized 0-1 square
+    instead of tracing the piece's outline."""
+    if len(pts) != 4:
+        return False
+    xs = sorted({round(p.x, 4) for p in pts})
+    ys = sorted({round(p.y, 4) for p in pts})
+    if len(xs) != 2 or len(ys) != 2:
+        return False
+    w, h = xs[1] - xs[0], ys[1] - ys[0]
+    if w < 1e-9:
+        return False
+    return SQUARE_BOX_ASPECT[0] <= h / w <= SQUARE_BOX_ASPECT[1]
+
+
 def patternize_contour(contour: PieceContour, measurements: Measurements) -> PieceSpec:
     """Convert one vision contour into a cleaned, real-scale PieceSpec.
 
     Raises ValueError for contours that cannot become a usable piece (too few
-    points, low confidence, degenerate or sub-MIN_PIECE_CM results)."""
+    points, low confidence, notions/hardware, untraced bounding boxes, degenerate
+    or sub-MIN_PIECE_CM results)."""
     if contour.confidence < MIN_CONTOUR_CONFIDENCE:
         raise ValueError(
             f"contour '{contour.detail}' confidence {contour.confidence:.2f} is below "
             f"the acceptance threshold {MIN_CONTOUR_CONFIDENCE}"
+        )
+    notion_hits = _contour_words(contour) & NOTION_WORDS
+    if notion_hits:
+        raise ValueError(
+            f"contour '{contour.detail}' describes a notion ({', '.join(sorted(notion_hits))}), "
+            "not a cut fabric piece"
         )
     raw = [Point(p.x, p.y) for p in contour.points]
     if not MIN_CONTOUR_POINTS <= len(raw) <= MAX_CONTOUR_POINTS:
         raise ValueError(
             f"contour '{contour.detail}' has {len(raw)} points; expected "
             f"{MIN_CONTOUR_POINTS}-{MAX_CONTOUR_POINTS}"
+        )
+    if _is_square_box(raw):
+        raise ValueError(
+            f"contour '{contour.detail}' is a near-square 4-point box — an untraced "
+            "bounding box, not an outline"
         )
 
     pts = _renormalize(raw)
@@ -225,12 +276,46 @@ def patternize_contour(contour: PieceContour, measurements: Measurements) -> Pie
     )
 
 
+def _duplicates_existing(contour: PieceContour, existing_names: set[str]) -> str | None:
+    """Return the name of an already-drafted piece this contour re-traces, or None.
+
+    A contour duplicates a drafted piece when both share a core piece-role word
+    (back/front/collar/…). The vision model only sees the garment, not what the
+    parametric engine drafted, so in forced-contour debug mode (and on sloppy
+    normal-mode output) it happily re-traces the back panel or collar the engine
+    already produced — those must not land on the canvas twice."""
+    contour_roles = _contour_words(contour) & CORE_ROLE_WORDS
+    if not contour_roles:
+        return None
+    for name in existing_names:
+        name_words = set(name.lower().replace("_", " ").split())
+        if contour_roles & name_words:
+            return name
+    return None
+
+
 def generate_vision_pieces(
-    features: GarmentFeatures, measurements: Measurements,
+    features: GarmentFeatures,
+    measurements: Measurements,
+    existing_names: set[str] | frozenset = frozenset(),
 ) -> list[PieceSpec]:
-    """Patternize every usable contour; invalid ones are logged and skipped."""
+    """Patternize every usable contour; invalid ones are logged and skipped.
+
+    ``existing_names`` lists pieces already drafted by the parametric engine;
+    contours that re-trace one of them are skipped."""
     specs: list[PieceSpec] = []
     for contour in features.piece_contours:
+        duplicate_of = _duplicates_existing(contour, set(existing_names))
+        if duplicate_of:
+            logger.info(
+                "Skipping vision contour '%s': engine already drafted '%s'",
+                contour.detail, duplicate_of,
+            )
+            add_event(
+                "vision_contour_skipped", detail=contour.detail,
+                reason=f"duplicates drafted piece '{duplicate_of}'",
+            )
+            continue
         try:
             spec = patternize_contour(contour, measurements)
         except ValueError as exc:

@@ -129,6 +129,39 @@ def test_vest_does_not_trigger_llm_fallback():
     assert detect_unsupported_details(_reference_vest_features()) == []
 
 
+def test_edge_in_both_binding_and_facings_keeps_facing_only():
+    # A contradictory analysis (blueVest run): binding AND facing claimed for the
+    # same edges. The facing must win; no binding strips for those edges.
+    feats = _reference_vest_features()
+    feats.binding = BindingFeature(edges=["neckline", "armhole"], width_cm=1.0, contrast=True)
+    feats.facings = ["neckline", "armhole"]
+    names = _piece_names(generate_pattern(feats, _m()))
+    assert "Neckline Facing" in names and "Armhole Facing" in names
+    assert "Neckline Binding" not in names and "Armhole Binding" not in names
+
+
+def test_vision_contours_do_not_duplicate_engine_pieces():
+    # Forced-contour debug mode returns a contour for every visible piece; those
+    # that re-trace pieces the engine drafted must not land on the canvas twice.
+    from app.models.features import ContourPoint, PieceContour
+
+    unit_square = [
+        ContourPoint(x=0.0, y=0.0), ContourPoint(x=1.0, y=0.0),
+        ContourPoint(x=1.0, y=1.0), ContourPoint(x=0.0, y=1.0),
+    ]
+    feats = _reference_vest_features()
+    feats.piece_contours = [
+        PieceContour(detail="back_panel", name="Back Panel",
+                     points=unit_square, width_frac=0.95, confidence=0.75),
+        PieceContour(detail="frog_button_closure", name="Chinese Frog Button / Knot Closure",
+                     points=unit_square, width_frac=0.08, confidence=0.88),
+    ]
+    names = _piece_names(generate_pattern(feats, _m()))
+    assert "Back Bodice" in names
+    assert "Back Panel" not in names                       # dedupe against the engine
+    assert all("Frog" not in n for n in names)             # notions are never pieces
+
+
 def test_detail_tokens_drive_finishes_without_structured_fields():
     feats = GarmentFeatures(
         garment_type=GarmentType.VEST,
