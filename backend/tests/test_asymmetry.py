@@ -1,4 +1,6 @@
 """Tests for asymmetric wrap fronts, the mandarin collar, and per-panel warp."""
+import pytest
+
 from app.models.features import (
     AsymmetryFeature,
     BindingFeature,
@@ -11,7 +13,7 @@ from app.models.features import (
 )
 from app.models.measurements import Measurements
 from app.patterns.engine import generate_pattern
-from app.patterns.geometry import CurveSegment
+from app.patterns.geometry import CurveSegment, Point
 from app.patterns.llm_fallback import detect_unsupported_details
 from app.patterns.shaping import apply_shape
 from app.patterns.vests import build_vest_block
@@ -40,7 +42,7 @@ def test_asymmetric_wrap_emits_two_distinct_fronts():
     assert ov_xy != un_xy
 
 
-def test_overlap_front_is_wider_and_has_diagonal_edge():
+def test_overlap_front_is_wider_and_has_free_wrap_edge():
     pieces = build_vest_block(_m(), front_style="asymmetric_wrap", overlap_cm=14.0)
     ov = pieces["overlap_front"]
     un = pieces["underlap_front"]
@@ -51,6 +53,53 @@ def test_overlap_front_is_wider_and_has_diagonal_edge():
     assert "overlap_edge" in ov.edge_labels.values()
     assert "underlap_edge" in un.edge_labels.values()
     assert any(isinstance(v, CurveSegment) for v in ov.outline)  # armscye curve
+
+
+def test_overlap_wrap_band_matches_corrected_reference():
+    """Geometry pinned to harness/blueVestCorrected.svg: neckline curve down to a CF
+    frog point, a stepped wrap band through the mid-body only, and a hem that ends
+    at the CF (not at the wrap edge)."""
+    m = _m()
+    pieces = build_vest_block(m, front_style="asymmetric_wrap", overlap_cm=18.0)
+    ov = pieces["overlap_front"]
+    chest_qt = (m.chest_cm + 6.0) / 4  # EASE_CHEST
+    cf = chest_qt
+    arm_depth = ov.outline[3].y        # armscye curve endpoint = underarm depth
+
+    # Vertex 0 is the frog-closure point on the CF at half the neck-to-underarm drop.
+    frog = ov.outline[0]
+    assert frog.x == pytest.approx(cf)
+    assert frog.y == pytest.approx(1.5 + (arm_depth - 1.5) * 0.5)
+    # Edge 0 is the neckline CURVE up to the collar neck point.
+    assert isinstance(ov.outline[1], CurveSegment)
+    assert ov.edge_labels[0] == "neckline"
+    # The vision's 18 cm overlap is clamped to 0.46 × quarter-chest.
+    wrap_x = min(p.x for p in ov.outline)
+    assert wrap_x == pytest.approx(cf - chest_qt * 0.46)
+    # The band crosses CF only through the mid-body: the hem's inner corner is AT the CF.
+    L = m.length_cm
+    hem_xs = [p.x for p in ov.outline if isinstance(p, Point) and abs(p.y - L) < 1e-6]
+    assert min(hem_xs) == pytest.approx(cf)
+    # The band vertices step out and back at the same two heights.
+    band_ys = sorted({round(p.y, 2) for p in ov.outline if isinstance(p, Point) and p.x == pytest.approx(wrap_x)})
+    assert len(band_ys) == 2
+    assert band_ys[0] < arm_depth < band_ys[1]  # spans across the underarm line
+
+
+def test_underlap_is_a_normal_front_half():
+    """The underlap is a standard vest front: neckline curve, straight CF edge, no
+    extension past the CF."""
+    m = _m()
+    pieces = build_vest_block(m, front_style="asymmetric_wrap")
+    un = pieces["underlap_front"]
+    cf = (m.chest_cm + 6.0) / 4
+    assert max(p.x for p in un.outline) == pytest.approx(cf)   # nothing crosses the CF
+    assert isinstance(un.outline[1], CurveSegment)             # neckline curve
+    assert un.edge_labels[0] == "neckline"
+    assert list(un.edge_labels.values()).count("underlap_edge") == 1
+    # Straight CF edge: both the CF neck and the CF hem corner sit at x = cf.
+    assert un.outline[0].x == pytest.approx(cf)
+    assert un.outline[-1].x == pytest.approx(cf)
 
 
 def test_wrap_side_left_mirrors_the_construction():

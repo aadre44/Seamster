@@ -77,51 +77,88 @@ def _asymmetric_fronts(
     """Draft an asymmetric wrap front as two DISTINCT non-mirrored panels.
 
     Drafted in a full-front frame: x = 0 is the left side seam, x = FW (= 2·chest_qt) the
-    right side seam, centre front at x = cf. The Overlap (wrap) Front is the large panel whose
-    free edge is a DIAGONAL closure running from the high-side neck down to the opposite lower
-    front; the Underlap Front is the smaller panel that sits beneath it. ``wrap_side`` flips
-    the whole construction by reflecting x → FW − x.
+    right side seam, centre front at x = cf. ``wrap_side`` flips the whole construction by
+    reflecting x → FW − x.
+
+    Proportions follow the corrected blueVest reference (harness/blueVestCorrected.svg):
+
+    - **Overlap (wrap) Front** — a full half-front whose free edge is NOT one straight
+      diagonal to the hem. From the collar neck point a concave neckline curve sweeps down
+      to the frog-closure point on the CF at half the neck-to-underarm drop; a short
+      vertical closure edge follows; then the **wrap band** juts past CF only through the
+      mid-body (upper chest to low hip), steps back to CF, and runs straight down the CF
+      to the hem.
+    - **Underlap Front** — a normal vest front half (neckline curve, shoulder, armscye,
+      side seam, hem, straight CF edge) that sits beneath the wrap.
+
+    ``closure_drop_frac`` is accepted for API compatibility but no longer used: the vision
+    estimate placed the closure below the underarm, contradicting the photo; the frog point
+    is now fixed at half the neck-to-underarm drop per the corrected reference.
     """
     cf = chest_qt
     FW = 2 * chest_qt
     nw = front_neck_w
     neck_dip = 1.5
-    underlap_ext = 4.0
-    low_y = arm_depth + (L - arm_depth) * max(0.05, closure_drop_frac)
+    # Vision routinely overestimates how far the wrap crosses CF; the corrected
+    # reference puts the band at ~0.46 of a quarter-chest past CF.
+    ov = max(2.0, min(overlap_cm, chest_qt * 0.46))
+    wrap_x = cf - ov
+    frog_y = neck_dip + (arm_depth - neck_dip) * 0.5   # frog closure on the CF, upper chest
+    drop = frog_y - neck_dip
+    band_top_y = frog_y + 3.0                          # short vertical closure edge
+    band_bot_y = max(band_top_y + 2.0, arm_depth + (L - arm_depth) * 0.6)
 
-    # Overlap (wrap) panel — anchored high on the RIGHT (x > cf), diagonal down to the left.
+    # Overlap (wrap) panel — anchored high on the RIGHT (x > cf), band crossing to the left.
     neck_hi = Point(cf + nw, neck_dip)
     sh_hi = Point(cf + shoulder_tip_x, shoulder_slope)
     scye_hi = Point(FW, arm_depth)
-    hem_left = Point(max(0.0, cf - overlap_cm), L)
-    diag_low = Point(max(0.0, cf - overlap_cm), low_y)
+    frog = Point(cf, frog_y)
+    neck_curve = CurveSegment(                         # frog → neck point, concave from above
+        neck_hi.x, neck_hi.y,
+        cp1=Point(cf + nw * 0.45, frog_y - drop * 0.05),
+        cp2=Point(cf + nw * 0.76, neck_dip + drop * 0.62),
+    )
     overlap_outline: list[Point | CurveSegment] = [
-        neck_hi,                       # 0 high neck (collar attaches)
-        sh_hi,                         # 1 shoulder tip
-        _arm_curve(sh_hi, scye_hi),    # 2 armscye (curve)
-        Point(FW, L),                  # 3 right side hem
-        hem_left,                      # 4 hem crosses to the left
+        frog,                          # 0 frog-closure point on the CF
+        neck_curve,                    # 1 neckline curve up to the collar neck point
+        sh_hi,                         # 2 shoulder tip
+        _arm_curve(sh_hi, scye_hi),    # 3 armscye (curve)
+        Point(FW, L),                  # 4 side hem
+        Point(cf, L),                  # 5 hem ends at the CF
+        Point(cf, band_bot_y),         # 6 CF edge up to the band
+        Point(wrap_x, band_bot_y),     # 7 band bottom step past CF
+        Point(wrap_x, band_top_y),     # 8 band leading edge
+        Point(cf, band_top_y),         # 9 band top step back to CF (closes to the frog)
     ]
-    overlap_labels = {0: "shoulder", 1: "armhole", 2: "side_seam", 3: "hem"}
-    if abs(diag_low.y - L) > 0.5:
-        overlap_outline.append(diag_low)              # 5 up the short left edge
-        overlap_labels[4] = "overlap_edge"
-        overlap_labels[5] = "overlap_edge"            # diagonal closure → neck
-    else:
-        overlap_labels[4] = "overlap_edge"            # hem_left → neck (pure diagonal)
+    overlap_labels = {
+        0: "neckline", 1: "shoulder", 2: "armhole", 3: "side_seam", 4: "hem",
+        5: "overlap_edge", 6: "overlap_edge", 7: "overlap_edge", 8: "overlap_edge",
+        9: "overlap_edge",
+    }
 
-    # Underlap panel — the left half-front beneath the wrap.
+    # Underlap panel — a normal vest front half beneath the wrap: high round neck under
+    # the collar stand, straight CF edge.
+    neck_drop = neck_dip + 5.0
     neck_lo = Point(cf - nw, neck_dip)
     sh_lo = Point(cf - shoulder_tip_x, shoulder_slope)
     scye_lo = Point(0.0, arm_depth)
+    under_neck_curve = CurveSegment(                   # CF neck → neck point, flat at the CF
+        neck_lo.x, neck_lo.y,
+        cp1=Point(cf - nw * 0.45, neck_drop),
+        cp2=Point(cf - nw * 0.8, neck_dip + (neck_drop - neck_dip) * 0.35),
+    )
     underlap_outline: list[Point | CurveSegment] = [
-        neck_lo,                       # 0 left neck
-        sh_lo,                         # 1 left shoulder tip
-        _arm_curve(sh_lo, scye_lo),    # 2 left armscye (curve)
-        Point(0.0, L),                 # 3 left side hem
-        Point(cf + underlap_ext, L),   # 4 hem extends under the wrap
+        Point(cf, neck_drop),          # 0 CF neck
+        under_neck_curve,              # 1 neckline curve to the neck point
+        sh_lo,                         # 2 left shoulder tip
+        _arm_curve(sh_lo, scye_lo),    # 3 left armscye (curve)
+        Point(0.0, L),                 # 4 left side hem
+        Point(cf, L),                  # 5 hem to the CF (closes straight up the CF)
     ]
-    underlap_labels = {0: "shoulder", 1: "armhole", 2: "side_seam", 3: "hem", 4: "underlap_edge"}
+    underlap_labels = {
+        0: "neckline", 1: "shoulder", 2: "armhole", 3: "side_seam", 4: "hem",
+        5: "underlap_edge",
+    }
 
     if (wrap_side or "right").lower() == "left":
         def _reflect(v: Point | CurveSegment) -> Point | CurveSegment:
@@ -140,16 +177,19 @@ def _asymmetric_fronts(
     overlap = PieceSpec(
         name="Overlap Front", outline=overlap_outline, darts=[],
         grain_start=og_s, grain_end=og_e, cut_qty=1, on_fold=False, seam_allowance=sa,
-        notes="asymmetric WRAP front — the large outer panel; its diagonal free edge is the visible "
-              "closure that crosses the body. Cut 1. Lays OVER the Underlap Front; fasten at the "
-              "neck/upper edge; finish the diagonal edge (facing or binding).",
+        notes="asymmetric WRAP front — the outer panel. Its neckline curves from the collar down "
+              "to the frog-closure point at the CF; the wrap band below crosses past the CF "
+              "through the mid-body then returns to the CF and drops straight to the hem. Cut 1. "
+              "Lays OVER the Underlap Front; fasten the frog at the top of the closure edge; "
+              "finish the whole free edge (facing or binding).",
     )
     overlap.edge_labels = overlap_labels
     underlap = PieceSpec(
         name="Underlap Front", outline=underlap_outline, darts=[],
         grain_start=ug_s, grain_end=ug_e, cut_qty=1, on_fold=False, seam_allowance=sa,
-        notes="asymmetric underlap front — the smaller inner panel that sits UNDER the wrap. Cut 1. "
-              "Finish its inner edge; the Overlap Front laps over it.",
+        notes="asymmetric underlap front — a normal vest front half (high round neck, straight CF "
+              "edge) that sits UNDER the wrap. Cut 1. Finish the CF edge; the Overlap Front laps "
+              "over it and the frog fastens through both layers.",
     )
     underlap.edge_labels = underlap_labels
     return {"overlap_front": overlap, "underlap_front": underlap}

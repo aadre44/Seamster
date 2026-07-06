@@ -303,10 +303,17 @@ details from the vision analysis:
   about a vertical CF, so a diagonal wrap (two *different* fronts) is structurally impossible for the
   edge modifiers. `AsymmetryFeature` (`front_style=asymmetric_wrap`, `wrap_side`, `overlap_cm`,
   `closure_drop_frac`) drives `vests.py::_asymmetric_fronts`, which drafts the front in a full-front
-  frame (x: 0 = left side seam … FW = right side seam) and returns two non-mirrored panels: an
-  **Overlap Front** (large wrap panel whose diagonal free edge is the visible closure) and an
-  **Underlap Front** (the panel beneath). The closure edges are labelled `overlap_edge` /
-  `underlap_edge` (distinct, single-piece) so `_compute_connections` never sews them as a seam;
+  frame (x: 0 = left side seam … FW = right side seam) and returns two non-mirrored panels whose
+  proportions are pinned to the user-corrected blueVest reference (harness/blueVestCorrected.svg):
+  an **Overlap Front** — a full half-front whose neckline curves from the collar neck point down to
+  the frog-closure point on the CF (at half the neck-to-underarm drop), followed by a 3 cm closure
+  edge and a stepped **wrap band** that crosses past CF only through the mid-body (clamped to
+  0.46 × quarter-chest; vision's `overlap_cm` routinely overestimates) before returning to the CF
+  and dropping straight to the hem — and an **Underlap Front**, a normal vest front half (high
+  round neckline curve, straight CF edge, nothing crossing CF). `closure_drop_frac` is accepted but
+  unused (its vision semantics placed the frog below the underarm, contradicting photos). The free
+  edges are labelled `overlap_edge` / `underlap_edge` (distinct, single-piece) so
+  `_compute_connections` never sews them as a seam; both panels carry a real `neckline` edge;
   `wrap_side=left` reflects the construction about FW. `engine.py::_resolve_asymmetry` maps the field
   (with `asymmetric_wrap`/`wrap_front` detail fallbacks); `_resolve_collar` adds a **Mandarin / band
   stand collar** (`neckline=mandarin` or a `mandarin_collar` detail). Vision reports both via
