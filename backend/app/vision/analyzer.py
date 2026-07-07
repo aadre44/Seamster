@@ -528,11 +528,13 @@ async def analyze_garment(
         # Constrained decoding (Ollama) + deterministic temperature curb the
         # out-of-enum closures and hallucinated details a small local model emits.
         # The schema is ignored by providers that don't support it (Anthropic).
+        # 8192 tokens: a forced-contour analysis enumerates every piece with a
+        # 4-16 point outline — 2048 used to cut those responses off mid-JSON.
         response = await acomplete_with_retry(
             get_provider(),
             system=system_prompt,
             user_text=user_prompt,
-            max_tokens=2048,
+            max_tokens=8192,
             images=images,
             response_format=GarmentFeatures.model_json_schema(),
             temperature=0,
@@ -540,7 +542,15 @@ async def analyze_garment(
         raw_text = response.text
 
         logger.debug("LLM raw response: %s", raw_text[:500])
-        data = parse_json_response(raw_text)
+        try:
+            data = parse_json_response(raw_text)
+        except ValueError as exc:
+            if response.truncated:
+                raise ValueError(
+                    "The vision model's response was cut off at the token limit before the "
+                    "JSON was complete. Try again; if it persists, raise the analyzer max_tokens."
+                ) from exc
+            raise
 
         notes: str = data.get("notes", "")
         gtype = garment_type.value

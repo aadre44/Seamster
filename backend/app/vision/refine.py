@@ -35,6 +35,7 @@ from app.llm import acomplete_with_retry, get_provider, parse_json_response
 from app.models.features import GarmentType
 from app.models.measurements import Measurements
 from app.patterns.engine import _compute_connections, _serialise_piece
+from app.patterns.finishings import path_length
 from app.patterns.geometry import CurveSegment, Point
 from app.patterns.novel_validation import validate_spec
 from app.patterns.skirts import PieceSpec
@@ -51,8 +52,18 @@ MIN_POINTS, MAX_POINTS = 3, 40
 #: On-fold pieces: first/last vertices must stay within this fraction of the
 #: bbox diagonal of their drafted positions (the fold edge is load-bearing).
 FOLD_ANCHOR_TOLERANCE = 0.10
+#: Structural seams must keep their drafted length or the pieces stop sewing
+#: together: the summed per-label path length of these edges may drift at most
+#: this fraction from the draft.
+STRUCTURAL_LABELS = frozenset(
+    {"shoulder", "armhole", "side_seam", "waist", "waist_seam", "inseam", "crotch"}
+)
+SEAM_LENGTH_TOLERANCE = 0.12
 #: LLM attempts: one initial call plus one repair re-prompt.
 _MAX_ATTEMPTS = 2
+#: Response budget — a 6-piece garment with bezier outlines easily exceeds 4k
+#: tokens, and a truncated response used to reject EVERY piece (silent no-change).
+_MAX_RESPONSE_TOKENS = 8192
 # ───────────────────────────────────────────────────────────────────────────────
 
 _CP_KEYS = ("cp1x", "cp1y", "cp2x", "cp2y")
@@ -109,6 +120,41 @@ class _PieceCtx:
     outline_ids: list[str] = field(default_factory=list)
     first_vertex: tuple[float, float] = (0.0, 0.0)   # local coords
     last_vertex: tuple[float, float] = (0.0, 0.0)
+    #: Drafted per-label summed edge length (cm) for the structural-seam guard.
+    label_lengths: dict[str, float] = field(default_factory=dict)
+
+
+def _element_length(el: dict) -> float:
+    """Arc length of one psnap outline element (line or cubic-bezier curve)."""
+    start = Point(el["start"]["x"], el["start"]["y"])
+    if el.get("type") == "curve":
+        end = CurveSegment(
+            el["end"]["x"], el["end"]["y"],
+            cp1=Point(el["cp1"]["x"], el["cp1"]["y"]),
+            cp2=Point(el["cp2"]["x"], el["cp2"]["y"]),
+        )
+    else:
+        end = Point(el["end"]["x"], el["end"]["y"])
+    return path_length([start, end])
+
+
+def _outline_label_lengths(
+    vertices: list[Point | CurveSegment], edge_labels: dict[int, str]
+) -> dict[str, float]:
+    """Summed path length per edge label of a replacement outline.
+
+    Edge i runs vertex i → vertex i+1 (wrapping); a CurveSegment target makes the
+    edge a cubic bezier — the same conventions as PieceSpec outlines."""
+    n = len(vertices)
+    sums: dict[str, float] = {}
+    for i in range(n):
+        label = edge_labels.get(i, "")
+        if not label:
+            continue
+        a, b = vertices[i], vertices[(i + 1) % n]
+        length = path_length([Point(a.x, a.y), b])
+        sums[label] = sums.get(label, 0.0) + length
+    return sums
 
 
 def _pieces_to_compact(psnap: dict) -> tuple[list[dict], dict[str, _PieceCtx]]:
@@ -160,6 +206,12 @@ def _pieces_to_compact(psnap: dict) -> tuple[list[dict], dict[str, _PieceCtx]]:
             "on_fold": bool(piece.get("onFold", False)),
             "outline": outline_json,
         })
+        label_lengths: dict[str, float] = {}
+        for el in elems:
+            label = el.get("seamLabel", "") or ""
+            if label:
+                label_lengths[label] = label_lengths.get(label, 0.0) + _element_length(el)
+
         ctx[name] = _PieceCtx(
             piece_id=piece["id"],
             name=name,
@@ -174,9 +226,61 @@ def _pieces_to_compact(psnap: dict) -> tuple[list[dict], dict[str, _PieceCtx]]:
             outline_ids=[e["id"] for e in elems],
             first_vertex=(elems[0]["start"]["x"] - min_x, elems[0]["start"]["y"] - min_y),
             last_vertex=(elems[-1]["start"]["x"] - min_x, elems[-1]["start"]["y"] - min_y),
+            label_lengths=label_lengths,
         )
 
     return compact, ctx
+
+
+def _salvage_pieces(text: str) -> list[dict]:
+    """Recover complete piece objects from a truncated response.
+
+    A response cut off at the token limit usually dies mid-object inside the
+    ``"pieces"`` array. Scan from the array's opening bracket with a
+    string-aware brace counter and json-load every complete top-level object;
+    whatever parses is returned (the half-written trailing object is dropped).
+    """
+    key = text.find('"pieces"')
+    if key < 0:
+        return []
+    start = text.find("[", key)
+    if start < 0:
+        return []
+
+    entries: list[dict] = []
+    depth = 0
+    obj_start = -1
+    in_string = False
+    escaped = False
+    for i in range(start + 1, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if depth == 0:
+                obj_start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and obj_start >= 0:
+                try:
+                    obj = json.loads(text[obj_start:i + 1])
+                    if isinstance(obj, dict):
+                        entries.append(obj)
+                except ValueError:
+                    pass
+                obj_start = -1
+        elif ch == "]" and depth == 0:
+            break
+    return entries
 
 
 # ── LLM response → validated PieceSpec ─────────────────────────────────────────
@@ -265,6 +369,21 @@ def _validate_entry(entry: dict, ctx: dict[str, _PieceCtx], measurements: Measur
         problems.append(f"{name}: missing edge_label(s) {sorted(missing)} — every original label must appear")
     if extra:
         problems.append(f"{name}: invented edge_label(s) {sorted(extra)} — only the original labels are allowed")
+
+    # Structural seams must keep their drafted length — _compute_connections pairs
+    # these edges with another piece, and a shorter/longer seam no longer sews.
+    new_lengths = _outline_label_lengths(vertices, edge_labels)
+    for label in sorted(STRUCTURAL_LABELS & c.labels & set(new_lengths)):
+        old_len = c.label_lengths.get(label, 0.0)
+        if old_len <= 1e-6:
+            continue
+        new_len = new_lengths[label]
+        if abs(new_len - old_len) / old_len > SEAM_LENGTH_TOLERANCE:
+            problems.append(
+                f"{name}: the '{label}' seam is {new_len:.1f} cm but was drafted {old_len:.1f} cm — "
+                f"structural seams must stay within {SEAM_LENGTH_TOLERANCE:.0%} or the pieces "
+                f"no longer sew together; reshape the free edges instead"
+            )
 
     xs = [v.x for v in vertices]
     ys = [v.y for v in vertices]
@@ -420,6 +539,7 @@ async def refine_pattern(
     raw_responses: list[str] = []
     accepted: dict[str, PieceSpec] = {}
     rejected: dict[str, str] = {}
+    salvage_pool: dict[str, PieceSpec] = {}
     problems: list[str] = []
 
     try:
@@ -430,12 +550,15 @@ async def refine_pattern(
                 get_provider(),
                 system=_REFINE_SYSTEM_PROMPT,
                 user_text=user,
-                max_tokens=4096,
+                max_tokens=_MAX_RESPONSE_TOKENS,
                 images=images,
                 temperature=0,
             )
             raw_responses.append(response.text)
-            add_event("refine_attempt", attempt=attempt, problems_sent=list(problems))
+            add_event(
+                "refine_attempt", attempt=attempt,
+                problems_sent=list(problems), truncated=response.truncated,
+            )
 
             try:
                 data = parse_json_response(response.text)
@@ -443,9 +566,22 @@ async def refine_pattern(
                 if not isinstance(entries, list):
                     raise ValueError("the response must be {\"pieces\": [...]}")
             except ValueError as exc:
-                problems = [str(exc)]
-                accepted, rejected = {}, {"(response)": str(exc)}
-                continue
+                if response.truncated:
+                    # Cut off at the token limit — recover the complete piece
+                    # objects instead of rejecting the whole response.
+                    entries = _salvage_pieces(response.text)
+                    add_event("refine_truncated_salvage", pieces_recovered=len(entries))
+                    if not entries:
+                        problems = [
+                            "your response was cut off at the token limit — return only the "
+                            "pieces that truly disagree with the photo, with fewer outline points"
+                        ]
+                        accepted, rejected = {}, {"(response)": "truncated at the token limit"}
+                        continue
+                else:
+                    problems = [str(exc)]
+                    accepted, rejected = {}, {"(response)": str(exc)}
+                    continue
 
             accepted, rejected = {}, {}
             for idx, entry in enumerate(entries):
@@ -458,10 +594,23 @@ async def refine_pattern(
                 else:
                     rejected[str(entry.get("name") or f"(entry {idx})")] = "; ".join(entry_problems)
 
-            if not rejected:
+            if accepted:
+                # Best-so-far: if a repair attempt regresses to nothing, the pieces
+                # already validated on this attempt are still applied.
+                salvage_pool = dict(accepted)
+            if not rejected and not response.truncated:
                 break
             problems = [reason for reason in rejected.values()]
+            if response.truncated:
+                problems.append(
+                    "your response was cut off at the token limit — return only the pieces "
+                    "that truly disagree with the photo, with fewer outline points"
+                )
         # Final attempt: keep the valid pieces, drop the invalid ones (partial acceptance).
+        if not accepted and salvage_pool:
+            accepted = salvage_pool
+            rejected = {n: r for n, r in rejected.items() if n not in accepted}
+            add_event("refine_kept_previous_attempt", pieces=sorted(accepted))
 
         for name in accepted:
             add_event("refine_piece_accepted", name=name)

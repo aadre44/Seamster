@@ -172,6 +172,31 @@ def test_degenerate_control_points_become_plain_point():
     assert not isinstance(spec.outline[0], CurveSegment)
 
 
+def test_shortened_structural_seam_rejected():
+    """The prompt rule 'structural seams keep their drafted length' is enforced:
+    a side seam stretched well past tolerance rejects the piece."""
+    psnap = _vest_psnap()
+    compact, ctx = _pieces_to_compact(psnap)
+    entry = _identity_entry(_compact_piece(compact, "Underlap Front"))
+    # The waist vertex is the second one leaving a side_seam edge; dragging it far
+    # sideways lengthens the seam >12% while the bbox stays within limits.
+    side_idxs = [i for i, pt in enumerate(entry["outline"]) if pt["edge_label"] == "side_seam"]
+    entry["outline"][side_idxs[1]]["x"] += 14.0
+    spec, problems = _validate_entry(entry, ctx, _m())
+    assert spec is None
+    assert any("side_seam" in p and "sew together" in p for p in problems)
+
+
+def test_free_edge_reshape_passes_seam_guard():
+    """Reshaping a non-structural edge (the wrap closure) must NOT trip the guard."""
+    psnap = _vest_psnap()
+    compact, ctx = _pieces_to_compact(psnap)
+    entry = _curved_wrap_entry(compact, ctx)
+    spec, problems = _validate_entry(entry, ctx, _m())
+    assert problems == []
+    assert spec is not None
+
+
 def test_self_intersecting_outline_rejected():
     psnap = _vest_psnap()
     compact, ctx = _pieces_to_compact(psnap)
@@ -327,6 +352,71 @@ async def test_refine_no_pieces_raises(monkeypatch):
     _install_fake(monkeypatch, [{"pieces": []}])
     with pytest.raises(ValueError, match="no pieces"):
         await refine_pattern({"pieces": [], "elements": []}, GarmentType.VEST, _m(), b"png")
+
+
+# ── Truncated responses ───────────────────────────────────────────────────────
+
+def _install_fake_llm(monkeypatch, responses: list[LLMResponse]) -> list[dict]:
+    """Like _install_fake but with full LLMResponse control (truncated flag)."""
+    calls: list[dict] = []
+
+    async def fake_acomplete(provider, **kwargs):
+        calls.append(kwargs)
+        return responses[min(len(calls) - 1, len(responses) - 1)]
+
+    monkeypatch.setattr(vr, "acomplete_with_retry", fake_acomplete)
+    monkeypatch.setattr(vr, "get_provider", lambda: object())
+    return calls
+
+
+async def test_truncated_response_salvages_complete_pieces(monkeypatch):
+    """A response cut off at the token limit keeps its complete piece objects
+    instead of rejecting everything (the silent-no-change failure of the live
+    blueVest run)."""
+    psnap = _vest_psnap()
+    compact, ctx = _pieces_to_compact(psnap)
+    good = _curved_wrap_entry(compact, ctx)
+    cut = '{"pieces": [' + json.dumps(good) + ', {"name": "Back Bodice", "outline": [{"x": 0'
+    calls = _install_fake_llm(monkeypatch, [LLMResponse(text=cut, truncated=True)])
+
+    updated, summary = await refine_pattern(psnap, GarmentType.VEST, _m(), b"png")
+    assert summary["changed"] == ["Overlap Front"]
+    pieces = {p["name"]: p for p in updated["pieces"]}
+    assert pieces["Overlap Front"]["source"] == "vision"
+    # Truncation triggers a repair attempt (and the fake stays truncated).
+    assert len(calls) == 2
+    assert calls[0]["max_tokens"] == vr._MAX_RESPONSE_TOKENS
+
+
+async def test_truncated_unsalvageable_reprompts_with_reason(monkeypatch):
+    psnap = _vest_psnap()
+    compact, ctx = _pieces_to_compact(psnap)
+    good = _curved_wrap_entry(compact, ctx)
+    calls = _install_fake_llm(monkeypatch, [
+        LLMResponse(text='{"pieces": [{"name": "Ove', truncated=True),
+        LLMResponse(text=json.dumps({"pieces": [good]})),
+    ])
+
+    updated, summary = await refine_pattern(psnap, GarmentType.VEST, _m(), b"png")
+    assert len(calls) == 2
+    assert "cut off at the token limit" in calls[1]["user_text"]
+    assert summary["changed"] == ["Overlap Front"]
+
+
+async def test_salvaged_pieces_survive_a_regressing_repair(monkeypatch):
+    """If the repair attempt is worse than the truncated first attempt, the pieces
+    already validated are still applied."""
+    psnap = _vest_psnap()
+    compact, ctx = _pieces_to_compact(psnap)
+    good = _curved_wrap_entry(compact, ctx)
+    cut = '{"pieces": [' + json.dumps(good) + ', {"name": "Back Bodice", "out'
+    _install_fake_llm(monkeypatch, [
+        LLMResponse(text=cut, truncated=True),
+        LLMResponse(text="sorry, I cannot help with that"),
+    ])
+
+    updated, summary = await refine_pattern(psnap, GarmentType.VEST, _m(), b"png")
+    assert summary["changed"] == ["Overlap Front"]
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────

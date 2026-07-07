@@ -306,24 +306,35 @@ details from the vision analysis:
   about a vertical CF, so a diagonal wrap (two *different* fronts) is structurally impossible for the
   edge modifiers. `AsymmetryFeature` (`front_style=asymmetric_wrap`, `wrap_side`, `overlap_cm`,
   `closure_drop_frac`) drives `vests.py::_asymmetric_fronts`, which drafts the front in a full-front
-  frame (x: 0 = left side seam … FW = right side seam) and returns two non-mirrored panels whose
-  proportions are pinned to the user-corrected blueVest reference (harness/blueVestCorrected.svg):
-  an **Overlap Front** — a full half-front whose neckline curves from the collar neck point down to
-  the frog-closure point on the CF (at half the neck-to-underarm drop), followed by a 3 cm closure
-  edge and a stepped **wrap band** that crosses past CF only through the mid-body (clamped to
-  0.46 × quarter-chest; vision's `overlap_cm` routinely overestimates) before returning to the CF
-  and dropping straight to the hem — and an **Underlap Front**, a normal vest front half (high
-  round neckline curve, straight CF edge, nothing crossing CF). `closure_drop_frac` is accepted but
-  unused (its vision semantics placed the frog below the underarm, contradicting photos). The free
-  edges are labelled `overlap_edge` / `underlap_edge` (distinct, single-piece) so
+  frame (x: 0 = left side seam … FW = right side seam) and returns two non-mirrored panels. The wrap
+  look follows the user-corrected blueVest reference (harness/blueVestCorrected.svg); the seams
+  follow **construction rules so the vest is wearable**:
+  - *Symmetric neck hole*: both panels carry the SAME mirrored neckline curve
+    (`_wrap_neck_curve` — shoulder neck point at y = 0 down to the CF throat at
+    `_WRAP_NECK_DROP` = 6.5 cm), so the collar-attachment line is identical left/right of the body.
+  - *Shoulder seams match the back* (same endpoints mirrored: neck point at y = 0, tip at the
+    fit-style shoulder slope) and *the armscye is one shared recipe* (`_armscye_curve`, also used
+    by the symmetric bodices) so front/back armhole curves are equal length and join smoothly.
+  - *Side seams match the back*: the back's waist suppression + hem pull-in (`_side_points`)
+    mirrored into the full-front frame — equal side-seam lengths and hem widths.
+  - The **Overlap Front**'s free edge is: CF closure drop from the throat to the frog point
+    (halfway throat → underarm), a 3 cm closure edge, then the stepped **wrap band** crossing past
+    CF only through the mid-body (clamped to 0.46 × quarter-chest; vision's `overlap_cm` routinely
+    overestimates) before returning to the CF and dropping straight to the hem. The **Underlap
+    Front** is a normal front half (straight CF edge, nothing crossing CF). `closure_drop_frac` is
+    accepted but unused (its vision semantics placed the frog below the underarm, contradicting
+    photos).
+  The free edges are labelled `overlap_edge` / `underlap_edge` (distinct, single-piece) so
   `_compute_connections` never sews them as a seam; both panels carry a real `neckline` edge;
   `wrap_side=left` reflects the construction about FW. `engine.py::_resolve_asymmetry` maps the field
   (with `asymmetric_wrap`/`wrap_front` detail fallbacks); `_resolve_collar` adds a **Mandarin / band
-  stand collar** (`neckline=mandarin` or a `mandarin_collar` detail). Vision reports both via
-  `prompts.py` (asymmetry object + note; `mandarin` neckline) with notes backfill
-  (`analyzer.py::_infer_asymmetry_from_notes`). The `warp` mode additionally accepts a
-  `silhouette_path.panels` map (a normalized hull per piece name) so each asymmetric panel can be
-  warped to its own outline — the foundation for fully vision-driven, per-panel outlines.
+  stand collar** (`neckline=mandarin` or a `mandarin_collar` detail) whose band length — like the
+  neckline binding — is the MEASURED neck hole (2 × mirrored front neck curve + full back neck),
+  not a straight-line guess. Vision reports both via `prompts.py` (asymmetry object + note;
+  `mandarin` neckline) with notes backfill (`analyzer.py::_infer_asymmetry_from_notes`). The `warp`
+  mode additionally accepts a `silhouette_path.panels` map (a normalized hull per piece name) so
+  each asymmetric panel can be warped to its own outline — the foundation for fully vision-driven,
+  per-panel outlines.
 
 ---
 
@@ -431,10 +442,15 @@ name at all, the photo itself is the source:
   `cp1x/cp1y/cp2x/cp2y` values makes the edge arriving at it a cubic bezier
   (the tier-2 convention; the prompt teaches it). Control points scale and
   translate WITH the vertices (`_affine`); a curve-bearing contour skips the
-  Point-only cleanup stages (RDP / symmetrize / axis-snap) — a model emitting
-  beziers is tracing deliberately. Partial cp sets degrade to plain points;
-  control points far outside the vertex bbox reject the contour as noise.
-  Validation (`sample_outline`) and `.psnap` serialization were already
+  Point-only cleanup stages (RDP / axis-snap) — a model emitting beziers is
+  tracing deliberately. **Symmetrize IS curve-aware**: a nearly mirror-equal
+  outline (collar, band) is paired vertex-by-vertex through the order-reversing
+  reflection map a mirror symmetry induces on a closed outline, and vertices AND
+  control points are mirror-averaged (cp1 with the partner edge's mirrored cp2
+  and vice versa); when a curved edge's mirror partner is straight the shape is
+  genuinely one-sided and is left alone. Partial cp sets degrade to plain
+  points; control points far outside the vertex bbox reject the contour as
+  noise. Validation (`sample_outline`) and `.psnap` serialization were already
   curve-capable.
 - Three guards keep junk contours off the canvas (each skip is trace-logged
   with its reason): **notion filter** — contours naming hardware/notions
@@ -484,16 +500,31 @@ outlines is a refine pass that mirrors how a user corrects a draft by hand
   (`{"pieces": []}` when everything matches).
 - Hard guards per returned piece: the name must match an existing piece; the
   distinct seam-label set must equal the original's (protects
-  `_compute_connections`); bbox width/height within ±`REFINE_MAX_DELTA` (30%)
+  `_compute_connections`); **structural seams keep their drafted length** —
+  the summed per-label path length of `STRUCTURAL_LABELS` edges (shoulder,
+  armhole, side_seam, waist, waist_seam, inseam, crotch) must stay within
+  `SEAM_LENGTH_TOLERANCE` (12%) of the draft, so a reshape can never stop the
+  pieces sewing together; bbox width/height within ±`REFINE_MAX_DELTA` (30%)
   of the draft; control points within `MAX_CP_BBOX_FACTOR`× the bbox; on-fold
   pieces keep a straight closing edge with anchored first/last vertices; then
   the shared tier-3 geometry validation. Model habits are normalized rather
   than rejected: an explicit closing duplicate of the first point is dropped
   (it would create a zero-length edge and falsely trip the self-intersection
   check) and degenerate cps (cp == its own vertex) become plain points.
+- **Truncation is handled, not silently fatal**: the response budget is
+  `_MAX_RESPONSE_TOKENS` (8192; 4096 used to cut multi-piece curved outlines
+  off mid-JSON, rejecting every piece as a parse error → a silent no-change).
+  A response flagged `truncated` is salvaged with a string-aware brace scanner
+  (`_salvage_pieces`) that recovers every complete piece object from the cut
+  `"pieces"` array, and the repair re-prompt tells the model to answer leaner.
+  If a repair attempt regresses, pieces already validated on the previous
+  attempt are still applied (`salvage_pool`). The same class of bug is fixed in
+  `analyzer.py`: analyze now uses 8192 tokens (forced-contour responses
+  enumerate every piece) and a truncated response raises a clear "cut off at
+  the token limit" error instead of "invalid JSON".
 - One repair re-prompt carries the rejection reasons back; on the final
   attempt valid pieces are kept and invalid dropped. The worst case is always
-  an unchanged pattern.
+  an unchanged pattern — but now with an honest per-piece reason in the trace.
 - Accepted outlines are spliced in place: same piece id (`_serialise_piece`
   gained an optional `piece_id`), same canvas position (original bbox offset),
   interior elements (darts, marks, the original grain line) untouched,

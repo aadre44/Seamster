@@ -56,23 +56,27 @@ def test_overlap_front_is_wider_and_has_free_wrap_edge():
 
 
 def test_overlap_wrap_band_matches_corrected_reference():
-    """Geometry pinned to harness/blueVestCorrected.svg: neckline curve down to a CF
-    frog point, a stepped wrap band through the mid-body only, and a hem that ends
-    at the CF (not at the wrap edge)."""
+    """Wrap look pinned to harness/blueVestCorrected.svg (frog on the CF, a stepped
+    wrap band through the mid-body only, hem ending at the CF) — but with the
+    construction-consistent neck: a symmetric neckline curve down to the CF throat
+    and a closure edge from the throat to the frog."""
     m = _m()
     pieces = build_vest_block(m, front_style="asymmetric_wrap", overlap_cm=18.0)
     ov = pieces["overlap_front"]
     chest_qt = (m.chest_cm + 6.0) / 4  # EASE_CHEST
     cf = chest_qt
-    arm_depth = ov.outline[3].y        # armscye curve endpoint = underarm depth
+    arm_depth = ov.outline[4].y        # armscye curve endpoint = underarm depth
 
-    # Vertex 0 is the frog-closure point on the CF at half the neck-to-underarm drop.
+    # Vertex 0 is the frog-closure point on the CF, halfway throat → underarm.
     frog = ov.outline[0]
+    throat = ov.outline[1]
     assert frog.x == pytest.approx(cf)
-    assert frog.y == pytest.approx(1.5 + (arm_depth - 1.5) * 0.5)
-    # Edge 0 is the neckline CURVE up to the collar neck point.
-    assert isinstance(ov.outline[1], CurveSegment)
-    assert ov.edge_labels[0] == "neckline"
+    assert throat.x == pytest.approx(cf)
+    assert frog.y == pytest.approx((throat.y + arm_depth) / 2)
+    # Edge 0 (frog → throat) is closure, edge 1 the neckline CURVE to the neck point.
+    assert ov.edge_labels[0] == "overlap_edge"
+    assert isinstance(ov.outline[2], CurveSegment)
+    assert ov.edge_labels[1] == "neckline"
     # The vision's 18 cm overlap is clamped to 0.46 × quarter-chest.
     wrap_x = min(p.x for p in ov.outline)
     assert wrap_x == pytest.approx(cf - chest_qt * 0.46)
@@ -114,12 +118,87 @@ def test_symmetric_default_unchanged():
     assert "front_bodice" in pieces and "overlap_front" not in pieces
 
 
+# ── Wearability: the panels must sew together ─────────────────────────────────
+
+def _label_lengths(spec) -> dict[str, float]:
+    """Summed curve-aware path length of a piece's edges, grouped by seam label."""
+    from app.patterns.finishings import path_length
+
+    o = spec.outline
+    n = len(o)
+    sums: dict[str, float] = {}
+    for i in range(n):
+        label = spec.edge_labels.get(i, "")
+        if not label:
+            continue
+        a, b = o[i], o[(i + 1) % n]
+        sums[label] = sums.get(label, 0.0) + path_length([Point(a.x, a.y), b])
+    return sums
+
+
+def test_front_and_back_seams_match():
+    """Shoulder, armhole, side seam, and hem must agree between every front panel
+    and the back — otherwise the vest cannot be sewn flat."""
+    pieces = build_vest_block(_m(), front_style="asymmetric_wrap", collar_style="mandarin")
+    back = _label_lengths(pieces["back_bodice"])
+    for key in ("overlap_front", "underlap_front"):
+        front = _label_lengths(pieces[key])
+        for label, tol in (("shoulder", 0.1), ("armhole", 0.2), ("side_seam", 0.2), ("hem", 0.1)):
+            assert front[label] == pytest.approx(back[label], abs=tol), f"{key} {label}"
+
+
+def test_shoulder_seams_align_with_back():
+    """Front shoulder edges share the back's endpoints (mirrored): neck point at
+    y = 0, tip at shoulder_slope — so the seams align and the neckline doesn't step."""
+    pieces = build_vest_block(_m(), front_style="asymmetric_wrap")
+    back = pieces["back_bodice"]
+    neck_b, tip_b = back.outline[1], back.outline[2]
+    for key, neck_i in (("overlap_front", 2), ("underlap_front", 1)):
+        o = pieces[key].outline
+        neck_f, tip_f = o[neck_i], o[neck_i + 1]
+        assert neck_f.y == pytest.approx(neck_b.y)     # both neck points at y = 0
+        assert tip_f.y == pytest.approx(tip_b.y)       # both tips at shoulder_slope
+
+
+def test_neck_hole_is_symmetric():
+    """Both wrap panels carry the SAME mirrored neckline curve, so the assembled
+    neck hole (and the collar seam) is symmetric left/right of the body."""
+    m = _m()
+    pieces = build_vest_block(m, front_style="asymmetric_wrap")
+    ov, un = pieces["overlap_front"], pieces["underlap_front"]
+    cf = (m.chest_cm + 6.0) / 4
+    ov_neck, un_neck = ov.outline[2], un.outline[1]     # neckline CurveSegments
+    # Mirrored endpoints and control points about the CF.
+    assert ov_neck.x - cf == pytest.approx(cf - un_neck.x)
+    assert ov_neck.y == pytest.approx(un_neck.y)
+    assert ov_neck.cp1.x - cf == pytest.approx(cf - un_neck.cp1.x)
+    assert ov_neck.cp1.y == pytest.approx(un_neck.cp1.y)
+    assert ov_neck.cp2.x - cf == pytest.approx(cf - un_neck.cp2.x)
+    assert ov_neck.cp2.y == pytest.approx(un_neck.cp2.y)
+    # Equal neckline lengths.
+    assert _label_lengths(ov)["neckline"] == pytest.approx(_label_lengths(un)["neckline"], abs=0.05)
+
+
 # ── Mandarin collar ───────────────────────────────────────────────────────────
 
 def test_mandarin_collar_piece():
     pieces = build_vest_block(_m(), collar_style="mandarin")
     assert "collar" in pieces and pieces["collar"].name == "Mandarin Collar"
     assert pieces["collar"].cut_qty == 2
+
+
+def test_mandarin_collar_fits_the_wrap_neck_hole():
+    """For the wrap front the collar band must be as long as the MEASURED neck hole:
+    both mirrored front neckline curves plus the full back neck."""
+    m = _m()
+    pieces = build_vest_block(m, front_style="asymmetric_wrap", collar_style="mandarin")
+    hole = (
+        _label_lengths(pieces["overlap_front"])["neckline"]
+        + _label_lengths(pieces["underlap_front"])["neckline"]
+        + 2 * _label_lengths(pieces["back_bodice"])["neckline"]  # back is cut on fold
+    )
+    collar_len = max(p.x for p in pieces["collar"].outline)
+    assert collar_len == pytest.approx(hole, abs=0.5)
 
 
 # ── Engine + connections ──────────────────────────────────────────────────────

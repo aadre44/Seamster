@@ -166,19 +166,61 @@ def _simplify_closed(pts: list[Point], epsilon: float) -> list[Point]:
     return merged if len(merged) >= 3 else pts
 
 
-def _symmetrize(pts: list[Point]) -> list[Point]:
+def _symmetrize(pts: list[Vertex]) -> list[Vertex]:
     """Force exact mirror symmetry about the vertical centre when the contour is
-    already nearly symmetric (mean nearest-mirror distance < SYMMETRY_TOLERANCE)."""
-    cx = (min(p.x for p in pts) + max(p.x for p in pts)) / 2
-    mirrored = [Point(2 * cx - p.x, p.y) for p in pts]
+    already nearly symmetric (mean mirror-pair distance < SYMMETRY_TOLERANCE).
 
-    def nearest(q: Point) -> Point:
-        return min(mirrored, key=lambda m: q.distance_to(m))
-
-    mean_dist = sum(p.distance_to(nearest(p)) for p in pts) / len(pts)
-    if mean_dist > SYMMETRY_TOLERANCE:
+    Curve-aware. A mirror symmetry of a closed outline pairs vertices through an
+    order-reversing reflection map i ↔ (k − i) mod n; the best k is chosen by
+    mean vertex distance. Bezier control points ride along: the edge arriving at
+    a vertex pairs with the mirrored partner edge traversed backwards, so cp1
+    averages with the partner's mirrored cp2 and vice versa. When edge types
+    disagree under the pairing (a curve mirrored onto a straight edge) the shape
+    is not truly mirror-equal and the contour is returned unchanged — collars and
+    other bands come out symmetric, genuinely one-sided drapes stay asymmetric.
+    """
+    n = len(pts)
+    if n < 3:
         return pts
-    return [p.midpoint(nearest(p)) for p in pts]
+    cx = (min(p.x for p in pts) + max(p.x for p in pts)) / 2
+
+    def mirror(p: Point) -> Point:
+        return Point(2 * cx - p.x, p.y)
+
+    def vertex(i: int) -> Point:
+        v = pts[i % n]
+        return Point(v.x, v.y)
+
+    def score(k: int) -> float:
+        return sum(vertex(i).distance_to(mirror(vertex(k - i))) for i in range(n)) / n
+
+    best_k = min(range(n), key=score)
+    if score(best_k) > SYMMETRY_TOLERANCE:
+        return pts
+
+    # The edge arriving at vertex i mirrors onto the edge arriving at vertex
+    # (k − i + 1), traversed backwards. Curve data lives on the arrival vertex.
+    def partner_idx(i: int) -> int:
+        return (best_k - i + 1) % n
+
+    for i in range(n):
+        if isinstance(pts[i], CurveSegment) != isinstance(pts[partner_idx(i)], CurveSegment):
+            return pts
+
+    out: list[Vertex] = []
+    for i in range(n):
+        pos = vertex(i).midpoint(mirror(vertex(best_k - i)))
+        cur = pts[i]
+        if isinstance(cur, CurveSegment):
+            partner = pts[partner_idx(i)]
+            out.append(CurveSegment(
+                pos.x, pos.y,
+                cp1=cur.cp1.midpoint(mirror(partner.cp2)),
+                cp2=cur.cp2.midpoint(mirror(partner.cp1)),
+            ))
+        else:
+            out.append(Point(pos.x, pos.y))
+    return out
 
 
 def _snap_axes(pts: list[Point]) -> list[Point]:
@@ -281,9 +323,12 @@ def patternize_contour(contour: PieceContour, measurements: Measurements) -> Pie
     pts = _renormalize(raw)
     if has_curves:
         # A model emitting beziers is tracing deliberately — the jitter-cleanup
-        # stages (RDP / symmetrize / axis-snap) are Point-only and would corrupt
-        # control points, so a curved contour skips them entirely.
+        # stages RDP / axis-snap are Point-only and would corrupt control
+        # points, so a curved contour skips them. Symmetrize IS curve-aware:
+        # a near-mirror curved piece (collar, band) is forced exactly symmetric.
         _check_control_points(contour.detail, pts)
+        pts = _symmetrize(pts)
+        pts = _renormalize(pts)
     else:
         diag = math.hypot(1.0, max(p.y for p in pts))
         pts = _simplify_closed(pts, epsilon=RDP_EPSILON_FRAC * diag)

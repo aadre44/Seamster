@@ -228,6 +228,49 @@ def test_curved_contour_bypasses_cleanup_stages():
     assert spec.outline[3].x == pytest.approx(0.04 * w)   # NOT symmetrized/snapped
 
 
+def test_curved_near_mirror_contour_is_symmetrized():
+    """Symmetrize is curve-aware: a nearly mirror-equal curved piece (collar/band
+    shapes) comes out exactly symmetric, control points included."""
+    pts = [
+        # closing edge (apex → here) is the mirrored LEFT curve
+        ContourPoint(x=0.0, y=0.0, cp1x=0.3, cp1y=0.9, cp2x=0.05, cp2y=0.45),
+        ContourPoint(x=1.0, y=0.02),   # top edge, slightly off-mirror
+        # right curve down to the apex
+        ContourPoint(x=0.52, y=1.0, cp1x=0.97, cp1y=0.45, cp2x=0.72, cp2y=0.9),
+    ]
+    spec = patternize_contour(contour(points=pts), M)
+    curves = [v for v in spec.outline if isinstance(v, CurveSegment)]
+    assert len(curves) == 2
+    xs = [v.x for v in spec.outline]
+    cx = (min(xs) + max(xs)) / 2
+    apex = max(spec.outline, key=lambda v: v.y)
+    assert apex.x == pytest.approx(cx, abs=1e-6)
+    # The two curved edges mirror each other, control points included.
+    left, right = spec.outline[0], spec.outline[2]
+    assert left.cp1.x + right.cp2.x == pytest.approx(2 * cx, abs=1e-6)
+    assert left.cp1.y == pytest.approx(right.cp2.y, abs=1e-6)
+    assert left.cp2.x + right.cp1.x == pytest.approx(2 * cx, abs=1e-6)
+    assert left.cp2.y == pytest.approx(right.cp1.y, abs=1e-6)
+    # The top corners were averaged onto the same height.
+    assert spec.outline[0].y == pytest.approx(spec.outline[1].y, abs=1e-6)
+
+
+def test_one_sided_curved_contour_stays_asymmetric():
+    """A curve whose mirror partner is a straight edge is a genuinely one-sided
+    shape — symmetrize must leave it alone."""
+    pts = [
+        ContourPoint(x=0.0, y=0.0),
+        ContourPoint(x=1.0, y=0.0),
+        # right edge curves; the left edge is straight → structural mismatch
+        ContourPoint(x=0.96, y=1.0, cp1x=1.1, cp1y=0.3, cp2x=1.05, cp2y=0.7),
+        ContourPoint(x=0.0, y=1.0),
+    ]
+    spec = patternize_contour(contour(points=pts), M)
+    w = 90 * 0.25
+    assert spec.outline[2].x == pytest.approx(0.96 * w)   # untouched
+    assert spec.outline[2].cp1.x == pytest.approx(1.1 * w)
+
+
 def test_partial_cp_keys_stay_a_plain_point():
     pts = [
         ContourPoint(x=0.0, y=0.0),
