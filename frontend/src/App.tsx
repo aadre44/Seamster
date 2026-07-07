@@ -5,6 +5,8 @@ import Toolbar from './components/Toolbar'
 import PropertiesPanel from './components/PropertiesPanel'
 import MeasurementPanel from './components/MeasurementPanel'
 import AIAssistModal from './components/AIAssistModal'
+import RefinePhotoModal from './components/RefinePhotoModal'
+import type { RefineContext } from './components/RefinePhotoModal'
 import InstructionsPanel from './components/InstructionsPanel'
 import AssemblyView from './components/AssemblyView'
 import ModelToggle from './components/ModelToggle'
@@ -124,13 +126,26 @@ function Editor() {
   const [showAI, setShowAI] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
   const [showAssembly, setShowAssembly] = useState(false)
+  // Set after a photo-based AI generate; keeps the photo + measurements so the
+  // "Refine from Photo" button stays available until the next generate.
+  const [refineCtx, setRefineCtx] = useState<RefineContext | null>(null)
+  const [showRefine, setShowRefine] = useState(false)
 
   const canShowInstructions = state.lastFeatures !== null
   const canShowAssembly = state.pieces.length > 0
+  const canRefine = refineCtx !== null && state.pieces.length > 0
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      {showAI && <AIAssistModal onClose={() => setShowAI(false)} />}
+      {showAI && (
+        <AIAssistModal
+          onClose={() => setShowAI(false)}
+          onGenerated={ctx => setRefineCtx(ctx)}
+        />
+      )}
+      {showRefine && refineCtx && (
+        <RefinePhotoModal ctx={refineCtx} onClose={() => setShowRefine(false)} />
+      )}
 
       {/* Top header */}
       <header className="flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200 shrink-0">
@@ -143,6 +158,14 @@ function Editor() {
         >
           <span>✦</span> AI Assist
         </button>
+        {canRefine && (
+          <button
+            onClick={() => setShowRefine(true)}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-violet-50 text-violet-700 border border-violet-300 rounded-full hover:bg-violet-100 transition-colors"
+          >
+            <span>📷</span> Refine from Photo
+          </button>
+        )}
         {canShowInstructions && (
           <button
             onClick={() => setShowInstructions(v => !v)}

@@ -467,10 +467,16 @@ garment-specific as the vocabulary — the generic path for photo-accurate
 outlines is a refine pass that mirrors how a user corrects a draft by hand
 (the blueVest reference, harness/blueVestCorrected.svg):
 
-- Triggered by the **"Refine Shapes from Photo"** button on the AI modal's done
-  step (the modal now stays open after generate and keeps the uploaded photo).
-  `/api/generate` never sees the photo, so refine is its own multipart endpoint:
-  garment_type + psnap JSON + measurements JSON + the photo(s).
+- Triggered by a persistent **"Refine from Photo"** header button
+  (`RefinePhotoModal.tsx`): after a photo-based generate the AI modal closes so
+  the drafted pattern can be inspected first, and hands a `RefineContext`
+  (photo files + backend measurements + garment type + notes) up to `App.tsx`,
+  which keeps it until the next generate. The button opens a compact modal
+  that refines the **current canvas state** (not a generate-time snapshot), so
+  user edits made while inspecting are respected, and it can be re-run any
+  number of times. `/api/generate` never sees the photo, so refine is its own
+  multipart endpoint: garment_type + psnap JSON + measurements JSON + the
+  photo(s).
 - The psnap pieces are serialized to a compact per-piece JSON (cm, local
   coordinates, per-edge seam labels, bezier cps on curve endpoints) and sent to
   the vision LLM with the photo. The model returns complete replacement
