@@ -78,29 +78,15 @@ describe('piece classification', () => {
 })
 
 describe('garment placement', () => {
-  const TOLERANCE: Record<string, number> = { side_seam: 1.0, shoulder: 2.0, inseam: 2.5 }
+  const TOLERANCE: Record<string, number> = { side_seam: 1.0, shoulder: 2.0, inseam: 2.5, waist_seam: 1.5 }
 
-  // The backend pairs ANY two edges sharing a label (e.g. dress bodice side
-  // seam ↔ skirt side seam, hem ↔ hem), so only physically sewn pairs are
-  // checked: side/shoulder/inseam between the front and back of one body part,
-  // and the waist seam between bodice and skirt on the same side.
-  const isSewn = (g: string, c: SeamConnection) => {
-    const placed = placements.get(g)!.placement.placed
-    const a = placed.find(p => p.id === c.from.pieceId)
-    const b = placed.find(p => p.id === c.to.pieceId)
-    if (!a || !b) return false
-    const backA = /back/i.test(a.name)
-    const backB = /back/i.test(b.name)
-    if (c.label === 'waist_seam') return a.region !== b.region && backA === backB
-    return a.region === b.region && backA !== backB
-  }
-
+  // Connections are the engine's stitch map: every one is a real seam.
   it('brings every sewn seam together on the body', () => {
     const report: string[] = []
     for (const g of GARMENTS) {
       for (const c of placements.get(g)!.psnap.connections) {
         const tol = TOLERANCE[c.label]
-        if (tol === undefined || !isSewn(g, c)) continue
+        if (tol === undefined) continue
         const gap = seamGap(g, c)
         report.push(`${g} ${c.label} ${gap.toFixed(2)}`)
         expect(gap, `${g} ${c.label}`).toBeLessThan(tol)
@@ -109,9 +95,7 @@ describe('garment placement', () => {
     console.log(report.join('\n'))
   })
 
-  // Both sides of a dress waist seam are sewn at the body's waist. (Their
-  // lengths differ in the engine's current drafts — darts are double-counted,
-  // see fixList — so only the height is checked, not the full 3D gap.)
+  // Both sides of a dress waist seam are sewn at the body's waist.
   it('puts both sides of a waist seam at the body waist', () => {
     const { psnap, placement } = placements.get('dress')!
     for (const piece of placement.placed) {
@@ -195,11 +179,11 @@ describe('garment placement', () => {
       return e
     }
     const tight = placeGarment(psnap.pieces, psnap.elements.map(shrink), query)
-    const belowDarts = (c: { positions: Float32Array; ease: Float32Array }) =>
-      Array.from(c.ease).filter((_, i) => c.positions[i * 3 + 1] < query.waistY - 16)
-    expect(Math.min(...belowDarts(tight.placed[0].copies[0]))).toBeLessThan(EASE_TIGHT)
-    // A skirt drafted for this body is not tight over the hips and below.
-    expect(Math.min(...belowDarts(placements.get('skirt')!.placement.placed[0].copies[0]))).toBeGreaterThanOrEqual(EASE_TIGHT)
+    expect(Math.min(...tight.placed[0].copies[0].ease)).toBeLessThan(EASE_TIGHT)
+    // A skirt drafted for this body is tight nowhere — including the darted waist.
+    for (const piece of placements.get('skirt')!.placement.placed) {
+      expect(Math.min(...piece.copies[0].ease), piece.name).toBeGreaterThanOrEqual(EASE_TIGHT)
+    }
   })
 
   it('wraps trouser legs around each leg below the crotch', () => {

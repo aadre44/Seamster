@@ -70,14 +70,24 @@ def test_back_cb_seam_longer_than_plain_vertical_rise():
 
 
 def test_back_waist_quarter_preserved_along_slant():
-    """Back waist measured along the slanted edge stays ~waist_qt_b (W/4 - 0.5)."""
+    """Sewn back waist (slanted edge minus darts) stays ~waist_qt_b (W/4 - 0.5)."""
     m = _measurements()
     block = build_trousers_block(m, fit_style="regular")
     back = block["back"]
     cb_waist, ss_waist = back.outline[0], back.outline[1]
     span = math.hypot(ss_waist.x - cb_waist.x, ss_waist.y - cb_waist.y)
-    expected = m.waist_cm / 4 - 0.5
-    assert abs(span - expected) < 0.25
+    sewn = span - sum(d.width for d in back.darts)
+    assert abs(sewn - (m.waist_cm / 4 - 0.5)) < 0.25
+
+
+def test_front_sewn_waist_is_the_front_quarter():
+    """Front waist edge minus its dart = W/4 + 0.5 (darts not double-counted)."""
+    m = _measurements()
+    front = build_trousers_block(m, fit_style="regular")["front"]
+    edge = front.outline[1].x - front.outline[0].x
+    sewn = edge - sum(d.width for d in front.darts)
+    assert math.isclose(sewn, m.waist_cm / 4 + 0.5, abs_tol=1e-6)
+    assert front.darts  # still darted: the reduction is shared with the side seam
 
 
 def test_front_leg_unchanged_by_tilt():

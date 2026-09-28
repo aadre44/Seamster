@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
-from app.patterns.skirts import DartSpec, PieceSpec
+from app.patterns.skirts import SKIRT_DART_SPLIT_B, SKIRT_DART_SPLIT_F, DartSpec, PieceSpec, split_waist_reduction
 
 EASE_BUST = 4.0   # standard bust ease added to full bust circumference
 _KAPPA = 0.5523   # Bézier quarter-circle approximation constant
@@ -356,20 +356,29 @@ def build_dress_block(
     # ── Skirt block ───────────────────────────────────────────────────────────
     # Skirt length = remaining dress length below bodice
     # Empire: "waist" = underbust circ ≈ bust - 8 cm
-    skirt_W = (bust - 8.0) if is_empire else W
     skirt_L = max(total_L - bodice_h, wh + 5.0)
 
-    hip_qt       = (H + 2.0) / 4          # quarter hip with standard ease
-    skirt_w_qt_f = skirt_W / 4 + 0.5     # Aldrich balance correction
-    skirt_w_qt_b = skirt_W / 4 - 0.5
+    hip_qt = (H + 2.0) / 4          # quarter hip with standard ease
 
-    skirt_dart_intake_f = hip_qt - skirt_w_qt_f
-    skirt_dart_intake_b = hip_qt - skirt_w_qt_b
+    # The skirt is sewn to the bodice, so each side's sewn skirt waist must equal
+    # that side's sewn bodice waist (edge minus any bust dart), not the body waist.
+    front_bodice_waist = f_waist_side - sum(d.width for d in front_bodice_darts)
+    back_bodice_waist = waist_side if bodice_suppress > 0.0 else chest_qt
+    skirt_w_qt_f = front_bodice_waist
+    skirt_w_qt_b = back_bodice_waist
+
+    suppress_skirt_darts = fp["skirt_no_darts"] or closure_type == "none"
+    if suppress_skirt_darts:
+        skirt_dart_intake_f = skirt_dart_intake_b = 0.0
+    else:
+        skirt_dart_intake_f, _ = split_waist_reduction(hip_qt - skirt_w_qt_f, *SKIRT_DART_SPLIT_F)
+        skirt_dart_intake_b, _ = split_waist_reduction(hip_qt - skirt_w_qt_b, *SKIRT_DART_SPLIT_B)
+    skirt_edge_f = skirt_w_qt_f + skirt_dart_intake_f
+    skirt_edge_b = skirt_w_qt_b + skirt_dart_intake_b
     skirt_dart_depth_f  = _clamp(10.0, 6.0, wh * 0.75)
     skirt_dart_depth_b  = _clamp(13.0, 8.0, wh * 0.90)
 
     hem_x = hip_qt * fp["skirt_hem_mult"]
-    suppress_skirt_darts = fp["skirt_no_darts"] or closure_type == "none"
 
     # Knee control point: sheath and bodycon taper to knee then flare slightly
     knee_taper: float | None = 0.85 if fit_style in ("sheath", "bodycon") else None
@@ -388,11 +397,11 @@ def build_dress_block(
         pts += [Point(hem_x + h_extra, skirt_L), Point(0.0, skirt_L)]
         return pts
 
-    front_skirt_outline = _skirt_side_pts(skirt_w_qt_f, wrap_extra, wrap_extra)
+    front_skirt_outline = _skirt_side_pts(skirt_edge_f, wrap_extra, wrap_extra)
 
     front_skirt_darts: list[DartSpec] = []
     if not suppress_skirt_darts and skirt_dart_intake_f > 0.1:
-        dart_x = _clamp(skirt_w_qt_f * 0.40, skirt_dart_intake_f / 2 + 0.5, skirt_w_qt_f - skirt_dart_intake_f / 2 - 0.5)
+        dart_x = _clamp(skirt_edge_f * 0.40, skirt_dart_intake_f / 2 + 0.5, skirt_edge_f - skirt_dart_intake_f / 2 - 0.5)
         front_skirt_darts.append(DartSpec(center_x=dart_x, width=skirt_dart_intake_f, depth=skirt_dart_depth_f))
 
     _fsn = len(front_skirt_outline)
@@ -409,13 +418,13 @@ def build_dress_block(
         edge_labels={0: "waist_seam", **{i: "side_seam" for i in range(1, _fsn - 2)}, _fsn - 2: "hem", _fsn - 1: "center_front"},
     )
 
-    back_skirt_outline = _skirt_side_pts(skirt_w_qt_b, 0.0, 0.0)
+    back_skirt_outline = _skirt_side_pts(skirt_edge_b, 0.0, 0.0)
 
     back_skirt_darts: list[DartSpec] = []
     if not suppress_skirt_darts and skirt_dart_intake_b > 0.1:
         dw_each = skirt_dart_intake_b / 2
-        d1x = _clamp(skirt_w_qt_b * 0.30, dw_each / 2 + 0.3, skirt_w_qt_b / 2 - dw_each / 2 - 0.3)
-        d2x = _clamp(skirt_w_qt_b * 0.65, skirt_w_qt_b / 2 + dw_each / 2 + 0.3, skirt_w_qt_b - dw_each / 2 - 0.3)
+        d1x = _clamp(skirt_edge_b * 0.30, dw_each / 2 + 0.3, skirt_edge_b / 2 - dw_each / 2 - 0.3)
+        d2x = _clamp(skirt_edge_b * 0.65, skirt_edge_b / 2 + dw_each / 2 + 0.3, skirt_edge_b - dw_each / 2 - 0.3)
         back_skirt_darts.append(DartSpec(center_x=d1x, width=dw_each, depth=skirt_dart_depth_b))
         back_skirt_darts.append(DartSpec(center_x=d2x, width=dw_each, depth=skirt_dart_depth_b))
 

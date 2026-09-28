@@ -76,26 +76,35 @@ def test_back_hip_width():
 
 # ── Dart intake ───────────────────────────────────────────────────────────────
 
-def test_front_dart_intake_equals_hip_minus_waist_quarter():
+def _waist_edge(spec) -> float:
+    return max(p.x for p in spec.outline if math.isclose(p.y, 0.0, abs_tol=TOLERANCE))
+
+
+def test_sewn_front_waist_is_the_front_quarter():
+    """Waist edge minus darts = the waist quarter (the darts are not double-counted)."""
     m = _measurements(waist_cm=76.0, hip_cm=94.0)
-    hip_qt = (94.0 + 2.0) / 4  # 24.0
-    w_qt_f = 76.0 / 4 + 0.5    # 19.5  (Aldrich front balance correction)
-    expected_intake = hip_qt - w_qt_f
-    pieces = build_straight_skirt_block(m)
-    front = pieces["front"]
-    total_dart = sum(d.width for d in front.darts)
-    assert math.isclose(total_dart, expected_intake, abs_tol=TOLERANCE)
+    front = build_straight_skirt_block(m)["front"]
+    sewn = _waist_edge(front) - sum(d.width for d in front.darts)
+    assert math.isclose(sewn, 76.0 / 4 + 0.5, abs_tol=TOLERANCE)
 
 
-def test_back_dart_total_intake():
+def test_sewn_back_waist_is_the_back_quarter():
+    m = _measurements(waist_cm=76.0, hip_cm=94.0)
+    back = build_straight_skirt_block(m)["back"]
+    sewn = _waist_edge(back) - sum(d.width for d in back.darts)
+    assert math.isclose(sewn, 76.0 / 4 - 0.5, abs_tol=TOLERANCE)
+
+
+def test_darts_and_side_shaping_share_the_hip_waist_reduction():
+    """Darts take part of the hip→waist reduction; the side seam takes the rest."""
     m = _measurements(waist_cm=76.0, hip_cm=94.0)
     hip_qt = (94.0 + 2.0) / 4
-    w_qt_b = 76.0 / 4 - 0.5    # Aldrich back balance correction
-    expected_intake = hip_qt - w_qt_b
-    pieces = build_straight_skirt_block(m)
-    back = pieces["back"]
-    total_dart = sum(d.width for d in back.darts)
-    assert math.isclose(total_dart, expected_intake, abs_tol=TOLERANCE)
+    for key, w_qt in (("front", 76.0 / 4 + 0.5), ("back", 76.0 / 4 - 0.5)):
+        spec = build_straight_skirt_block(m)[key]
+        darts = sum(d.width for d in spec.darts)
+        side_shaping = hip_qt - _waist_edge(spec)
+        assert darts > 0 and side_shaping > 0
+        assert math.isclose(darts + side_shaping, hip_qt - w_qt, abs_tol=TOLERANCE)
 
 
 def test_front_has_one_dart():
@@ -165,16 +174,15 @@ def test_golden_hip_width(label, waist, hip, wh, length):
 
 @pytest.mark.parametrize("label,waist,hip,wh,length", GOLDEN_CASES)
 def test_golden_waist_circumference(label, waist, hip, wh, length):
-    """After removing all dart intake, the total waist seam = W."""
+    """After sewing all darts, the total waist seam = W."""
     m = _measurements(waist_cm=waist, hip_cm=hip, waist_to_hip_cm=wh, length_cm=length)
     pieces = build_straight_skirt_block(m)
-    # Each half-panel (front/back) waist = hip_qt - total_dart_intake
-    # Combined 4 quarter-panels = W (full circle)
+    # Each quarter-panel's sewn waist = its waist edge - its dart intake;
+    # 4 quarter-panels = W (full circle)
     total_waist = 0.0
     for spec in pieces.values():
-        hip_qt = max(p.x for p in spec.outline)
         total_dart = sum(d.width for d in spec.darts)
-        total_waist += (hip_qt - total_dart) * 2  # × 2 for both halves
+        total_waist += (_waist_edge(spec) - total_dart) * 2  # × 2 for both halves
     assert math.isclose(total_waist, waist, abs_tol=TOLERANCE * 4), \
         f"{label}: total waist {total_waist:.2f} ≠ {waist:.2f}"
 

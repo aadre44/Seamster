@@ -50,7 +50,13 @@ def test_all_three_modes_produce_valid_patterns():
         psnap = generate_pattern(_vest(shape), _m(), mode)
         assert len(psnap["pieces"]) == 2
         labels = {c["label"] for c in psnap["connections"]}
-        assert {"shoulder", "side_seam", "hem"} <= labels
+        assert {"shoulder", "side_seam"} <= labels
+        # Both panels keep their hem edge, but front and back hems are one
+        # opening — they are never sewn to each other.
+        assert "hem" not in labels
+        for piece in psnap["pieces"]:
+            ids = set(piece["elementIds"])
+            assert any(e.get("seamLabel") == "hem" for e in psnap["elements"] if e["id"] in ids)
 
 
 def test_pointed_modes_extend_hem_below_straight():

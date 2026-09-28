@@ -164,6 +164,10 @@ JSON with top-level keys:
 
 ---
 
+## Waist shaping & darts
+
+For darted skirts, dress skirts and trousers, each half-panel's hip→waist reduction is split by `split_waist_reduction(reduction, dart_share, dart_cap)` (`patterns/skirts.py`) into dart intake and side-seam shaping. The waist edge is drawn at waist quarter + dart intake, so the sewn waist (edge − darts) is exactly the quarter. Previously the edge was drawn at the quarter *and* carried full-reduction darts, so sewn waists came out about 26 cm small. A dress skirt's waist quarters are the bodice's sewn waist on each side, so the waist seam lengths match. Dartless silhouettes (flared, circle, gathered, pleated, elastic) take the whole reduction in the side seam. Invariants are in `tests/test_waist_shaping.py`.
+
 ## Pattern Detail Handling — pockets & pleats
 
 The parametric engine (`backend/app/patterns/`) shapes two commonly-mis-rendered

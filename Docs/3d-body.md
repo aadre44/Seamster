@@ -190,13 +190,13 @@ The tests run against real engine outputs for skirt, trousers, shirt, dress and 
 - **Legs:** trouser legs wrap each leg.
 - **Performance:** placement takes about 0.2–2 s per garment.
 
-### What the fit map revealed (backend bugs, not 3D bugs)
-- **Darts double-counted.** In `skirts.py` (and the dress and trouser blocks), the waist edge is drawn at the waist quarter *and* darts sized at hip quarter − waist quarter are placed inside it. Sewn up, the waist is about 26 cm smaller than the body. Generated darted skirts, dress skirts and trousers therefore show **red at the waist**. This is tracked in `harness/fixList.md`.
-- **Spurious seam connections.** `_compute_connections` pairs *any* two edges with the same label: a dress bodice side seam with a skirt side seam, front and back armholes, even hem with hem. The 3D placement doesn't use connections. Phase 3's stitching must only use real pairs, so this needs fixing first.
+### What the fit map revealed (backend bugs — both fixed)
+- **Darts double-counted.** In `skirts.py` (and the dress and trouser blocks), the waist edge is drawn at the waist quarter *and* darts sized at hip quarter − waist quarter are placed inside it. Sewn up, the waist is about 26 cm smaller than the body. **Fixed:** `split_waist_reduction()` in `skirts.py` now splits the reduction between darts (front: 40%, capped at 3 cm; back: 60%, capped at 6 cm; trousers: 35% / 2.5 cm and 60% / 5 cm) and side shaping. The waist edge is drawn at waist quarter + dart intake. A dress skirt's waist quarters now equal the bodice's sewn waist on each side, and `tests/test_waist_shaping.py` pins the invariant: sewn waist = target.
+- **Spurious seam connections.** `_compute_connections` pairs *any* two edges with the same label: a dress bodice side seam with a skirt side seam, front and back armholes, even hem with hem. The 3D placement doesn't use connections. **Fixed:** pairing now depends on the kind of seam (construction / horizontal join / opening; see the README file-format section), with tests in `tests/test_connections.py`. Connections are a true stitch map for phase 3.
 
 ### Known limits (static preview)
 - **Vertical mapping:** it doesn't follow surface curvature. The front length over the bust isn't lengthened, except where a waist seam anchors the piece.
-- **Seam lengths:** there's no length matching between sewn edges of different lengths, such as eased sleeve caps and mismatched waist seams.
+- **Seam lengths:** there's no length matching between sewn edges of different lengths, such as eased sleeve caps.
 - **Asymmetric pieces:** cut-1 non-fold pieces (for example the asymmetric wrap fronts) are placed once, on the right.
 - **Skipped details:** horizontal (bust) darts, yokes and princess seams are not handled yet.
 

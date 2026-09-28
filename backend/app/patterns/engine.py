@@ -293,17 +293,46 @@ def _edge_length(elem: dict) -> float:
     return length
 
 
-def _compute_connections(all_elements: list[dict], all_pieces: list[dict]) -> list[dict]:
-    """Pair edges that share the same non-empty seamLabel across different pieces.
+# Seam labels fall into three kinds, which pair differently:
+#  - construction seams join the front and back panels of ONE garment section;
+#    edges sewn along their whole length must have matching lengths;
+#  - horizontal joins join sections top-to-bottom on the same side
+#    (bodice→skirt waist seam, yoke→back panel);
+#  - every other label (hem, neckline, armhole, waist, wrist, novel attachment
+#    labels) is a garment opening: it is sewn to a DIFFERENT shell (sleeve,
+#    collar, cuff, waistband, facing, flounce), never between the panels of the
+#    same shell, and never front↔back.
+_CONSTRUCTION_LABELS = frozenset({
+    "side_seam", "shoulder", "inseam", "crotch", "sleeve_seam", "center_front", "center_back",
+})
+_JOIN_LABELS = frozenset({"waist_seam", "yoke_seam"})
+# Sewn edges must match in length within this tolerance (cm / fraction).
+_SEAM_LENGTH_TOL_CM = 1.5
+_SEAM_LENGTH_TOL_FRAC = 0.15
 
-    Edges are grouped per (label, piece) in outline order, and for each pair of
-    pieces sharing a label they are matched 1:1 by sequence — k-th edge with k-th
-    edge — NOT as a cross-product (a trouser side seam split over 4 edges per leg
-    previously produced 4x4 = 16 connections for one physical seam, and the
-    AssemblyView aligned on an arbitrary one). If the two pieces traverse the seam
-    in opposite outline directions, the reversed pairing is detected by total
-    length mismatch (sewn seam segments have matching lengths) and corrected.
-    With unequal edge counts the extras are left unconnected.
+
+def _piece_side(labels: set[str]) -> str | None:
+    """'front' / 'back' from the piece's centre edge, None when it has neither.
+    Wrap fronts carry their centre as an overlap/underlap edge instead."""
+    if labels & {"center_front", "overlap_edge", "underlap_edge"}:
+        return "front"
+    if "center_back" in labels:
+        return "back"
+    return None
+
+
+def _compute_connections(all_elements: list[dict], all_pieces: list[dict]) -> list[dict]:
+    """Pair edges that are sewn together, using their seamLabels.
+
+    Same-label edges of two pieces are matched 1:1 by sequence — k-th edge with
+    k-th edge — NOT as a cross-product (a trouser side seam split over 4 edges
+    per leg previously produced 4x4 = 16 connections for one physical seam). If
+    the two pieces traverse the seam in opposite directions, the reversed pairing
+    is detected by length mismatch and corrected; extra edges stay unconnected.
+
+    A shared label alone is not enough (it paired a dress bodice side seam with
+    the skirt side seam, and hem with hem): which pieces may pair depends on the
+    kind of seam — see _CONSTRUCTION_LABELS / _JOIN_LABELS above.
     """
     from itertools import combinations
 
@@ -313,30 +342,66 @@ def _compute_connections(all_elements: list[dict], all_pieces: list[dict]) -> li
 
     # label -> pieceId -> edges in outline order (dicts preserve insertion order)
     label_groups: dict[str, dict[str, list[dict]]] = {}
+    piece_labels: dict[str, set[str]] = {}
     for elem in all_elements:
         if elem["id"] not in outline_ids:
             continue
         label = elem.get("seamLabel", "")
-        if not label or elem.get("isFold"):
+        if not label:
+            continue
+        piece_labels.setdefault(elem["pieceId"], set()).add(label)
+        if elem.get("isFold"):
             continue
         label_groups.setdefault(label, {}).setdefault(elem["pieceId"], []).append(elem)
+    side = {pid: _piece_side(labels) for pid, labels in piece_labels.items()}
+
+    def paired(edges_a: list[dict], edges_b: list[dict]) -> list[tuple[dict, dict]]:
+        if len(edges_a) > 1 and len(edges_b) > 1:
+            forward = sum(abs(_edge_length(a) - _edge_length(b)) for a, b in zip(edges_a, edges_b))
+            reverse = sum(abs(_edge_length(a) - _edge_length(b)) for a, b in zip(edges_a, reversed(edges_b)))
+            if reverse < forward:
+                edges_b = list(reversed(edges_b))
+        return list(zip(edges_a, edges_b))
+
+    def connection(label: str, pid_a: str, pid_b: str, a: dict, b: dict) -> dict:
+        return {
+            "label": label,
+            "from": {"pieceId": pid_a, "edgeId": a["id"]},
+            "to":   {"pieceId": pid_b, "edgeId": b["id"]},
+        }
 
     connections: list[dict] = []
-    for label, by_piece in label_groups.items():
+    # Pieces joined by construction seams form one shell (union-find).
+    shell: dict[str, str] = {}
+
+    def root(pid: str) -> str:
+        while shell.get(pid, pid) != pid:
+            pid = shell[pid]
+        return pid
+
+    for label in _CONSTRUCTION_LABELS & label_groups.keys():
+        by_piece = label_groups[label]
         for pid_a, pid_b in combinations(by_piece.keys(), 2):
-            edges_a = by_piece[pid_a]
-            edges_b = by_piece[pid_b]
-            if len(edges_a) > 1 and len(edges_b) > 1:
-                forward = sum(abs(_edge_length(a) - _edge_length(b)) for a, b in zip(edges_a, edges_b))
-                reverse = sum(abs(_edge_length(a) - _edge_length(b)) for a, b in zip(edges_a, reversed(edges_b)))
-                if reverse < forward:
-                    edges_b = list(reversed(edges_b))
-            for a, b in zip(edges_a, edges_b):
-                connections.append({
-                    "label": label,
-                    "from": {"pieceId": pid_a, "edgeId": a["id"]},
-                    "to":   {"pieceId": pid_b, "edgeId": b["id"]},
-                })
+            if side[pid_a] is not None and side[pid_a] == side[pid_b]:
+                continue  # front↔front / back↔back are never joined by these seams
+            # Whole seam on each piece — not just the zipped edges, or a 1-edge
+            # bodice side seam would match the first of a skirt's 2 side edges.
+            len_a = sum(_edge_length(e) for e in by_piece[pid_a])
+            len_b = sum(_edge_length(e) for e in by_piece[pid_b])
+            if abs(len_a - len_b) > max(_SEAM_LENGTH_TOL_CM, _SEAM_LENGTH_TOL_FRAC * max(len_a, len_b)):
+                continue  # different lengths: not sewn together (e.g. bodice vs skirt side seam)
+            connections += [connection(label, pid_a, pid_b, a, b) for a, b in paired(by_piece[pid_a], by_piece[pid_b])]
+            shell[root(pid_a)] = root(pid_b)
+
+    for label, by_piece in label_groups.items():
+        if label in _CONSTRUCTION_LABELS:
+            continue
+        for pid_a, pid_b in combinations(by_piece.keys(), 2):
+            if side[pid_a] is not None and side[pid_b] is not None and side[pid_a] != side[pid_b]:
+                continue  # never front↔back
+            if label not in _JOIN_LABELS and root(pid_a) == root(pid_b):
+                continue  # an opening is not sewn between panels of the same shell
+            connections += [connection(label, pid_a, pid_b, a, b) for a, b in paired(by_piece[pid_a], by_piece[pid_b])]
     return connections
 
 

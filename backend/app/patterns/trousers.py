@@ -32,7 +32,7 @@ from __future__ import annotations
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
 from app.patterns.pockets import make_patch_pocket
-from app.patterns.skirts import DartSpec, MarkSpec, PieceSpec
+from app.patterns.skirts import DartSpec, MarkSpec, PieceSpec, split_waist_reduction
 
 # ── Fit-style parameter table ─────────────────────────────────────────────────
 # hip_ease        : added to full hip before dividing by 4
@@ -75,6 +75,9 @@ _ANKLE_FLOOR_F = 6.5
 _ANKLE_FLOOR_B = 7.0
 # Knee sits this fraction of the inseam below the crotch.
 _KNEE_FRAC = 0.60
+# Dart share / cap of each half-panel's hip→waist reduction (rest is side shaping).
+TROUSER_DART_SPLIT_F = (0.35, 2.5)
+TROUSER_DART_SPLIT_B = (0.6, 5.0)
 
 # ── Rise style deltas (added to resolved rise measurement) ────────────────────
 _RISE_DELTA: dict[str, float] = {
@@ -209,9 +212,19 @@ def build_trousers_block(
 
     hip_qt_b = hip_qt + 1.5            # back gets extra seat ease
 
-    # Dart intakes
-    dart_intake_f = hip_qt - waist_qt_f
-    dart_intake_b = hip_qt_b - waist_qt_b
+    # ── Dart suppression for elastic waist / jogger ───────────────────────────
+    suppress_darts = closure_type == "elastic_waist"
+
+    # Dart intakes: the hip→waist reduction is split between darts and the side
+    # seam, and the waist edge carries the dart intake so the sewn waist is the
+    # quarter (see split_waist_reduction). Trouser fronts take a small dart.
+    if suppress_darts:
+        dart_intake_f = dart_intake_b = 0.0
+    else:
+        dart_intake_f, _ = split_waist_reduction(hip_qt - waist_qt_f, *TROUSER_DART_SPLIT_F)
+        dart_intake_b, _ = split_waist_reduction(hip_qt_b - waist_qt_b, *TROUSER_DART_SPLIT_B)
+    waist_edge_f = waist_qt_f + dart_intake_f
+    waist_edge_b = waist_qt_b + dart_intake_b
 
     # Thigh widths (at crotch level)
     thigh_half_f = hip_qt * fp["thigh_mult"]
@@ -254,9 +267,6 @@ def build_trousers_block(
     crotch_inseam_x_f = max(0.3, grain_x_f - thigh_half_f)
     crotch_inseam_x_b = max(0.3, grain_x_b - thigh_half_b)
 
-    # ── Dart suppression for elastic waist / jogger ───────────────────────────
-    suppress_darts = closure_type == "elastic_waist"
-
     # ── Front Leg ─────────────────────────────────────────────────────────────
     # The crotch seam ([8]→[9]) is a cubic Bézier arc:
     #   [8] = deepest point of the crotch arc (at rise + depth below waist)
@@ -264,7 +274,7 @@ def build_trousers_block(
     #   cp1 sweeps the arc rightward from [8]; cp2 makes it arrive vertically at [9]
     front_outline: list[Point | CurveSegment] = [
         Point(crotch_ext_f, 0.0),                                # [0] CF at waist
-        Point(crotch_ext_f + waist_qt_f, 0.0),                   # [1] SS at waist
+        Point(crotch_ext_f + waist_edge_f, 0.0),                   # [1] SS at waist
         Point(crotch_ext_f + hip_qt, wh),                        # [2] SS at hip
         Point(crotch_ext_f + thigh_half_f, rise),                # [3] SS at thigh
         Point(grain_x_f + knee_half_f, knee_y),                  # [4] SS at knee
@@ -311,9 +321,9 @@ def build_trousers_block(
     front_darts: list[DartSpec] = []
     if not suppress_darts and dart_intake_f > 0.5:
         dart_x = _clamp(
-            crotch_ext_f + waist_qt_f * 0.40,
+            crotch_ext_f + waist_edge_f * 0.40,
             crotch_ext_f + dart_intake_f / 2 + 0.5,
-            crotch_ext_f + waist_qt_f - dart_intake_f / 2 - 0.5,
+            crotch_ext_f + waist_edge_f - dart_intake_f / 2 - 0.5,
         )
         front_darts.append(DartSpec(
             center_x=dart_x,
@@ -351,7 +361,7 @@ def build_trousers_block(
     back_lift = fp["back_lift"]
     cb_waist_x = crotch_ext_b + back_tilt
     cb_waist_pt = Point(cb_waist_x, -back_lift)               # raised, outset CB waist
-    ss_waist_pt = Point(cb_waist_x + waist_qt_b, 0.0)         # side waist (quarter preserved)
+    ss_waist_pt = Point(cb_waist_x + waist_edge_b, 0.0)       # side waist (quarter + dart intake)
 
     back_outline: list[Point | CurveSegment] = [
         cb_waist_pt,                                             # [0] CB at waist (tilted/lifted)
@@ -377,14 +387,14 @@ def build_trousers_block(
         dart_depth_b = _clamp(12.0, 8.0, wh * 0.85)
         # Dart x measured from the tilted CB waist; legs ride the slanted waist edge.
         dart1_x = _clamp(
-            cb_waist_x + waist_qt_b * 0.30,
+            cb_waist_x + waist_edge_b * 0.30,
             cb_waist_x + dw_each / 2 + 0.3,
-            cb_waist_x + waist_qt_b / 2 - dw_each / 2 - 0.3,
+            cb_waist_x + waist_edge_b / 2 - dw_each / 2 - 0.3,
         )
         dart2_x = _clamp(
-            cb_waist_x + waist_qt_b * 0.65,
-            cb_waist_x + waist_qt_b / 2 + dw_each / 2 + 0.3,
-            cb_waist_x + waist_qt_b - dw_each / 2 - 0.3,
+            cb_waist_x + waist_edge_b * 0.65,
+            cb_waist_x + waist_edge_b / 2 + dw_each / 2 + 0.3,
+            cb_waist_x + waist_edge_b - dw_each / 2 - 0.3,
         )
         _back_baseline = (cb_waist_pt, ss_waist_pt)
         back_darts.append(DartSpec(center_x=dart1_x, width=dw_each, depth=dart_depth_b, baseline=_back_baseline))

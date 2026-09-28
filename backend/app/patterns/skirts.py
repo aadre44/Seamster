@@ -116,6 +116,27 @@ def _clamp(val: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, val))
 
 
+def split_waist_reduction(reduction: float, dart_share: float, dart_cap: float) -> tuple[float, float]:
+    """Split a half-panel's hip→waist reduction between darts and side-seam shaping.
+
+    Returns (dart_intake, side_shaping). The waist edge must be drawn at
+    waist_quarter + dart_intake: sewing the darts then brings it to exactly the
+    waist quarter, while the side seam curves in by side_shaping from the hip.
+    (Drawing the edge at the waist quarter AND adding full-reduction darts takes
+    the reduction twice — the sewn waist comes out far too small.)
+    """
+    if reduction <= 0:
+        return 0.0, 0.0
+    dart = min(reduction * dart_share, dart_cap)
+    return dart, reduction - dart
+
+
+# Aldrich-style split: one small front dart, two back darts taking more of the
+# (larger) back reduction; the rest is side-seam shaping.
+SKIRT_DART_SPLIT_F = (0.4, 3.0)
+SKIRT_DART_SPLIT_B = (0.6, 6.0)
+
+
 def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
     """Return front and back PieceSpecs for a straight skirt base block (Aldrich method).
 
@@ -136,10 +157,12 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
     w_qt_f = W / 4 + 0.5           # front waist quarter (slightly wider)
     w_qt_b = W / 4 - 0.5           # back waist quarter (slightly narrower)
 
-    # Dart intake: excess at waist compared to hip width
-    # These are the amounts each half-panel must absorb via darts.
-    dart_intake_f = hip_qt - w_qt_f   # positive = excess to take in
-    dart_intake_b = hip_qt - w_qt_b
+    # The hip→waist reduction is split between darts and side-seam shaping;
+    # the waist edge carries the dart intake so the sewn waist is the quarter.
+    dart_intake_f, _ = split_waist_reduction(hip_qt - w_qt_f, *SKIRT_DART_SPLIT_F)
+    dart_intake_b, _ = split_waist_reduction(hip_qt - w_qt_b, *SKIRT_DART_SPLIT_B)
+    edge_f = w_qt_f + dart_intake_f
+    edge_b = w_qt_b + dart_intake_b
 
     # Dart depth (capped to keep dart within the wh region)
     dart_depth_f = _clamp(10.0, 6.0, wh * 0.75)
@@ -148,18 +171,18 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
     # ── Front panel ───────────────────────────────────────────────────────────
     # Outline vertices (clockwise in SVG Y-down coords):
     #   CF-waist → SS-waist → SS-hip → SS-hem → CF-hem → back to CF-waist
-    # Side seam is shaped: it angles outward from waist (w_qt_f) to hip (hip_qt).
+    # Side seam is shaped: it angles outward from the waist edge to hip (hip_qt).
     front_outline = [
         Point(0.0, 0.0),           # CF at waist (fold or seam)
-        Point(w_qt_f, 0.0),        # SS at waist
+        Point(edge_f, 0.0),        # SS at waist
         Point(hip_qt, wh),         # SS at hip (shaped outward)
         Point(hip_qt, L),          # SS at hem
         Point(0.0, L),             # CF at hem
     ]
 
-    # 1 dart in front, placed at ~40 % of the waist-quarter width from CF
-    front_dart_x = w_qt_f * 0.40
-    front_dart_x = _clamp(front_dart_x, dart_intake_f / 2 + 0.5, w_qt_f - dart_intake_f / 2 - 0.5)
+    # 1 dart in front, placed at ~40 % of the waist edge from CF
+    front_dart_x = edge_f * 0.40
+    front_dart_x = _clamp(front_dart_x, dart_intake_f / 2 + 0.5, edge_f - dart_intake_f / 2 - 0.5)
     front_darts = [DartSpec(
         center_x=front_dart_x,
         width=dart_intake_f,
@@ -182,18 +205,18 @@ def build_straight_skirt_block(m: Measurements) -> dict[str, PieceSpec]:
     # ── Back panel ────────────────────────────────────────────────────────────
     back_outline = [
         Point(0.0, 0.0),           # CB at waist
-        Point(w_qt_b, 0.0),        # SS at waist
+        Point(edge_b, 0.0),        # SS at waist
         Point(hip_qt, wh),         # SS at hip
         Point(hip_qt, L),          # SS at hem
         Point(0.0, L),             # CB at hem
     ]
 
-    # 2 darts in back, split evenly at 1/3 and 2/3 of the waist quarter
+    # 2 darts in back, at roughly 1/3 and 2/3 of the waist edge
     dw_each = dart_intake_b / 2
-    back_dart1_x = w_qt_b * 0.30
-    back_dart1_x = _clamp(back_dart1_x, dw_each / 2 + 0.3, w_qt_b / 2 - dw_each / 2 - 0.3)
-    back_dart2_x = w_qt_b * 0.65
-    back_dart2_x = _clamp(back_dart2_x, w_qt_b / 2 + dw_each / 2 + 0.3, w_qt_b - dw_each / 2 - 0.3)
+    back_dart1_x = edge_b * 0.30
+    back_dart1_x = _clamp(back_dart1_x, dw_each / 2 + 0.3, edge_b / 2 - dw_each / 2 - 0.3)
+    back_dart2_x = edge_b * 0.65
+    back_dart2_x = _clamp(back_dart2_x, edge_b / 2 + dw_each / 2 + 0.3, edge_b - dw_each / 2 - 0.3)
 
     back_darts = []
     if dart_intake_b > 0.1:
@@ -344,8 +367,16 @@ def build_skirt_block(
         suppress_darts = True
 
     # ── Dart intake ───────────────────────────────────────────────────────────
-    dart_intake_f = hip_qt - w_qt_f
-    dart_intake_b = hip_qt - w_qt_b
+    # Darted skirts split the hip→waist reduction between darts and the side
+    # seam; the waist edge carries the dart intake. Dartless silhouettes put it
+    # all in the side seam.
+    if suppress_darts:
+        dart_intake_f = dart_intake_b = 0.0
+    else:
+        dart_intake_f, _ = split_waist_reduction(hip_qt - w_qt_f, *SKIRT_DART_SPLIT_F)
+        dart_intake_b, _ = split_waist_reduction(hip_qt - w_qt_b, *SKIRT_DART_SPLIT_B)
+    edge_f = w_qt_f + dart_intake_f
+    edge_b = w_qt_b + dart_intake_b
     dart_depth_f  = _clamp(10.0, 6.0, wh * 0.75)
     dart_depth_b  = _clamp(13.0, 8.0, wh * 0.90)
 
@@ -359,12 +390,12 @@ def build_skirt_block(
     # S-shape that follows the body's silhouette from waist to hip.
     _ss_f_hip = CurveSegment(
         x=hip_qt + wrap_extra, y=wh,
-        cp1=Point(w_qt_f + wrap_extra + (hip_qt - w_qt_f) * 0.12, wh * 0.30),
+        cp1=Point(edge_f + wrap_extra + (hip_qt - edge_f) * 0.12, wh * 0.30),
         cp2=Point(hip_qt + wrap_extra + 0.4, wh * 0.70),
     )
     _ss_b_hip = CurveSegment(
         x=hip_qt, y=wh,
-        cp1=Point(w_qt_b + (hip_qt - w_qt_b) * 0.12, wh * 0.30),
+        cp1=Point(edge_b + (hip_qt - edge_b) * 0.12, wh * 0.30),
         cp2=Point(hip_qt + 0.4, wh * 0.70),
     )
 
@@ -372,7 +403,7 @@ def build_skirt_block(
     if has_knee_point:
         front_outline: list[Point | CurveSegment] = [
             Point(0.0, 0.0),
-            Point(w_qt_f + wrap_extra, 0.0),
+            Point(edge_f + wrap_extra, 0.0),
             _ss_f_hip,
             Point(knee_x, knee_y),
             Point(hem_x + wrap_extra, L),
@@ -381,7 +412,7 @@ def build_skirt_block(
     else:
         front_outline = [
             Point(0.0, 0.0),
-            Point(w_qt_f + wrap_extra, 0.0),
+            Point(edge_f + wrap_extra, 0.0),
             _ss_f_hip,
             Point(hem_x + wrap_extra, L),
             Point(0.0, L),
@@ -390,9 +421,9 @@ def build_skirt_block(
     front_darts: list[DartSpec] = []
     if not suppress_darts and dart_intake_f > 0.1:
         dart_x = _clamp(
-            w_qt_f * 0.40,
+            edge_f * 0.40,
             dart_intake_f / 2 + 0.5,
-            w_qt_f - dart_intake_f / 2 - 0.5,
+            edge_f - dart_intake_f / 2 - 0.5,
         )
         front_darts.append(DartSpec(center_x=dart_x, width=dart_intake_f, depth=dart_depth_f))
 
@@ -417,7 +448,7 @@ def build_skirt_block(
     if has_knee_point:
         back_outline: list[Point | CurveSegment] = [
             Point(0.0, 0.0),
-            Point(w_qt_b, 0.0),
+            Point(edge_b, 0.0),
             _ss_b_hip,
             Point(knee_x, knee_y),
             Point(hem_x, L),
@@ -426,7 +457,7 @@ def build_skirt_block(
     else:
         back_outline = [
             Point(0.0, 0.0),
-            Point(w_qt_b, 0.0),
+            Point(edge_b, 0.0),
             _ss_b_hip,
             Point(hem_x, L),
             Point(0.0, L),
@@ -435,8 +466,8 @@ def build_skirt_block(
     back_darts: list[DartSpec] = []
     if not suppress_darts and dart_intake_b > 0.1:
         dw_each = dart_intake_b / 2
-        dart1_x = _clamp(w_qt_b * 0.30, dw_each / 2 + 0.3, w_qt_b / 2 - dw_each / 2 - 0.3)
-        dart2_x = _clamp(w_qt_b * 0.65, w_qt_b / 2 + dw_each / 2 + 0.3, w_qt_b - dw_each / 2 - 0.3)
+        dart1_x = _clamp(edge_b * 0.30, dw_each / 2 + 0.3, edge_b / 2 - dw_each / 2 - 0.3)
+        dart2_x = _clamp(edge_b * 0.65, edge_b / 2 + dw_each / 2 + 0.3, edge_b - dw_each / 2 - 0.3)
         back_darts.append(DartSpec(center_x=dart1_x, width=dw_each, depth=dart_depth_b))
         back_darts.append(DartSpec(center_x=dart2_x, width=dw_each, depth=dart_depth_b))
 

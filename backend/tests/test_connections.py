@@ -79,7 +79,7 @@ def test_trouser_side_seam_pairs_one_to_one():
 
 def test_no_edge_connects_twice_to_the_same_piece_under_one_label():
     psnap = _trouser_psnap()
-    for label in ("side_seam", "inseam", "crotch"):
+    for label in ("side_seam", "inseam"):
         usage = Counter()
         for c in psnap["connections"]:
             if c["label"] != label:
@@ -111,16 +111,15 @@ def test_inseam_pairs_one_to_one():
 
 # ── Single-edge labels keep their previous behaviour ──────────────────────────
 
-def test_single_edge_labels_still_connect():
+def test_only_physically_sewn_trouser_seams_connect():
+    """A pair of trouser legs is sewn at the inseam and the outseam only. The
+    crotch curve joins the OTHER leg's matching curve (the mirrored copy of the
+    same piece), and the waist edges are one opening sewn to a waistband — so
+    neither pairs Front Leg with Back Leg."""
     psnap = _trouser_psnap()
-    assert len(_connections_between(psnap, "crotch", "Front Leg", "Back Leg")) == 1
-    # Waist connects front<->back and each leg to the waistband (single edges each)
-    waist = [c for c in psnap["connections"] if c["label"] == "waist"]
-    assert len(waist) >= 1
-    pair_counts = Counter(
-        frozenset((c["from"]["pieceId"], c["to"]["pieceId"])) for c in waist
-    )
-    assert max(pair_counts.values()) == 1  # one waist connection per piece pair
+    assert _connections_between(psnap, "crotch", "Front Leg", "Back Leg") == []
+    assert _connections_between(psnap, "waist", "Front Leg", "Back Leg") == []
+    assert {c["label"] for c in psnap["connections"]} == {"side_seam", "inseam"}
 
 
 # ── Orientation: reversed traversal is detected by length mismatch ────────────
@@ -167,3 +166,58 @@ def test_unequal_edge_counts_leave_extras_unconnected():
     ]
     conns = _compute_connections(elems, [piece_a, piece_b])
     assert len(conns) == 1  # a1<->b1; b2 stays unmatched (no cross-product)
+
+
+# ── Only pieces that are actually sewn together connect ───────────────────────
+
+def _garment(gt, silhouette, closure="center_back_zip", position="center_back", details=None):
+    f = GarmentFeatures(
+        garment_type=gt, silhouette=silhouette, length_category="knee",
+        closure=ClosureFeature(type=closure, position=position),
+        details=details or [], confidence=0.9,
+    )
+    return generate_pattern(f, _measurements())
+
+
+def _pairs(psnap):
+    name = {p["id"]: p["name"] for p in psnap["pieces"]}
+    return {(c["label"], frozenset((name[c["from"]["pieceId"]], name[c["to"]["pieceId"]]))) for c in psnap["connections"]}
+
+
+def test_dress_connects_bodice_to_bodice_skirt_to_skirt_and_bodice_to_skirt_by_side():
+    pairs = _pairs(_garment(GarmentType.DRESS, "a_line"))
+    fb, bb, fs, bs = "Front Bodice", "Back Bodice", "Front Skirt", "Back Skirt"
+    assert ("side_seam", frozenset({fb, bb})) in pairs
+    assert ("side_seam", frozenset({fs, bs})) in pairs
+    assert ("waist_seam", frozenset({fb, fs})) in pairs
+    assert ("waist_seam", frozenset({bb, bs})) in pairs
+    # Previously spurious: bodice side seam ↔ skirt side seam, cross-side waist
+    # seams, front↔back waist seams, and hem ↔ hem.
+    for label, pieces in pairs:
+        assert not (label == "side_seam" and pieces & {fb, bb} and pieces & {fs, bs}), pieces
+        assert label != "hem"
+    assert ("waist_seam", frozenset({fb, bs})) not in pairs
+    assert ("waist_seam", frozenset({fb, bb})) not in pairs
+    assert ("waist_seam", frozenset({fs, bs})) not in pairs
+
+
+def test_shirt_sleeve_sews_to_both_bodice_armholes_but_bodices_do_not_share_armholes():
+    pairs = _pairs(_garment(GarmentType.SHIRT, "regular", closure="button_front", position="center_front"))
+    assert ("armhole", frozenset({"Front Bodice", "Sleeve"})) in pairs
+    assert ("armhole", frozenset({"Back Bodice", "Sleeve"})) in pairs
+    assert ("armhole", frozenset({"Front Bodice", "Back Bodice"})) not in pairs
+    assert ("neckline", frozenset({"Front Bodice", "Back Bodice"})) not in pairs
+    assert ("shoulder", frozenset({"Front Bodice", "Back Bodice"})) in pairs
+
+
+def test_asymmetric_wrap_fronts_sew_to_the_back_not_to_each_other():
+    from app.models.features import AsymmetryFeature
+    f = GarmentFeatures(
+        garment_type=GarmentType.VEST, silhouette="boxy", length_category="hip_length",
+        closure=ClosureFeature(type="none", position="center_front"),
+        asymmetry=AsymmetryFeature(front_style="asymmetric_wrap"), confidence=0.9,
+    )
+    pairs = _pairs(generate_pattern(f, _measurements()))
+    assert ("side_seam", frozenset({"Overlap Front", "Back Bodice"})) in pairs
+    assert ("side_seam", frozenset({"Underlap Front", "Back Bodice"})) in pairs
+    assert not any(pieces == frozenset({"Overlap Front", "Underlap Front"}) for _, pieces in pairs)
