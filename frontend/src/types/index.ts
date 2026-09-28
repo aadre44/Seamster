@@ -1,3 +1,5 @@
+import type { BodyProfile } from '../three/types'
+
 // ── Phase 1: Editor types ────────────────────────────────────────────────────
 
 export interface Point {
@@ -113,6 +115,9 @@ export interface EditorState {
   instructionsLoading: boolean
   lastFeatures: GarmentFeatures | null
   lastMeasurements: Measurements | null
+  // The 3D avatar's body. Belongs to the user, not the pattern, so it survives
+  // LOAD_STATE and is outside undo/redo.
+  bodyProfile: BodyProfile
 }
 
 // ── Phase 2: AI types ────────────────────────────────────────────────────────

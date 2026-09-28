@@ -7,6 +7,7 @@
 | Frontend | React 18, TypeScript, Tailwind CSS, Vite |
 | Backend | Python 3.12, FastAPI |
 | Canvas | SVG (no canvas element) |
+| 3D view | three.js + @react-three/fiber v8 (lazy-loaded chunk) — see [3d-body.md](3d-body.md) |
 | State | Custom reducer in `EditorContext` (no external state library) |
 
 ---
@@ -22,7 +23,11 @@ Seamster/
 │       │   ├── Toolbar.tsx           Left tool-button column (8 tools + 3 toggles + help)
 │       │   ├── HelpPanel.tsx         Tool reference modal
 │       │   ├── PropertiesPanel.tsx   Right sidebar — element and piece editing
-│       │   └── MeasurementPanel.tsx  Body measurements with range validation
+│       │   ├── MeasurementPanel.tsx  Body measurements with range validation
+│       │   ├── BodyModelView.tsx     Lazy 3D body view (r3f canvas, orbit controls, on-demand frames)
+│       │   └── BodyCustomizationPanel.tsx  Body sliders + shape preset (3D view sidebar)
+│       ├── three/                    3D avatar: bodyRegions.ts (fields, presets, landmark rings),
+│       │                             avatarBuilder.ts (smoothing + loft → mesh arrays), types.ts
 │       ├── context/
 │       │   └── EditorContext.tsx     Redux-style reducer; ~30 action types; 50-level undo stack
 │       ├── snapping/
@@ -83,6 +88,7 @@ Seamster/
 | `undoStack` / `redoStack` | `EditorSnapshot[]` | 50-level history; each entry versions `{elements, pieces, connections}` together |
 | `liveBase` | `EditorSnapshot \| null` | Pre-gesture snapshot captured on the first `LIVE_UPDATE_ELEMENTS` of a drag |
 | `undoTag` | `string \| null` | Coalescing tag — consecutive `UPDATE_PIECE` edits on the same piece share one undo entry |
+| `bodyProfile` | `BodyProfile` | 3D avatar `{ overrides, shape }` — user-set body values only; resolves against `measurements` then defaults. Kept across `LOAD_STATE`, outside undo history (`SET_BODY_PROFILE_FIELD`, `SET_BODY_SHAPE`, `RESET_BODY_PROFILE`). See [3d-body.md](3d-body.md) |
 
 Actions are dispatched via `useReducer`. Undo semantics:
 

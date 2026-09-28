@@ -1,6 +1,8 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
 import type { CanvasElement, EditorSnapshot, EditorState, GarmentFeatures, Measurements, PatternPiece, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
 import { mirrorPiece } from '../utils/pieceTransforms'
+import type { BodyField, BodyShapePreset } from '../three/types'
+import { DEFAULT_BODY_PROFILE } from '../three/bodyRegions'
 
 type Action =
   | { type: 'SET_ZOOM'; zoom: number }
@@ -26,6 +28,9 @@ type Action =
   | { type: 'MIRROR_PIECE'; pieceId: string; op: 'flipH' | 'flipV' }
   | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; connections?: SeamConnection[]; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
   | { type: 'SET_INSTRUCTIONS'; instructions: SewingInstructions | null; loading: boolean; features?: GarmentFeatures; measurements?: Measurements }
+  | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
+  | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
+  | { type: 'RESET_BODY_PROFILE' }
   | { type: 'PUSH_UNDO' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
@@ -54,6 +59,7 @@ const initialState: EditorState = {
   instructionsLoading: false,
   lastFeatures: null,
   lastMeasurements: null,
+  bodyProfile: DEFAULT_BODY_PROFILE,
 }
 
 function snapshot(state: EditorState): EditorSnapshot {
@@ -228,7 +234,20 @@ function reducer(state: EditorState, action: Action): EditorState {
         instructions: action.instructions ?? null,
         lastFeatures: action.lastFeatures ?? null,
         lastMeasurements: action.lastMeasurements ?? null,
+        bodyProfile: state.bodyProfile,
       }
+
+    case 'SET_BODY_PROFILE_FIELD':
+      return {
+        ...state,
+        bodyProfile: { ...state.bodyProfile, overrides: { ...state.bodyProfile.overrides, [action.field]: action.value } },
+      }
+
+    case 'SET_BODY_SHAPE':
+      return { ...state, bodyProfile: { ...state.bodyProfile, shape: action.shape } }
+
+    case 'RESET_BODY_PROFILE':
+      return { ...state, bodyProfile: { ...state.bodyProfile, overrides: {} } }
 
     case 'SET_INSTRUCTIONS':
       return {

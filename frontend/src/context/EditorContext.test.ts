@@ -147,3 +147,27 @@ describe('DELETE_ELEMENTS', () => {
     expect(s1.connections[0].label).toBe('hem')
   })
 })
+
+describe('body profile', () => {
+  it('records overrides and shape, and reset clears only the overrides', () => {
+    let s = reducer(initialState, { type: 'SET_BODY_PROFILE_FIELD', field: 'waist', value: 81 })
+    s = reducer(s, { type: 'SET_BODY_SHAPE', shape: 'apple' })
+    expect(s.bodyProfile).toEqual({ overrides: { waist: 81 }, shape: 'apple' })
+    s = reducer(s, { type: 'RESET_BODY_PROFILE' })
+    expect(s.bodyProfile).toEqual({ overrides: {}, shape: 'apple' })
+  })
+
+  it('survives LOAD_STATE (opening a file or AI generate)', () => {
+    const s = reducer(initialState, { type: 'SET_BODY_PROFILE_FIELD', field: 'height', value: 181 })
+    const loaded = reducer(s, { type: 'LOAD_STATE', elements: [], pieces: [], measurements: { waist: 70 } })
+    expect(loaded.bodyProfile.overrides.height).toBe(181)
+    expect(loaded.measurements).toEqual({ waist: 70 })
+  })
+
+  it('is not part of undo history', () => {
+    const s = reducer(baseState(), { type: 'SET_BODY_PROFILE_FIELD', field: 'hip', value: 110 })
+    expect(s.undoStack).toHaveLength(0)
+    const deleted = reducer(s, { type: 'DELETE_PIECE', id: 'P1' })
+    expect(reducer(deleted, { type: 'UNDO' }).bodyProfile.overrides.hip).toBe(110)
+  })
+})

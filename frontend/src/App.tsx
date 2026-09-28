@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { EditorProvider, useEditor } from './context/EditorContext'
 import Canvas from './components/Canvas'
 import Toolbar from './components/Toolbar'
@@ -10,6 +10,12 @@ import type { RefineContext } from './components/RefinePhotoModal'
 import InstructionsPanel from './components/InstructionsPanel'
 import AssemblyView from './components/AssemblyView'
 import ModelToggle from './components/ModelToggle'
+import BodyCustomizationPanel from './components/BodyCustomizationPanel'
+
+// three.js is only fetched when the 3D view is first opened.
+const BodyModelView = lazy(() => import('./components/BodyModelView'))
+
+type MainView = 'canvas' | 'assembly' | 'body'
 import { downloadSVG } from './export/svgExport'
 import { exportPdf } from './api'
 
@@ -125,7 +131,8 @@ function Editor() {
   const { state } = useEditor()
   const [showAI, setShowAI] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
-  const [showAssembly, setShowAssembly] = useState(false)
+  const [mainView, setMainView] = useState<MainView>('canvas')
+  const toggleView = (v: MainView) => setMainView(cur => (cur === v ? 'canvas' : v))
   // Set after a photo-based AI generate; keeps the photo + measurements so the
   // "Refine from Photo" button stays available until the next generate.
   const [refineCtx, setRefineCtx] = useState<RefineContext | null>(null)
@@ -185,9 +192,9 @@ function Editor() {
         )}
         {canShowAssembly && (
           <button
-            onClick={() => setShowAssembly(v => !v)}
+            onClick={() => toggleView('assembly')}
             className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-              showAssembly
+              mainView === 'assembly'
                 ? 'bg-teal-600 text-white hover:bg-teal-700'
                 : 'bg-teal-50 text-teal-700 border border-teal-300 hover:bg-teal-100'
             }`}
@@ -196,6 +203,17 @@ function Editor() {
             Assembly View
           </button>
         )}
+        <button
+          onClick={() => toggleView('body')}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+            mainView === 'body'
+              ? 'bg-teal-600 text-white hover:bg-teal-700'
+              : 'bg-teal-50 text-teal-700 border border-teal-300 hover:bg-teal-100'
+          }`}
+        >
+          <span>🧍</span>
+          3D Body
+        </button>
         <div className="ml-auto flex items-center gap-3">
           <ModelToggle />
           <span className="text-gray-200 text-sm">|</span>
@@ -208,11 +226,18 @@ function Editor() {
         {/* Left toolbar */}
         <Toolbar />
 
-        {/* Canvas / Assembly View (fills remaining space) */}
-        {showAssembly ? <AssemblyView /> : <Canvas />}
+        {/* Main view (fills remaining space) */}
+        {mainView === 'body' ? (
+          <Suspense fallback={
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Loading 3D view…</div>
+          }>
+            <BodyModelView />
+          </Suspense>
+        ) : mainView === 'assembly' && canShowAssembly ? <AssemblyView /> : <Canvas />}
 
         {/* Right sidebar */}
         <aside className="w-52 shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
+          {mainView === 'body' && <BodyCustomizationPanel />}
           <div className="px-3 py-2 text-xs font-semibold text-gray-700 border-b border-gray-100">
             Properties
           </div>

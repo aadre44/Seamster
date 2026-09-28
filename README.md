@@ -120,6 +120,20 @@ Assembly View is only shown when the canvas has at least one pattern piece. Conn
 
 ---
 
+## 3D Body View
+
+The **🧍 3D Body** header button replaces the canvas with a 3D mannequin built from body measurements. It's available at any time, with or without a pattern. Click the button again to return to the editor.
+
+- **Orbit** — drag to rotate, scroll to zoom, right-drag to pan.
+- **Body panel** (top of the right sidebar while the view is open) — sliders for height, bust, underbust, waist, waist-to-hip, hip, neck, shoulder width, arm length, upper arm, wrist, inseam, thigh, knee, calf and ankle. The mannequin reshapes live as you drag.
+- **Shape** — Hourglass / Rectangle / Pear / Apple changes the cross-section depths and the bust, belly and seat projection, not just the circumferences.
+- **Where values come from** — a slider you move becomes a `custom` value. Fields you haven't set use the Measurements panel (tagged `measured`: bust, waist, hip, waist-to-hip, inseam, shoulder), otherwise a default. **Reset to measurements** clears your custom values.
+- Your body stays as you set it when you open a file or generate a new pattern. It is not part of undo/redo, and is not yet saved in `.psnap`.
+
+The mannequin is generated procedurally (elliptical cross-sections lofted into a body), with no licensed body models. three.js is loaded only when the view is first opened. Putting the pattern on the body (static fit preview), then physically draping it, are the next two phases. See **[Docs/3d-body.md](Docs/3d-body.md)**.
+
+---
+
 ## Sewing Instructions
 
 After generating a pattern with AI Assist, an **Instructions** button appears in the header. If instructions have not yet been generated it reads "Generate Instructions"; once generated it reads "Instructions". Click it to open the step-by-step sewing guide in a slide-out panel.
@@ -322,7 +336,13 @@ Seamster/
 │       │   ├── MeasurementPanel.tsx    Body measurements with range validation
 │       │   ├── AIAssistModal.tsx       Phase 2: photo upload + feature review + generate workflow
 │       │   ├── InstructionsPanel.tsx   Sewing instructions drawer — sections, steps, tips
-│       │   └── AssemblyView.tsx        Assembly view — flat-lay BFS alignment + grid view with seam arc connections
+│       │   ├── AssemblyView.tsx        Assembly view — flat-lay BFS alignment + grid view with seam arc connections
+│       │   ├── BodyModelView.tsx       3D body view (lazy-loaded) — react-three-fiber canvas, orbit controls, on-demand rendering
+│       │   └── BodyCustomizationPanel.tsx  Body sliders + shape preset + reset (sidebar, 3D view only)
+│       ├── three/
+│       │   ├── bodyRegions.ts          Body fields/defaults, profile resolution, shape presets, ellipse math, landmark rings
+│       │   ├── avatarBuilder.ts        Monotone-cubic ring smoothing + loft → avatar mesh arrays (no three import; unit-tested)
+│       │   └── types.ts                BodyProfile, LoftRing, MeshData, AvatarData
 │       ├── context/
 │       │   └── EditorContext.tsx       Redux-style reducer; ~30 action types; 50-level undo stack
 │       ├── snapping/
@@ -397,6 +417,7 @@ Seamster/
 - `undoStack`, `redoStack` — 50-level snapshots of `{elements, pieces, connections}`; drags collapse to one entry via `liveBase`, piece-property edits coalesce via `undoTag`
 - `instructions` / `instructionsLoading` — sewing instructions state (null until generated)
 - `lastFeatures` / `lastMeasurements` — the inputs used for the last generate call (used to regenerate instructions)
+- `bodyProfile` — 3D avatar `{ overrides, shape }`; only user-set body values (the rest resolve from `measurements`, then defaults). Survives `LOAD_STATE`; not in undo history
 
 ### File format (`.psnap`)
 
@@ -421,6 +442,7 @@ Detailed technical docs live in [Docs/](Docs/):
 | [Docs/implementation-guide.md](Docs/implementation-guide.md) | **Step-by-step build guide** — every feature broken into small actionable steps with sample code; shows current position in the project |
 | [Docs/canvas-decisions.md](Docs/canvas-decisions.md) | **Canvas design decisions** — coordinate system, all tools, snapping, line/curve creation, selection, moving, node/endpoint handles, undo, keyboard shortcuts |
 | [Docs/presentation.md](Docs/presentation.md) | **Presentation overview** — project summary, tech-stack rationale, shirt photo→export flow chart, 3 problems faced, future improvements (Mermaid diagrams) |
+| [Docs/3d-body.md](Docs/3d-body.md) | **3D body & garment fit** — procedural avatar (ellipse loft, landmark table, shape presets, monotone smoothing), body-profile resolution, rendering notes, tests, and the fit-preview / drape roadmap |
 | [Docs/pattern-piece-construction-notes.md](Docs/pattern-piece-construction-notes.md) | **Construction nuances per garment/piece** — on-fold vs cut-2, the strap/back/front-opening topology axes (halter split vs non-split, shoulderless = sleeveless), and the source of truth for piece-generation rules |
 
 ---
