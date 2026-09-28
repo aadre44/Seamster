@@ -6,6 +6,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { useEditor } from '../context/EditorContext'
 import { resolveBody } from '../three/bodyRegions'
 import { useAvatarMesh } from '../three/useAvatarMesh'
+import { useGarmentPlacement } from '../three/useGarmentPlacement'
+import { EASE_SNUG, EASE_TIGHT } from '../three/garmentWrap'
+import type { GarmentResult } from '../three/garmentWorker'
 
 // three's own OrbitControls; the canvas renders on demand, so every camera
 // change requests a frame.
@@ -77,6 +80,46 @@ function KeyLight({ height }: { height: number }) {
   )
 }
 
+// Soft fabric colours, one per piece.
+const FABRIC = ['#7c9cc9', '#c98f7c', '#86b59a', '#b59ac9', '#c9b87c', '#7cb8c9', '#c97ca4', '#9aa0b5']
+const SNUG = new THREE.Color('#f5a524')
+const TIGHT = new THREE.Color('#e5484d')
+
+function GarmentMeshes({ result, fitMap }: { result: GarmentResult; fitMap: boolean }) {
+  const meshes = useMemo(() => result.pieces.flatMap((piece, i) => {
+    const base = new THREE.Color(FABRIC[i % FABRIC.length])
+    return piece.copies.map(copy => {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.BufferAttribute(copy.positions, 3))
+      g.setIndex(new THREE.BufferAttribute(copy.indices, 1))
+      g.computeVertexNormals()
+      const colors = new Float32Array(copy.ease.length * 3)
+      copy.ease.forEach((e, v) => {
+        const c = !fitMap || e >= EASE_SNUG ? base : e >= EASE_TIGHT ? SNUG : TIGHT
+        colors.set([c.r, c.g, c.b], v * 3)
+      })
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+      return { key: `${piece.id}:${piece.copies.indexOf(copy)}`, geometry: g }
+    })
+  }), [result, fitMap])
+  useEffect(() => () => meshes.forEach(m => m.geometry.dispose()), [meshes])
+
+  const material = useMemo(
+    () => new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.4,
+      polygonOffset: true, polygonOffsetFactor: -1,
+    }),
+    [],
+  )
+  useEffect(() => () => material.dispose(), [material])
+
+  return (
+    <>
+      {meshes.map(m => <mesh key={m.key} geometry={m.geometry} material={material} castShadow receiveShadow />)}
+    </>
+  )
+}
+
 export default function BodyModelView() {
   const { state } = useEditor()
   const body = useMemo(
@@ -84,6 +127,11 @@ export default function BodyModelView() {
     [state.bodyProfile, state.measurements],
   )
   const mesh = useAvatarMesh(body)
+  const hasPattern = state.pieces.length > 0
+  const [showGarment, setShowGarment] = useState(true)
+  const [fitMap, setFitMap] = useState(true)
+  const garment = useGarmentPlacement(body, state.pieces, state.elements, hasPattern && showGarment)
+  const placed = garment.result
 
   const geometry = useMemo(() => {
     if (!mesh) return null
@@ -126,6 +174,7 @@ export default function BodyModelView() {
         {geometry && (
           <mesh geometry={geometry} material={material} castShadow receiveShadow />
         )}
+        {placed && showGarment && <GarmentMeshes result={placed} fitMap={fitMap} />}
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[800, 800]} />
           <shadowMaterial transparent opacity={0.16} />
@@ -140,6 +189,36 @@ export default function BodyModelView() {
       <div className="absolute top-2 left-3 text-[10px] text-gray-500 pointer-events-none select-none">
         Drag to rotate · scroll to zoom · right-drag to pan
       </div>
+      {hasPattern && (
+        <div className="absolute top-2 right-3 w-52 rounded-lg bg-white/85 backdrop-blur border border-gray-200 shadow-sm p-2.5 text-[11px] text-gray-700 space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={showGarment} onChange={e => setShowGarment(e.target.checked)} />
+            <span className="font-medium">Show garment</span>
+            {garment.busy && <span className="ml-auto w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />}
+          </label>
+          {showGarment && (
+            <>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={fitMap} onChange={e => setFitMap(e.target.checked)} />
+                <span>Fit map</span>
+              </label>
+              {fitMap && (
+                <div className="space-y-0.5 pl-5 text-[10px] text-gray-500">
+                  <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#e5484d' }} /> Tight: fabric smaller than body</div>
+                  <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#f5a524' }} /> Snug: no ease</div>
+                </div>
+              )}
+              {placed?.error && <p className="text-red-600">Could not place the pattern: {placed.error}</p>}
+              {placed && placed.skipped.length > 0 && (
+                <p className="text-[10px] text-gray-500">
+                  Not shown in 3D: {placed.skipped.map(s => s.name).join(', ')}
+                </p>
+              )}
+              <p className="text-[10px] text-gray-400">Static preview — the garment is wrapped, not yet draped.</p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -5,7 +5,7 @@ The 3D view shows a measurement-driven body (a mannequin) that the user can resi
 | Phase | Feature id | Status |
 |-------|-----------|--------|
 | 1. Parametric body avatar + customization UI | `body-avatar-3d` | Done (procedural body; realism upgrade in progress, see below) |
-| 2. Static fit preview: pattern pieces wrapped onto the body using `SeamConnection` topology | `garment-3d-fit-preview` | Planned |
+| 2. Static fit preview: the current pattern wrapped onto the body, with a fit map | `garment-3d-fit-preview` | **Done** — see *Garment fit preview* |
 | 3. Physics drape: position-based dynamics cloth, seams as stitching constraints, body collision | `garment-3d-drape-simulation` | Planned |
 
 Everything runs in the browser, and no backend endpoint is involved.
@@ -40,6 +40,14 @@ frontend/src/three/
   avatarWorker.ts     Web Worker entry: builds the mesh off the UI thread
   useAvatarMesh.ts    Scheduler: coarse preview while dragging, then full resolution; one job in flight
   avatarBuilder.test.ts
+  bodyQuery.ts        BodyQuery — the only interface garment code uses to ask about the body
+                      (sections at a height, leg / arm sections, neck, shoulder-top height, SDF)
+  pieceGeometry.ts    Piece outline → ordered labelled loop; row/column intersections; cdt2d mesh
+  pieceClassifier.ts  Piece → body region (torso-upper / torso-lower / leg / sleeve / skip)
+  garmentWrap.ts      placeGarment(): wraps each piece onto the body, darts, mirroring, ease
+  garmentWorker.ts    Web Worker entry for placement
+  useGarmentPlacement.ts  Latest-wins scheduler for the garment worker
+  garmentWrap.test.ts + fixtures/*.psnap.json (real /api/generate outputs)
 frontend/src/components/
   BodyModelView.tsx           Lazy 3D view: studio lighting, soft shadow, orbit camera, on-demand frames
   BodyCustomizationPanel.tsx  Body sliders + shape preset + reset (right sidebar, 3D view only)
@@ -127,6 +135,70 @@ Frames render on demand, when the camera moves or the mesh changes. React contex
 - **Final surface:** tape measurements taken on the **final blended surface** match bust, waist and hip within 2%; the mesh has no holes and faces outward; it is mirror-symmetric, stands on the floor, and reaches its height; the neck and crotch are continuous; the build time is logged.
 
 `src/context/EditorContext.test.ts` covers the profile actions, keeping the profile through `LOAD_STATE`, and the profile staying out of undo history.
+
+---
+
+## Garment fit preview (phase 2)
+
+In the 3D view, **Show garment** places the current pattern on the body; **Fit map** colours bands where the garment is **snug** (amber, no ease) or **tight** (red, fabric smaller than the body). Placement runs in a Web Worker (`garmentWorker.ts`). Only the newest request is built; while it builds, a spinner shows in the panel.
+
+### Body-agnostic by design
+The garment code talks to the body only through **`BodyQuery`** (`bodyQuery.ts`):
+- the tape outline (convex hull) of the body at any height, including both legs below the hips;
+- a leg section, and an arm section along the arm axis;
+- the neck section;
+- the height of the shoulder top at any lateral position;
+- the signed distance field.
+
+The procedural body implements it today. A sculpted base mesh only needs to implement the same interface, for example by slicing the mesh.
+
+### Classification (`pieceClassifier.ts`)
+Classification uses seam labels first, then the piece name:
+- `center_sleeve` or `sleeve_seam` → sleeve;
+- `inseam` or `crotch` → leg;
+- `shoulder` or `armhole` → upper torso (hangs from the shoulders);
+- `side_seam` with `waist` or `waist_seam` → lower torso (hangs from the waist).
+
+`center_back` marks a back piece. Trims (facings, bindings, pockets, collars, cuffs, flies, waistbands, yokes, straps and so on) are skipped and listed as "Not shown in 3D".
+
+### Wrapping (`garmentWrap.ts`)
+- **Normalise.** A piece's outline is chained into an ordered loop (curves flattened), then flipped if needed so the centre edge is on the left and the top is up. That's the engine's convention, and it undoes any flips made on the canvas.
+- **Rows.** Each horizontal row of the piece is laid around the body's tape outline at the matching height:
+  - The centre edge (fold, CF or CB) lands on the body's centre line, and the side seam on its side line. Front and back side seams therefore meet by construction.
+  - Horizontal position is proportional: sewn distance from the centre ÷ the row's sewn width.
+  - Vertical position is 1:1 with height, measured from the anchor.
+- **Anchors.**
+  - Upper-torso pieces hang from the high point of the shoulder, at the body's shoulder top beside the neck.
+  - Lower-torso and leg pieces hang from the waist, at the top of the side seam.
+  - A piece with both a shoulder and a waist seam (a dress bodice) is stretched so the waist seam sits at the body's waist.
+- **Ease → stand-off.** At each height, the fabric loop (2 × (front width + back width)) is compared with the body's tape. The surplus becomes a radial stand-off of surplus ÷ 2π, plus a 0.35 cm gap, so flare and ease are visible. The ratio fabric ÷ body is the vertex's *ease*: below 0.97 is tight, below 1.0 snug.
+- **Darts.** Interior dart legs (unlabelled line pairs sharing an apex, running mostly vertically) are closed. Their intake is removed from the row's width, and both legs map to the same body point.
+- **Shoulders.** Within 7 cm of the shoulder seam, the fabric curves up over the shoulder, along a quarter ellipse, onto the ridge. Between the centre line and the neck point it goes around the base of the neck. Front and back shoulder seams therefore meet.
+- **Trouser legs.** Above the crotch, a leg piece wraps a torso quadrant (CF/CB to side). Below it, it wraps the leg (inseam to side seam, through the front or back). The two are blended over ±4 cm.
+- **Sleeves** run along the arm axis from the top of the shoulder cap. The fold lies on top of the arm and the sleeve seam underneath. The folded half becomes the other half of the same sleeve; cut 2 gives the other arm.
+- **Mirroring.** On-fold and cut-2 torso and leg pieces are mirrored (x → −x) to the other side.
+- **Push-out.** Any point closer than the gap to the skin is pushed out along the field gradient. The step is divided by the gradient magnitude, because blended regions have gradients weaker than 1.
+
+### Tests (`garmentWrap.test.ts`)
+The tests run against real engine outputs for skirt, trousers, shirt, dress and vest:
+- **Classification:** body regions are recognised, and the trousers' fly facing and fly shield are skipped.
+- **Seams:** every physically sewn side, shoulder and inseam seam lands together in 3D. Side seams and shoulders measure 0.00 cm; the inseam is within 1.1 cm. The dress waist seam lands at the body's waist height.
+- **Darts and folds:** both legs of a dart map to the same line, and fold edges land on the centre plane.
+- **Surface:** no fabric point is inside the body.
+- **Mirroring:** copies are exact mirror images.
+- **Fit:** an A-line hem stands further off the body than its waist, and a shrunken skirt is flagged tight.
+- **Legs:** trouser legs wrap each leg.
+- **Performance:** placement takes about 0.2–2 s per garment.
+
+### What the fit map revealed (backend bugs, not 3D bugs)
+- **Darts double-counted.** In `skirts.py` (and the dress and trouser blocks), the waist edge is drawn at the waist quarter *and* darts sized at hip quarter − waist quarter are placed inside it. Sewn up, the waist is about 26 cm smaller than the body. Generated darted skirts, dress skirts and trousers therefore show **red at the waist**. This is tracked in `harness/fixList.md`.
+- **Spurious seam connections.** `_compute_connections` pairs *any* two edges with the same label: a dress bodice side seam with a skirt side seam, front and back armholes, even hem with hem. The 3D placement doesn't use connections. Phase 3's stitching must only use real pairs, so this needs fixing first.
+
+### Known limits (static preview)
+- **Vertical mapping:** it doesn't follow surface curvature. The front length over the bust isn't lengthened, except where a waist seam anchors the piece.
+- **Seam lengths:** there's no length matching between sewn edges of different lengths, such as eased sleeve caps and mismatched waist seams.
+- **Asymmetric pieces:** cut-1 non-fold pieces (for example the asymmetric wrap fronts) are placed once, on the right.
+- **Skipped details:** horizontal (bust) darts, yokes and princess seams are not handled yet.
 
 ---
 
