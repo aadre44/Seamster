@@ -8,7 +8,7 @@ import { resolveBody } from '../three/bodyRegions'
 import { useAvatarMesh } from '../three/useAvatarMesh'
 import { useGarmentPlacement } from '../three/useGarmentPlacement'
 import { EASE_SNUG, EASE_TIGHT } from '../three/garmentWrap'
-import type { GarmentResult } from '../three/garmentWorker'
+import type { GarmentState } from '../three/useGarmentPlacement'
 
 // three's own OrbitControls; the canvas renders on demand, so every camera
 // change requests a frame.
@@ -85,12 +85,15 @@ const FABRIC = ['#7c9cc9', '#c98f7c', '#86b59a', '#b59ac9', '#c9b87c', '#7cb8c9'
 const SNUG = new THREE.Color('#f5a524')
 const TIGHT = new THREE.Color('#e5484d')
 
-function GarmentMeshes({ result, fitMap }: { result: GarmentResult; fitMap: boolean }) {
+function GarmentMeshes({ result, fitMap }: { result: GarmentState; fitMap: boolean }) {
+  const { invalidate } = useThree()
+  // Geometry is rebuilt only when the placement (topology) or colouring
+  // changes; drape frames just move the vertices.
   const meshes = useMemo(() => result.pieces.flatMap((piece, i) => {
     const base = new THREE.Color(FABRIC[i % FABRIC.length])
-    return piece.copies.map(copy => {
+    return piece.copies.map((copy, ci) => {
       const g = new THREE.BufferGeometry()
-      g.setAttribute('position', new THREE.BufferAttribute(copy.positions, 3))
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(copy.positions), 3))
       g.setIndex(new THREE.BufferAttribute(copy.indices, 1))
       g.computeVertexNormals()
       const colors = new Float32Array(copy.ease.length * 3)
@@ -99,10 +102,22 @@ function GarmentMeshes({ result, fitMap }: { result: GarmentResult; fitMap: bool
         colors.set([c.r, c.g, c.b], v * 3)
       })
       g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-      return { key: `${piece.id}:${piece.copies.indexOf(copy)}`, geometry: g }
+      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, geometry: g }
     })
-  }), [result, fitMap])
+  }), [result.placementId, fitMap])
   useEffect(() => () => meshes.forEach(m => m.geometry.dispose()), [meshes])
+
+  useEffect(() => {
+    for (const m of meshes) {
+      const src = result.pieces[m.piece]?.copies[m.copy]?.positions
+      const attr = m.geometry.getAttribute('position') as THREE.BufferAttribute
+      if (!src || src.length !== attr.array.length) continue
+      ;(attr.array as Float32Array).set(src)
+      attr.needsUpdate = true
+      m.geometry.computeVertexNormals()
+    }
+    invalidate()
+  }, [result, meshes, invalidate])
 
   const material = useMemo(
     () => new THREE.MeshStandardMaterial({
@@ -130,7 +145,8 @@ export default function BodyModelView() {
   const hasPattern = state.pieces.length > 0
   const [showGarment, setShowGarment] = useState(true)
   const [fitMap, setFitMap] = useState(true)
-  const garment = useGarmentPlacement(body, state.pieces, state.elements, hasPattern && showGarment)
+  const [drape, setDrape] = useState(true)
+  const garment = useGarmentPlacement(body, state.pieces, state.elements, state.connections, hasPattern && showGarment, drape)
   const placed = garment.result
 
   const geometry = useMemo(() => {
@@ -199,6 +215,11 @@ export default function BodyModelView() {
           {showGarment && (
             <>
               <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={drape} onChange={e => setDrape(e.target.checked)} />
+                <span>Drape with gravity</span>
+                {placed?.draping && <span className="ml-auto text-[10px] text-gray-400">settling…</span>}
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={fitMap} onChange={e => setFitMap(e.target.checked)} />
                 <span>Fit map</span>
               </label>
@@ -214,7 +235,7 @@ export default function BodyModelView() {
                   Not shown in 3D: {placed.skipped.map(s => s.name).join(', ')}
                 </p>
               )}
-              <p className="text-[10px] text-gray-400">Static preview — the garment is wrapped, not yet draped.</p>
+              <p className="text-[10px] text-gray-400">{drape ? 'Draped: seams sewn, gravity and body collision.' : 'Static preview: wrapped onto the body, not draped.'}</p>
             </>
           )}
         </div>

@@ -3,8 +3,8 @@ import type { BodyQuery, Pt, Section } from './bodyQuery'
 import { perimeter } from './bodyQuery'
 import { classifyPiece } from './pieceClassifier'
 import type { Region } from './pieceClassifier'
-import { allPoints, edgesWith, extractOutline, transformShape, triangulate, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
-import type { OutlineEdge, PieceShape } from './pieceGeometry'
+import { allPoints, cutDarts, edgesWith, extractOutline, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
+import type { DartLegs, OutlineEdge, PieceMesh, PieceShape } from './pieceGeometry'
 import type { Vec3 } from './types'
 
 // Static fit preview: every flat pattern piece is wrapped onto the body.
@@ -31,7 +31,7 @@ export const EASE_SNUG = 1.0
 export const EASE_TIGHT = 0.97
 const ROOF = 7 // cm below the shoulder seam over which fabric curves onto the shoulder top
 const CROTCH_BLEND = 4
-const MESH_SPACING = 1.5
+const MESH_SPACING = 2.0
 const ARC_SAMPLES = 64
 
 export interface PlacedCopy {
@@ -40,11 +40,18 @@ export interface PlacedCopy {
   ease: Float32Array // fabric loop ÷ body loop at each vertex's height (< 1 = tight)
 }
 
+export interface CopySpec { mirrorWorld: boolean; frontHalf: boolean }
+
 export interface PlacedPiece {
   id: string
   name: string
   region: Region
+  back: boolean
+  onFold: boolean
   copies: PlacedCopy[]
+  copySpecs: CopySpec[] // mirrorWorld = the body's left side; frontHalf = sleeve half
+  mesh: PieceMesh // flat (pattern-space) mesh shared by every copy
+  edges: { id: string; label: string; isFold: boolean }[] // same order as mesh.edgeVerts
   // Maps a point in the piece's original pattern coordinates onto the body for one copy.
   mapPoint: (x: number, y: number, copy: number) => Vec3
 }
@@ -141,12 +148,13 @@ interface Profile {
   waistRow: number | null
   hps: Pt | null
   darts: Dart[]
+  crotchExt: number // legs: how far the crotch curve reaches past the centre line
   partner: Profile | null
 }
 
 // A dart: two legs meeting at the apex. Sewing it folds away the fabric
 // between the legs, so on the body both legs land on the same point.
-interface Dart { a: [Pt, Pt]; b: [Pt, Pt] } // each leg: [base, apex]
+type Dart = DartLegs
 
 function legXAt(leg: [Pt, Pt], y: number): number | null {
   const [[x1, y1], [x2, y2]] = leg
@@ -250,7 +258,9 @@ function makeProfile(piece: PatternPiece, shape: PieceShape, region: Region, bac
   }
   return {
     piece, region, back, shape: s, toLocal, x0, side: sd, inner: edgesWith(s, ['inseam']), shoulder,
-    anchorRow, waistRow, hps, darts: findDarts(piece, elements, toLocal), partner: null,
+    anchorRow, waistRow, hps, darts: findDarts(piece, elements, toLocal),
+    crotchExt: region === 'leg' ? Math.max(0, x0 - xRange(s.edges)[0]) : 0,
+    partner: null,
   }
 }
 
@@ -361,8 +371,24 @@ class Wrapper {
   leg(p: Profile, X: number, Y: number): Mapped {
     const y = this.bodyY(p, Y)
     const yc = this.body.crotchY
+    // The crotch extension (left of the centre line) passes UNDER the body:
+    // from the centre line it runs down to one crotch point beneath the torso,
+    // where the front and back crotch curves (and the inseams) meet.
+    // Only the crotch curve itself: rows at or above where the inseam starts
+    // (below that, the inseam runs down the inner leg).
+    const inseamTop = p.inner.length ? yRange(p.inner)[0] : Infinity
+    if (X < p.x0 && p.crotchExt > 0 && Y <= inseamTop) {
+      const f = Math.min(1, (p.x0 - X) / p.crotchExt)
+      const centre = this.torso(p, Y, 0)
+      const under = sectionNear(k => this.body.wrapSection(k), yc)
+      const crotchPoint: Vec3 = [0, Math.min(centre.p[1], yc - GAP), under.center[1]]
+      return {
+        p: [0, 1, 2].map(k => centre.p[k] + (crotchPoint[k] - centre.p[k]) * f) as Vec3,
+        ease: centre.ease,
+      }
+    }
     const t = Math.min(1, Math.max(0, (y - (yc - CROTCH_BLEND)) / (2 * CROTCH_BLEND)))
-    const above = t > 0 ? this.torso(p, Y, sewnDistance(p, X, Y)) : null
+    const above = t > 0 ? this.torso(p, Y, Math.max(0, sewnDistance(p, X, Y))) : null
     const below = t < 1 ? this.legBelow(p, X, Y, y) : null
     if (!above) return below!
     if (!below) return above
@@ -426,7 +452,6 @@ class Wrapper {
   }
 }
 
-interface CopySpec { mirrorWorld: boolean; frontHalf: boolean }
 
 function copiesFor(p: Profile): CopySpec[] {
   const both = p.piece.onFold || p.piece.cutQty >= 2
@@ -473,7 +498,9 @@ export function placeGarment(pieces: PatternPiece[], elements: CanvasElement[], 
 
   const placed: PlacedPiece[] = profiles.map(p => {
     const specs = copiesFor(p)
-    const mesh = triangulate(p.shape.loop, MESH_SPACING)
+    // Darts are cut out of the mesh and sewn shut in the drape (their legs become edges).
+    const meshShape = cutDarts(p.shape, p.darts)
+    const mesh = triangulateShape(meshShape, MESH_SPACING)
     const copies = specs.map(c => {
       const positions = new Float32Array(mesh.pts.length * 3)
       const ease = new Float32Array(mesh.pts.length)
@@ -492,7 +519,12 @@ export function placeGarment(pieces: PatternPiece[], elements: CanvasElement[], 
       id: p.piece.id,
       name: p.piece.name,
       region: p.region,
+      back: p.back,
+      onFold: p.piece.onFold,
       copies,
+      copySpecs: specs,
+      mesh,
+      edges: meshShape.edges.map(e => ({ id: e.id, label: e.label, isFold: e.isFold })),
       mapPoint: (x, y, copy) => {
         const [X, Y] = p.toLocal([x, y])
         return map(p, X, Y, specs[copy]).p

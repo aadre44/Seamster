@@ -73,6 +73,55 @@ export function extractOutline(piece: PatternPiece, byId: Map<string, CanvasElem
   return { edges, loop }
 }
 
+// A dart as two legs, each [base on the outline, apex].
+export interface DartLegs { a: [Pt, Pt]; b: [Pt, Pt] }
+
+// Cuts each dart's wedge out of the outline: the edge its bases sit on is split
+// and the two legs become their own edges, labelled 'dart' (ids dart:<k>:a /
+// dart:<k>:b) so they can be sewn together like a seam. Darts whose bases are
+// not on the outline are left alone.
+export function cutDarts(shape: PieceShape, darts: DartLegs[]): PieceShape {
+  let edges = shape.edges
+  const onSegment = (p: Pt, a: Pt, b: Pt) => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (len < 1e-9) return null
+    const t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / (len * len)
+    if (t < -1e-6 || t > 1 + 1e-6) return null
+    const d = Math.hypot(a[0] + (b[0] - a[0]) * t - p[0], a[1] + (b[1] - a[1]) * t - p[1])
+    return d < 0.1 ? t : null
+  }
+  // Position of p along an edge as (segment index + fraction), or null.
+  const locate = (e: OutlineEdge, p: Pt) => {
+    for (let i = 0; i < e.pts.length - 1; i++) {
+      const t = onSegment(p, e.pts[i], e.pts[i + 1])
+      if (t !== null) return i + Math.min(1, Math.max(0, t))
+    }
+    return null
+  }
+  darts.forEach((dart, k) => {
+    const ei = edges.findIndex(e => locate(e, dart.a[0]) !== null && locate(e, dart.b[0]) !== null)
+    if (ei < 0) return
+    const e = edges[ei]
+    const la = locate(e, dart.a[0])!
+    const lb = locate(e, dart.b[0])!
+    const [first, second, s1, s2] = la <= lb ? [dart.a, dart.b, la, lb] : [dart.b, dart.a, lb, la]
+    const before = [...e.pts.slice(0, Math.floor(s1) + 1), first[0]]
+    const after = [second[0], ...e.pts.slice(Math.floor(s2) + 1)]
+    const apex = first[1]
+    edges = [
+      ...edges.slice(0, ei),
+      { ...e, pts: before },
+      { id: `dart:${k}:a`, label: 'dart', isFold: false, pts: [first[0], apex] },
+      { id: `dart:${k}:b`, label: 'dart', isFold: false, pts: [apex, second[0]] },
+      { ...e, id: `${e.id}#after-dart-${k}`, pts: after },
+      ...edges.slice(ei + 1),
+    ]
+  })
+  const loop: Pt[] = []
+  for (const e of edges) loop.push(...e.pts.slice(0, -1))
+  return { edges, loop }
+}
+
 export function transformShape(shape: PieceShape, fn: (p: Pt) => Pt): PieceShape {
   return {
     edges: shape.edges.map(e => ({ ...e, pts: e.pts.map(fn) })),
@@ -146,22 +195,66 @@ function segmentDistance(p: Pt, a: Pt, b: Pt): number {
   return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
 }
 
-// Triangulates the piece with interior points on a grid, so the flat piece
-// can bend when it is wrapped onto the body.
-export function triangulate(loop: Pt[], spacing: number): { pts: Pt[]; tris: [number, number, number][] } {
-  const boundary: Pt[] = []
-  for (let i = 0; i < loop.length; i++) {
-    const a = loop[i]
-    const b = loop[(i + 1) % loop.length]
-    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / spacing))
-    for (let k = 0; k < n; k++) {
-      const p: Pt = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]
-      const prev = boundary[boundary.length - 1]
-      if (!prev || Math.hypot(p[0] - prev[0], p[1] - prev[1]) > 0.02) boundary.push(p)
-    }
-  }
-  while (boundary.length > 3 && Math.hypot(boundary[0][0] - boundary[boundary.length - 1][0], boundary[0][1] - boundary[boundary.length - 1][1]) <= 0.02) boundary.pop()
+export interface PieceMesh {
+  pts: Pt[]
+  tris: [number, number, number][]
+  // Per outline edge (same order as shape.edges): its boundary vertices from
+  // start to end (endpoints shared with the neighbouring edges) and each
+  // vertex's arc-length fraction along the edge.
+  edgeVerts: number[][]
+  edgeT: number[][]
+}
 
+// Samples a polyline every ~spacing by arc length; returns points (without the
+// final endpoint) and their arc-length fractions.
+function resample(pts: Pt[], spacing: number): { pts: Pt[]; t: number[] } {
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+  const total = cum[cum.length - 1]
+  if (total < 1e-6) return { pts: [], t: [] }
+  const n = Math.max(1, Math.round(total / spacing))
+  const out: Pt[] = []
+  const ts: number[] = []
+  let seg = 0
+  for (let k = 0; k < n; k++) {
+    const s = (total * k) / n
+    while (seg < pts.length - 2 && cum[seg + 1] < s) seg++
+    const f = (s - cum[seg]) / Math.max(cum[seg + 1] - cum[seg], 1e-9)
+    out.push([pts[seg][0] + (pts[seg + 1][0] - pts[seg][0]) * f, pts[seg][1] + (pts[seg + 1][1] - pts[seg][1]) * f])
+    ts.push(k / n)
+  }
+  return { pts: out, t: ts }
+}
+
+// Triangulates a piece with interior points on a grid (so the flat piece can
+// bend on the body), keeping track of which boundary vertices lie on which
+// outline edge (so seams can be stitched).
+export function triangulateShape(shape: PieceShape, spacing: number): PieceMesh {
+  const boundary: Pt[] = []
+  const edgeVerts: number[][] = []
+  const edgeT: number[][] = []
+  for (const e of shape.edges) {
+    const r = resample(e.pts, spacing)
+    const verts: number[] = []
+    r.pts.forEach(p => {
+      verts.push(boundary.length)
+      boundary.push(p)
+    })
+    edgeVerts.push(verts)
+    edgeT.push(r.t)
+  }
+  // Each edge ends where the next begins: append that shared vertex.
+  for (let k = 0; k < edgeVerts.length; k++) {
+    let next = (k + 1) % edgeVerts.length
+    while (edgeVerts[next].length === 0 && next !== k) next = (next + 1) % edgeVerts.length
+    edgeVerts[k].push(edgeVerts[next][0] ?? 0)
+    edgeT[k].push(1)
+  }
+  const mesh = triangulateBoundary(boundary, spacing)
+  return { ...mesh, edgeVerts, edgeT }
+}
+
+function triangulateBoundary(boundary: Pt[], spacing: number): { pts: Pt[]; tris: [number, number, number][] } {
   const xs = boundary.map(p => p[0])
   const ys = boundary.map(p => p[1])
   const interior: Pt[] = []

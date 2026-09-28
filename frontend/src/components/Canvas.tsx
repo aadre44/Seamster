@@ -403,6 +403,10 @@ export default function Canvas() {
         elements: data.elements,
         pieces: data.pieces ?? [],
         measurements: data.measurements ?? {},
+        connections: data.connections ?? [],
+        instructions: data.instructions ?? null,
+        lastFeatures: data.lastFeatures ?? null,
+        lastMeasurements: data.lastMeasurements ?? null,
       })
     } catch {
       alert('Failed to load pattern file.')

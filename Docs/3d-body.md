@@ -6,7 +6,7 @@ The 3D view shows a measurement-driven body (a mannequin) that the user can resi
 |-------|-----------|--------|
 | 1. Parametric body avatar + customization UI | `body-avatar-3d` | Done (procedural body; realism upgrade in progress, see below) |
 | 2. Static fit preview: the current pattern wrapped onto the body, with a fit map | `garment-3d-fit-preview` | **Done** — see *Garment fit preview* |
-| 3. Physics drape: position-based dynamics cloth, seams as stitching constraints, body collision | `garment-3d-drape-simulation` | Planned |
+| 3. Physics drape: position-based dynamics cloth, seams sewn, gravity, body collision with friction | `garment-3d-drape-simulation` | **Done** — see *Drape simulation* |
 
 Everything runs in the browser, and no backend endpoint is involved.
 
@@ -45,8 +45,11 @@ frontend/src/three/
   pieceGeometry.ts    Piece outline → ordered labelled loop; row/column intersections; cdt2d mesh
   pieceClassifier.ts  Piece → body region (torso-upper / torso-lower / leg / sleeve / skip)
   garmentWrap.ts      placeGarment(): wraps each piece onto the body, darts, mirroring, ease
-  garmentWorker.ts    Web Worker entry for placement
-  useGarmentPlacement.ts  Latest-wins scheduler for the garment worker
+  sdfGrid.ts          Body distance field sampled on a narrow-band grid (fast collision lookups)
+  clothSim.ts         Drape: PBD cloth (stretch/bend/stitch/weld/tether), Coulomb friction, collision
+  garmentWorker.ts    Web Worker entry: placement, then a streamed, cancellable drape
+  useGarmentPlacement.ts  Scheduler for the garment worker (placement blocks; drapes are superseded)
+  clothSim.test.ts    Headless drape tests on the engine fixtures
   garmentWrap.test.ts + fixtures/*.psnap.json (real /api/generate outputs)
 frontend/src/components/
   BodyModelView.tsx           Lazy 3D view: studio lighting, soft shadow, orbit camera, on-demand frames
@@ -199,6 +202,47 @@ The tests run against real engine outputs for skirt, trousers, shirt, dress and 
 - **Seam lengths:** there's no length matching between sewn edges of different lengths, such as eased sleeve caps.
 - **Asymmetric pieces:** cut-1 non-fold pieces (for example the asymmetric wrap fronts) are placed once, on the right.
 - **Skipped details:** horizontal (bust) darts, yokes and princess seams are not handled yet.
+
+---
+
+## Drape simulation (phase 3)
+
+With **Drape with gravity** on (the default), the static wrap is the starting pose. From there a cloth simulation settles the garment into a natural hang. The worker streams a frame every 6 steps, so the garment visibly settles over about 2–4 s. The view only moves vertices in place; geometry is rebuilt only when the placement changes. Changing the body or the pattern restarts the placement and drape, and a drape still in progress is abandoned.
+
+**Solver.** Position-based dynamics in the "small steps" form (Macklin et al. 2019): 16 substeps per 1/60 s step, one constraint pass each, 150 steps. It is hand-rolled, because a generic cloth library knows nothing about the pattern's seams. One particle array holds every copy of every piece.
+- **Stretch:** every mesh edge keeps its **flat pattern length**. Compression is softer (0.4), so fabric can buckle into folds.
+- **Strain limiting:** an extra pass pulls over-stretched edges back.
+- **Bending:** soft (0.12) constraints between the far corners of neighbouring triangles.
+- **Tethers:** long-range attachments (Kim et al. 2012). Each particle may be no farther from its nearest vertex on the edge its piece hangs from (shoulder / waist / armhole) than its flat distance plus 10%. There's no tether within 15 cm of the anchor. This carries the garment's weight to where it hangs.
+- **Stitches:** every connection in the stitch map is sewn copy by copy on the same side of the body. A sleeve's front half is sewn to the front bodice and its back half to the back. Matching points are found by arc-length fraction, so eased seams gather evenly. A connection to an edge that darts split is treated as its chained segments, with the dart gaps skipped.
+- **Welds:** a piece's own seams between its mirrored copies (fold, CF/CB, crotch, sleeve underarm) and the two legs of each dart share particles one to one. A fold is continuous fabric, and welding leaves no hairline.
+- **Darts:** darts are cut out of the mesh (`cutDarts`: their legs become edges) and sewn shut. That's what takes the dart intake out of the waist; with the wedge left in, a darted skirt slid down to the high hip.
+- **Collision:** against a narrow-band grid of the body's distance field (`SdfGrid`: 1 cm cells, trilinear lookups), keeping the fabric 0.35 cm off the skin, and against the floor. Two contact passes per substep resolve corners where two contacts meet, such as foot and floor.
+- **Friction:** Coulomb (static 0.9 / kinetic 0.6). Slip smaller than μs × the normal push is cancelled entirely. Without static friction, the push-out along a sloped surface ratchets a waistband down the hips.
+
+**Placement changes made for draping.** The static wrap is the drape's starting pose, so two things changed in it:
+- **Crotch curve:** it now runs *under* the body from the centre line to one crotch point, where front and back meet; before, it went around the front.
+- **Garment mesh:** 2 cm spacing, coarser and so stiffer and faster.
+
+**Results.** From the drape tests on real engine patterns:
+
+| Garment | Particles | Time (test) | Stretch where the pattern fits: mean / 98th pct | Seams: 95% of points within |
+|---|---|---|---|---|
+| Skirt (A-line, darts) | ~2000 | ~2 s | 0.33% / 2.9% | 1 cm |
+| Trousers (straight, darts) | ~3200 | ~4 s | 1.1% / 5.7% | 1 cm |
+| Shirt (regular, sleeves) | ~3600 | ~4 s | 0.32% / 2.9% | 1 cm |
+| Dress (a-line, darted skirt) | ~2000 | ~2 s | 0.33% / 3.0% | 1 cm |
+
+All four settle: kinetic energy falls by more than 4×. At least 99% of cloth ends up outside the body, none of it more than 1 cm inside. The skirt stays at the waist, trousers hang from the waist (they settle up to about 4 cm, onto their drafted crotch drop), and the shirt hangs from the shoulders.
+
+**What the drape revealed.** A hip-length shirt drafted its hem at *waist* width, so it could not cover the hips. Fixed in `shirts.py` (`_hem_qt`): below the waist, the hem widens to the hip quarter + ease by hip level.
+
+**Known limits.**
+- **Crotch point:** the trouser crotch point is sewn between the thighs, which touch in this body model, so a few centimetres of the crotch junction stay apart there. The seam test allows it explicitly.
+- **Full-length hems:** they wedge between the foot and the floor and stretch locally.
+- **No self-collision:** layers (sleeve against bodice, overlap fronts) can pass through each other.
+- **No fabric properties yet:** the stiffness and weight sliders are future work.
+- **Too-small garments:** where a pattern is smaller than the body, the fabric strains and jitters instead of riding up. The fit map marks these areas red.
 
 ---
 

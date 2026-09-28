@@ -7,7 +7,7 @@
 | Frontend | React 18, TypeScript, Tailwind CSS, Vite |
 | Backend | Python 3.12, FastAPI |
 | Canvas | SVG (no canvas element) |
-| 3D view | three.js + @react-three/fiber v8 (lazy-loaded chunk) — see [3d-body.md](3d-body.md) |
+| 3D view | three.js + @react-three/fiber v8 (lazy-loaded chunk); body mesh, garment placement and PBD drape run in Web Workers — see [3d-body.md](3d-body.md) |
 | State | Custom reducer in `EditorContext` (no external state library) |
 
 ---
