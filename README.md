@@ -130,7 +130,7 @@ The **🧍 3D Body** header button replaces the canvas with a 3D mannequin built
 - **Where values come from** — a slider you move becomes a `custom` value. Fields you haven't set use the Measurements panel (tagged `measured`: bust, waist, hip, waist-to-hip, inseam, shoulder), otherwise a default. **Reset to measurements** clears your custom values.
 - Your body stays as you set it when you open a file or generate a new pattern. It is not part of undo/redo, and is not yet saved in `.psnap`.
 
-The mannequin is generated procedurally (elliptical cross-sections lofted into a body), with no licensed body models. three.js is loaded only when the view is first opened. Putting the pattern on the body (static fit preview), then physically draping it, are the next two phases. See **[Docs/3d-body.md](Docs/3d-body.md)**.
+The mannequin is generated procedurally from anatomically profiled cross-sections (tape-fitted to your measurements, bust cup solved from bust vs underbust) joined into one smooth surface, meshed in a Web Worker, with studio lighting. A sculpted base body (Fusion 360) deformed to your measurements is the planned realism upgrade. three.js is loaded only when the view is first opened. Putting the pattern on the body (static fit preview), then physically draping it, are the next two phases. See **[Docs/3d-body.md](Docs/3d-body.md)**.
 
 ---
 

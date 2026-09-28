@@ -16,13 +16,28 @@ export interface BodyProfile {
 
 export type ResolvedBody = Record<BodyField, number> & { shape: BodyShapePreset }
 
-// One cross-section of a loft: an ellipse in the plane spanned by u (lateral)
-// and w (depth), p(θ) = center + a·cosθ·u + b·sinθ·w.
+// A soft radial bump on a cross-section (breast, shoulder blade, buttock, belly).
+// `angle` is measured from +u towards +w (front); `width` is the dome's
+// half-extent in radians; `amp` its peak height in cm.
+export interface Lobe {
+  angle: number
+  width: number
+  amp: number
+}
+
+// One cross-section of the body, in the plane spanned by u (lateral) and w
+// (front). Its outline is the polar curve
+//   R(θ) = superellipse(a, front depth b / back depth `back`, exponent n) + Σ lobes,
+// placed at center + R(θ)·(cosθ·u + sinθ·w). With back = b, n = 2 and no lobes
+// it is the ellipse (a, b).
 export interface LoftRing {
   name: string
   center: Vec3
   a: number
   b: number
+  back?: number
+  n?: number
+  lobes?: Lobe[]
   u: Vec3
   w: Vec3
 }
@@ -30,13 +45,14 @@ export interface LoftRing {
 export interface MeshData {
   name: string
   positions: Float32Array
+  normals?: Float32Array
   indices: Uint32Array
 }
 
 export interface AvatarData {
   parts: MeshData[]
-  // Named landmark rings per part (before smoothing subdivision), for tests and
-  // for the garment wrap / collision phases.
+  // Named landmark cross-sections per body part, used by tests and by the
+  // garment-wrap / collision phases.
   landmarks: Record<string, LoftRing[]>
   height: number
 }
