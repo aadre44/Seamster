@@ -65,3 +65,25 @@ def test_dress_skirt_waist_matches_bodice_waist(fit):
 
     assert math.isclose(_sewn(block["front_skirt"]), bodice_waist(block["front_bodice"]), abs_tol=0.01)
     assert math.isclose(_sewn(block["back_skirt"]), bodice_waist(block["back_bodice"]), abs_tol=0.01)
+
+
+@pytest.mark.parametrize("length", [70.0, 80.0])
+def test_hip_length_shirt_hem_clears_the_hips(length):
+    """A shirt long enough to cover the hips must be at least hip-sized at the hem."""
+    from app.patterns.shirts import build_shirt_block
+    block = build_shirt_block(_m(length_cm=length))
+    halves = []
+    for key in ("front_bodice", "back_bodice"):
+        spec = block[key]
+        bottom = max(p.y for p in spec.outline)
+        halves.append(max(p.x for p in spec.outline if abs(p.y - bottom) < 1e-6))
+    # Front and back are each cut on the fold: the hem is 2 × (front half + back half).
+    assert 2 * sum(halves) >= 98.0 + 2.0
+
+
+def test_waist_length_shirt_hem_stays_at_the_waist():
+    from app.patterns.shirts import build_shirt_block
+    block = build_shirt_block(_m(length_cm=40.0))
+    front = block["front_bodice"]
+    bottom = max(p.y for p in front.outline)
+    assert max(p.x for p in front.outline if abs(p.y - bottom) < 1e-6) < (98.0 + 4.0) / 4

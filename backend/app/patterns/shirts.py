@@ -36,6 +36,7 @@ from app.patterns.geometry import CurveSegment, Point
 from app.patterns.skirts import PieceSpec
 
 EASE_CHEST = 6.0      # standard chest/bust ease added to the full chest circumference
+EASE_HIP = 4.0        # hip ease for shirts long enough to cover the hips
 _PLACKET_WIDTH = 3.0  # cm of CF overlap strip added when has_placket=True
 _COLLAR_HEIGHT = 4.0  # cm stand-collar height
 _CUFF_HEIGHT = 6.0    # cm cuff height
@@ -201,6 +202,21 @@ def build_shirt_block(
     waist_side_b = chest_qt - waist_suppress
     waist_side_f = chest_qt - waist_suppress
 
+    # Hem quarter for a shaped side seam. At or above the waist it is the waist
+    # quarter; a longer shirt must clear the hips, so below the waist the hem
+    # widens toward the hip quarter (+ ease), reaching it at hip level. (Drawing
+    # a hip-length hem at waist width made it ~20 cm too small for the hips.)
+    hip_qt = (m.hip_cm + EASE_HIP) / 4
+
+    def _hem_qt(waist_qt: float) -> float:
+        if L <= waist_y:
+            return waist_qt
+        f = min(1.0, (L - waist_y) / max(m.waist_to_hip_cm, 1.0))
+        return max(waist_qt, waist_qt + (hip_qt - waist_qt) * f)
+
+    hem_qt_b = _hem_qt(W / 4)
+    hem_qt_f = _hem_qt(W / 4 + 1.0)
+
     cap_height = chest / 8
     cap_w_half = chest_qt - 1.0
 
@@ -274,7 +290,7 @@ def build_shirt_block(
             back_outline = _band_top + [Point(chest_qt, L), Point(0.0, L)]
         else:
             back_outline = _band_top + [
-                Point(waist_side_b, waist_y), Point(W / 4, L), Point(0.0, L),
+                Point(waist_side_b, waist_y), Point(hem_qt_b, L), Point(0.0, L),
             ]
         _bn = len(back_outline)
         back_spec = PieceSpec(
@@ -322,7 +338,7 @@ def build_shirt_block(
             back_outline = _back_top + [Point(chest_qt, L), Point(0.0, L)]
         else:
             back_outline = _back_top + [
-                Point(waist_side_b, waist_y), Point(W / 4, L), Point(0.0, L),
+                Point(waist_side_b, waist_y), Point(hem_qt_b, L), Point(0.0, L),
             ]
 
         back_grain_x = chest_qt / 2
@@ -381,7 +397,7 @@ def build_shirt_block(
             else:
                 front_outline += [
                     Point(waist_side_f, y0 + waist_y),
-                    Point(W / 4 + 1.0, y0 + L),
+                    Point(hem_qt_f, y0 + L),
                     Point(0.0, y0 + L),
                 ]
             n = len(front_outline)
@@ -436,7 +452,7 @@ def build_shirt_block(
                 _front_labels[len(front_outline) - 1] = "side_seam"
                 front_outline.append(Point(chest_qt, y0 + arm_depth))   # armscye (underarm)
             else:
-                front_outline.append(Point(W / 4 + 1.0, y0 + L))        # side hem
+                front_outline.append(Point(hem_qt_f, y0 + L))        # side hem
                 _front_labels[len(front_outline) - 1] = "side_seam"
                 front_outline.append(Point(waist_side_f, y0 + waist_y)) # side at waist
                 _front_labels[len(front_outline) - 1] = "side_seam"
@@ -484,7 +500,7 @@ def build_shirt_block(
         else:
             sl_outline.append(Point(waist_side_f, waist_y)) # side at waist
             sl_labels[len(sl_outline) - 1] = "side_seam"
-            sl_outline.append(Point(W / 4 + 1.0, L))        # side hem
+            sl_outline.append(Point(hem_qt_f, L))        # side hem
         sl_labels[len(sl_outline) - 1] = "hem"              # side hem → CF hem
         sl_outline.append(Point(0.0, L))                    # CF at hem
         sl_labels[len(sl_outline) - 1] = "center_front"     # closing edge = CF fold
@@ -561,7 +577,7 @@ def build_shirt_block(
                 Point(shoulder_tip_x, shoulder_slope),
                 _armhole_pt,
                 Point(waist_side_f, waist_y),
-                Point(W / 4 + 1.0, L),
+                Point(hem_qt_f, L),
                 Point(0.0, L),
             ]
     elif neckline == "square":
@@ -584,7 +600,7 @@ def build_shirt_block(
                 Point(shoulder_tip_x, shoulder_slope),
                 _armhole_pt,
                 Point(waist_side_f, waist_y),
-                Point(W / 4 + 1.0, L),
+                Point(hem_qt_f, L),
                 Point(0.0, L),
             ]
     else:
@@ -604,7 +620,7 @@ def build_shirt_block(
                 Point(shoulder_tip_x, shoulder_slope),
                 _armhole_pt,
                 Point(waist_side_f, waist_y),
-                Point(W / 4 + 1.0, L),
+                Point(hem_qt_f, L),
                 Point(0.0, L),
             ]
 
