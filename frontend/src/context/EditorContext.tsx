@@ -33,6 +33,9 @@ type Action =
   | { type: 'DELETE_CONNECTION'; index: number }
   | { type: 'SET_CONNECTIONS'; connections: SeamConnection[] }
   | { type: 'APPLY_INFERRED'; connections: SeamConnection[]; placements: Placement[]; layers: Record<string, 'outer' | 'inside'> }
+  | { type: 'ADD_PLACEMENT'; placement: Placement }
+  | { type: 'UPDATE_PLACEMENT'; placement: Placement; tag?: string }
+  | { type: 'DELETE_PLACEMENT'; id: string }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
   | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
   | { type: 'RESET_BODY_PROFILE' }
@@ -269,6 +272,24 @@ function reducer(state: EditorState, action: Action): EditorState {
 
     case 'SET_CONNECTIONS':
       return { ...state, ...pushUndo(state), connections: action.connections }
+
+    case 'ADD_PLACEMENT':
+      // A piece is placed on one host at a time.
+      return {
+        ...state,
+        ...pushUndo(state),
+        placements: [...state.placements.filter(p => p.pieceId !== action.placement.pieceId), action.placement],
+      }
+
+    case 'UPDATE_PLACEMENT':
+      return {
+        ...state,
+        ...pushUndo(state, action.tag ?? null),
+        placements: state.placements.map(p => (p.id === action.placement.id ? action.placement : p)),
+      }
+
+    case 'DELETE_PLACEMENT':
+      return { ...state, ...pushUndo(state), placements: state.placements.filter(p => p.id !== action.id) }
 
     case 'APPLY_INFERRED': {
       // Re-infer: the user's own seams and placements stay; everything else is

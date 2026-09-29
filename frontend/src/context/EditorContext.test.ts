@@ -249,3 +249,22 @@ describe('re-infer (APPLY_INFERRED)', () => {
     expect(reducer(s1, { type: 'UNDO' }).connections).toEqual([mine, old])
   })
 })
+
+describe('placement editing', () => {
+  const pl = { id: 'p1', pieceId: 'P', hostId: 'H', transform: { dx: 1, dy: 2, rotation: 0 }, stitched: ['e1'], source: 'user' as const }
+
+  it('adds, moves (one undo step per drag) and removes a placement', () => {
+    const s1 = reducer({ ...initialState }, { type: 'ADD_PLACEMENT', placement: pl })
+    expect(s1.placements).toEqual([pl])
+    let s = s1
+    for (const dx of [2, 3, 4]) s = reducer(s, { type: 'UPDATE_PLACEMENT', placement: { ...pl, transform: { ...pl.transform, dx } }, tag: 'move:1' })
+    expect(s.placements[0].transform.dx).toBe(4)
+    expect(reducer(s, { type: 'UNDO' }).placements[0].transform.dx).toBe(1)
+    expect(reducer(s, { type: 'DELETE_PLACEMENT', id: 'p1' }).placements).toEqual([])
+  })
+
+  it('moves a piece to a new host instead of placing it twice', () => {
+    const s1 = reducer({ ...initialState, placements: [pl] }, { type: 'ADD_PLACEMENT', placement: { ...pl, id: 'p2', hostId: 'H2' } })
+    expect(s1.placements.map(p => p.hostId)).toEqual(['H2'])
+  })
+})

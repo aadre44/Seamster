@@ -35,9 +35,24 @@ export function edgeName(piece: PatternPiece | undefined, edgeId: string, byId: 
   const el = edges.find(e => e.id === edgeId)
   if (!el) return 'missing edge'
   const label = el.seamLabel || (el.type === 'line' && el.isFold ? 'fold' : '')
-  if (!label) return `edge ${edges.indexOf(el) + 1}`
+  if (!label) return positionName(edges, el)
   const same = edges.filter(e => (e.seamLabel || (e.type === 'line' && e.isFold ? 'fold' : '')) === label)
   return same.length > 1 ? `${prettyLabel(label)} ${same.indexOf(el) + 1}` : prettyLabel(label)
+}
+
+// An unlabelled edge named by where it lies on the piece ("top edge"); a
+// number is added only if two edges face the same way.
+function positionName(edges: ReturnType<typeof pieceEdges>, el: ReturnType<typeof pieceEdges>[number]): string {
+  const pts = edges.flatMap(e => [e.start, e.end])
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
+  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+  const facing = (e: typeof el) => {
+    const mx = (e.start.x + e.end.x) / 2 - cx, my = (e.start.y + e.end.y) / 2 - cy
+    return Math.abs(mx) > Math.abs(my) ? (mx > 0 ? 'right' : 'left') : (my > 0 ? 'bottom' : 'top')
+  }
+  const dir = facing(el)
+  const same = edges.filter(e => !e.seamLabel && facing(e) === dir)
+  return same.length > 1 ? `${dir} edge ${same.indexOf(el) + 1}` : `${dir} edge`
 }
 
 export function edgeLength(edgeId: string, byId: Map<string, CanvasElement>): number {

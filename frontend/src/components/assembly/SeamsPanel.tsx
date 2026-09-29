@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { inferAttachments } from '../../api'
 import { useEditor } from '../../context/EditorContext'
-import type { CanvasElement, PatternPiece, SeamConnection, SeamEnd } from '../../types'
+import type { CanvasElement, PatternPiece, Placement, SeamConnection, SeamEnd } from '../../types'
+import { pieceEdges } from './geometry'
 import { edgeName, hasSides, labelColour, seamFit, sewnLength } from './seams'
 import type { Fit } from './seams'
 
@@ -18,11 +19,14 @@ interface Props {
   onSelect: (i: number | null) => void
   onHover: (i: number | null) => void
   pending: SeamEnd | null
+  selectedPlacement: string | null
+  onSelectPlacement: (id: string | null) => void
 }
 
-export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, pending }: Props) {
+export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, pending, selectedPlacement, onSelectPlacement }: Props) {
   const { state, dispatch } = useEditor()
-  const { connections } = state
+  const { connections, placements } = state
+  const placed = placements.find(p => p.id === selectedPlacement)
   const [inferring, setInferring] = useState(false)
   const [inferError, setInferError] = useState('')
   const pieceOf = (id: string) => pieces.find(p => p.id === id)
@@ -63,9 +67,19 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
         <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">
           {pending
             ? <span className="text-teal-700">Now click the edge to sew <b>{endName(pending)}</b> to. Esc cancels.</span>
-            : 'Click an edge, then the edge it is sewn to. Click a seam to edit it.'}
+            : 'Click an edge, then the edge it is sewn to. Click a seam to edit it. Drag a pocket onto the piece it goes on.'}
         </div>
       </div>
+
+      {placed && (
+        <PlacementEditor
+          placement={placed}
+          piece={pieceOf(placed.pieceId)}
+          host={pieceOf(placed.hostId)}
+          byId={byId}
+          onDone={() => onSelectPlacement(null)}
+        />
+      )}
 
       {sel && selected !== null && (
         <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 space-y-2" data-testid="seam-editor">
@@ -131,6 +145,102 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
         ))}
         {connections.length === 0 && <li className="px-3 py-2 text-[11px] text-gray-400">No seams yet.</li>}
       </ul>
+
+      <div className="px-3 pt-2 pb-1 border-t border-gray-100 text-xs font-semibold text-gray-700">Placed pieces ({placements.length})</div>
+      <ul className="pb-2" data-testid="placements">
+        {placements.map(pl => (
+          <li key={pl.id}>
+            <button
+              className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50 ${selectedPlacement === pl.id ? 'bg-teal-50' : ''}`}
+              onClick={() => onSelectPlacement(selectedPlacement === pl.id ? null : pl.id)}
+            >
+              <span className="shrink-0 w-2.5 h-2.5 rounded-sm bg-amber-300" />
+              <span className="flex-1 min-w-0 text-[11px] text-gray-800 truncate">
+                {pieceOf(pl.pieceId)?.name ?? '?'} <span className="text-gray-400">on</span> {pieceOf(pl.hostId)?.name ?? '?'}
+              </span>
+              <span className="text-[9px] uppercase tracking-wide text-gray-400">{pl.source === 'user' ? 'yours' : 'auto'}</span>
+            </button>
+          </li>
+        ))}
+        {placements.length === 0 && <li className="px-3 py-1 text-[11px] text-gray-400">None — drag a pocket onto its piece.</li>}
+      </ul>
+    </div>
+  )
+}
+
+function PlacementEditor({ placement, piece, host, byId, onDone }: {
+  placement: Placement
+  piece: PatternPiece | undefined
+  host: PatternPiece | undefined
+  byId: Map<string, CanvasElement>
+  onDone: () => void
+}) {
+  const { dispatch } = useEditor()
+  const update = (p: Placement, tag?: string) => dispatch({ type: 'UPDATE_PLACEMENT', placement: { ...p, source: 'user' }, tag })
+  const edges = piece ? pieceEdges(piece, byId) : []
+  const layer = piece?.layer ?? 'outer'
+  return (
+    <div className="px-3 py-2 border-b border-gray-200 bg-amber-50/60 space-y-2" data-testid="placement-editor">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 text-[11px] font-medium text-gray-800 truncate">
+          {piece?.name ?? '?'} <span className="text-gray-500 font-normal">on</span> {host?.name ?? '?'}
+        </div>
+        <button
+          className="text-xs px-2 py-0.5 rounded border border-red-200 text-red-600 hover:bg-red-50"
+          onClick={() => { dispatch({ type: 'DELETE_PLACEMENT', id: placement.id }); onDone() }}
+        >Remove</button>
+      </div>
+      <div className="text-[11px] text-gray-500">Drag it to move; drag the round handle to turn it.</div>
+      <label className="flex items-center justify-between text-[11px] text-gray-600">
+        Rotation
+        <span className="flex items-center gap-1">
+          <input aria-label="Rotation" type="number" step={5} value={placement.transform.rotation}
+            onChange={e => update({ ...placement, transform: { ...placement.transform, rotation: Number(e.target.value) || 0 } }, `rot:${placement.id}`)}
+            className="w-14 border border-gray-300 rounded px-1 py-0.5 text-[11px]" />°
+        </span>
+      </label>
+      {hasSides(host) && (
+        <label className="flex items-center justify-between text-[11px] text-gray-600">
+          Side (wearer's)
+          <select aria-label="Placement side" className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
+            value={placement.side ?? 'both'}
+            onChange={e => {
+              const { side: _drop, ...rest } = placement
+              update(e.target.value === 'both' ? rest : { ...rest, side: e.target.value as 'left' | 'right' })
+            }}>
+            <option value="both">Both</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+      )}
+      {piece && (
+        <label className="flex items-center justify-between text-[11px] text-gray-600">
+          Sits
+          <select aria-label="Layer" className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
+            value={layer}
+            onChange={e => dispatch({ type: 'UPDATE_PIECE', piece: { ...piece, layer: e.target.value as 'outer' | 'inside' } })}>
+            <option value="outer">Outside</option>
+            <option value="inside">Inside</option>
+          </select>
+        </label>
+      )}
+      <div className="text-[11px] text-gray-600">
+        Stitched edges <span className="text-gray-400">(the rest stay open)</span>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {edges.map((el, k) => {
+            const on = placement.stitched.includes(el.id)
+            return (
+              <button key={el.id}
+                aria-pressed={on}
+                onClick={() => update({ ...placement, stitched: on ? placement.stitched.filter(id => id !== el.id) : [...placement.stitched, el.id] })}
+                className={`px-1.5 py-0.5 rounded border text-[10px] ${on ? 'bg-amber-700 text-white border-amber-700' : 'bg-white text-gray-600 border-gray-300'}`}>
+                {edgeName(piece, el.id, byId) || `edge ${k + 1}`}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

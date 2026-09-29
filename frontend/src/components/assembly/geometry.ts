@@ -108,6 +108,16 @@ export function nearestFraction(s: Samples, p: Pt): number {
   return best
 }
 
+// Even-odd point in polygon.
+export function insidePolygon(poly: Pt[], p: Pt): boolean {
+  let c = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j]
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) c = !c
+  }
+  return c
+}
+
 // ── Layouts ──────────────────────────────────────────────────────────────────
 
 const GAP_PX = 28

@@ -66,6 +66,27 @@ All the new fields are optional, so older `.psnap` files load unchanged.
   `UPDATE_CONNECTION` (optional `tag` coalesces a gesture into one undo step),
   `DELETE_CONNECTION`, `SET_CONNECTIONS`.
 
+## Placing pieces (pockets, flaps, appliqués)
+
+- **Drag** any piece (by its body) onto another piece to place it there; the
+  drop point is where its centre goes. A piece is placed on one host at a time
+  (`ADD_PLACEMENT` replaces an earlier placement of the same piece).
+- Placed pieces leave the layout and are drawn on their host (amber = outside,
+  grey = inside): stitched edges dashed brown, open edges dotted grey.
+- Select a placed piece (click it, or its row under **Placed pieces**): drag it
+  to move, drag the round handle above it to turn it (5° steps). The placement
+  editor sets the rotation, the side of the body (hosts cut 2 / on the fold;
+  default both), whether it sits outside or inside (`PatternPiece.layer`), and
+  which edges are stitched — also by clicking the piece's edges. **Remove**
+  (or Delete) puts it back in the layout. Every edit marks it `source: 'user'`.
+- A new placement stitches every edge but the top-most one (the mouth).
+- `utils/placement.ts` (`placementMatrix`) is the one transform both the
+  Assembly view and the 3D drape use: mirror in x (optional), rotate about the
+  piece's bbox centre (canvas axes, y down), translate.
+- Unlabelled edges are named by where they lie ("top edge", "left edge").
+- Reducer actions: `ADD_PLACEMENT`, `UPDATE_PLACEMENT` (optional `tag`: one undo
+  step per drag / rotate), `DELETE_PLACEMENT`.
+
 ## How seams reach the 3D drape
 
 - `pieceGeometry.ts` outline edges carry `base` (the element id), `span` (the
