@@ -4,6 +4,7 @@ import { snap, SNAP_COLORS, screenToCm } from '../snapping/snapEngine'
 import type { SnapResult, SnapResult as SR } from '../snapping/snapEngine'
 import type { CanvasElement, PatternPiece, Point } from '../types'
 import { transformPieceElements } from '../utils/pieceTransforms'
+import { downloadPsnap, loadPsnapAction, toPsnap } from '../utils/psnap'
 
 let _idSeq = 0
 function genId() { return `el-${++_idSeq}-${Date.now()}` }
@@ -374,40 +375,15 @@ export default function Canvas() {
   useEffect(() => { piecesRef.current = pieces }, [pieces])
   const selectedPieceIdRef = useRef(selectedPieceId)
   useEffect(() => { selectedPieceIdRef.current = selectedPieceId }, [selectedPieceId])
-  const measurementsRef = useRef(state.measurements)
-  useEffect(() => { measurementsRef.current = state.measurements }, [state.measurements])
 
   // Save / load helpers
-  const savePattern = useCallback(() => {
-    const data = {
-      version: 1,
-      elements: elementsRef.current,
-      pieces: piecesRef.current,
-      measurements: measurementsRef.current,
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'pattern.psnap'
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [])
+  const stateRef = useRef(state)
+  useEffect(() => { stateRef.current = state }, [state])
+  const savePattern = useCallback(() => downloadPsnap(toPsnap(stateRef.current)), [])
 
   const loadPattern = useCallback((json: string) => {
     try {
-      const data = JSON.parse(json)
-      if (!data.elements || !Array.isArray(data.elements)) throw new Error('Invalid .psnap file')
-      dispatch({
-        type: 'LOAD_STATE',
-        elements: data.elements,
-        pieces: data.pieces ?? [],
-        measurements: data.measurements ?? {},
-        connections: data.connections ?? [],
-        instructions: data.instructions ?? null,
-        lastFeatures: data.lastFeatures ?? null,
-        lastMeasurements: data.lastMeasurements ?? null,
-      })
+      dispatch(loadPsnapAction(json))
     } catch {
       alert('Failed to load pattern file.')
     }

@@ -705,6 +705,7 @@ export default function AIAssistModal({ onClose, onGenerated }: Props) {
         pieces: psnap.pieces ?? [],
         measurements: psnap.measurements ?? {},
         connections: psnap.connections ?? [],
+        placements: psnap.placements ?? [],
       })
 
       // Cache features/measurements so the Instructions panel can generate on demand

@@ -52,6 +52,7 @@ export default function RefinePhotoModal({ ctx, onClose }: {
         pieces: r.psnap.pieces ?? [],
         measurements: r.psnap.measurements ?? {},
         connections: r.psnap.connections ?? [],
+        placements: r.psnap.placements ?? [],
         // Preserve state LOAD_STATE would otherwise reset to null.
         instructions: state.instructions,
         lastFeatures: state.lastFeatures,

@@ -171,3 +171,27 @@ describe('body profile', () => {
     expect(reducer(deleted, { type: 'UNDO' }).bodyProfile.overrides.hip).toBe(110)
   })
 })
+
+describe('placements', () => {
+  const pocket = { id: 'PL1', pieceId: 'P2', hostId: 'P1', transform: { dx: 3, dy: 4, rotation: 0 }, stitched: ['L2', 'Y1'] }
+
+  it('go with a deleted piece, as host or as the placed piece', () => {
+    const s = { ...baseState(), placements: [pocket] }
+    expect(reducer(s, { type: 'DELETE_PIECE', id: 'P1' }).placements).toEqual([])
+    expect(reducer(s, { type: 'REMOVE_SIDE_FROM_PIECE', pieceId: 'P1', elementId: 'L1' }).placements).toEqual([])
+  })
+
+  it('stop stitching along a deleted edge', () => {
+    const s = reducer({ ...baseState(), placements: [pocket] }, { type: 'DELETE_ELEMENTS', ids: ['L2'] })
+    expect(s.placements[0].stitched).toEqual(['Y1'])
+  })
+
+  it('are versioned with undo and loaded by LOAD_STATE', () => {
+    const loaded = reducer(initialState, {
+      type: 'LOAD_STATE', elements: baseState().elements, pieces: baseState().pieces, measurements: {}, placements: [pocket],
+    })
+    expect(loaded.placements).toEqual([pocket])
+    const deleted = reducer(loaded, { type: 'DELETE_PIECE', id: 'P1' })
+    expect(reducer(deleted, { type: 'UNDO' }).placements).toEqual([pocket])
+  })
+})

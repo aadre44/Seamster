@@ -32,7 +32,7 @@
 ### Frontend
 
 #### App Shell · `frontend/src/App.tsx`
-**Role:** Top-level layout — header (AI Assist / Instructions / Assembly buttons, ModelToggle), tool/canvas/sidebar rows, status bar; also owns `.psnap` save/open and the PDF-export fetch.
+**Role:** Top-level layout — header (Pattern | Assembly | 3D Body view tabs, AI Assist / Instructions buttons, ModelToggle), tool/canvas/sidebar rows, status bar; also owns the Save/Open buttons (format in `utils/psnap.ts`) and the PDF-export fetch.
 **Inputs:** User clicks; editor state via `useEditor`.
 **Outputs:** Rendered app; `LOAD_STATE` dispatches; downloads (`.psnap`, PDF).
 **Depends on:** Editor Context, Canvas, Toolbar, Properties Panel, Measurement Panel, AI Assist Modal, Instructions Panel, Assembly View, Model Toggle, SVG Export, `POST /api/export/pdf`.

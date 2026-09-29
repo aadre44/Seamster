@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
-import type { CanvasElement, EditorSnapshot, EditorState, GarmentFeatures, Measurements, PatternPiece, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
+import type { CanvasElement, EditorSnapshot, EditorState, GarmentFeatures, Measurements, PatternPiece, Placement, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
 import { mirrorPiece } from '../utils/pieceTransforms'
 import type { BodyField, BodyShapePreset } from '../three/types'
 import { DEFAULT_BODY_PROFILE } from '../three/bodyRegions'
@@ -26,7 +26,7 @@ type Action =
   | { type: 'LIVE_UPDATE_ELEMENTS'; elements: CanvasElement[] }
   | { type: 'REMOVE_SIDE_FROM_PIECE'; pieceId: string; elementId: string }
   | { type: 'MIRROR_PIECE'; pieceId: string; op: 'flipH' | 'flipV' }
-  | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; connections?: SeamConnection[]; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
+  | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; connections?: SeamConnection[]; placements?: Placement[]; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
   | { type: 'SET_INSTRUCTIONS'; instructions: SewingInstructions | null; loading: boolean; features?: GarmentFeatures; measurements?: Measurements }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
   | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
@@ -42,6 +42,7 @@ const initialState: EditorState = {
   pieces: [],
   measurements: {},
   connections: [],
+  placements: [],
   selectedIds: [],
   selectedPieceId: null,
   activeTool: 'select',
@@ -63,7 +64,15 @@ const initialState: EditorState = {
 }
 
 function snapshot(state: EditorState): EditorSnapshot {
-  return { elements: state.elements, pieces: state.pieces, connections: state.connections }
+  return { elements: state.elements, pieces: state.pieces, connections: state.connections, placements: state.placements }
+}
+
+// Seams and placements that involve a piece being removed go with it.
+function withoutPiece(state: EditorState, pieceId: string): Pick<EditorState, 'connections' | 'placements'> {
+  return {
+    connections: state.connections.filter(c => c.from.pieceId !== pieceId && c.to.pieceId !== pieceId),
+    placements: state.placements.filter(p => p.pieceId !== pieceId && p.hostId !== pieceId),
+  }
 }
 
 // Push the current state onto the undo stack (before applying a mutation).
@@ -119,11 +128,14 @@ function reducer(state: EditorState, action: Action): EditorState {
     case 'DELETE_ELEMENTS': {
       const ids = new Set(action.ids)
       const newElements = state.elements.filter(el => !ids.has(el.id))
-      // Drop connections whose edge no longer exists
+      // Drop connections whose edge no longer exists (and stitching along it)
       const newConnections = state.connections.filter(
         c => !ids.has(c.from.edgeId) && !ids.has(c.to.edgeId)
       )
-      return { ...state, ...pushUndo(state), elements: newElements, connections: newConnections, selectedIds: [] }
+      const newPlacements = state.placements.map(p =>
+        p.stitched.some(id => ids.has(id)) ? { ...p, stitched: p.stitched.filter(id => !ids.has(id)) } : p
+      )
+      return { ...state, ...pushUndo(state), elements: newElements, connections: newConnections, placements: newPlacements, selectedIds: [] }
     }
 
     case 'SET_SELECTED':
@@ -156,15 +168,12 @@ function reducer(state: EditorState, action: Action): EditorState {
       const newElements = state.elements.filter(
         el => !outlineIds.has(el.id) && !('pieceId' in el && el.pieceId === action.id)
       )
-      const newConnections = state.connections.filter(
-        c => c.from.pieceId !== action.id && c.to.pieceId !== action.id
-      )
       return {
         ...state,
         ...pushUndo(state),
         elements: newElements,
         pieces: state.pieces.filter(p => p.id !== action.id),
-        connections: newConnections,
+        ...withoutPiece(state, action.id),
         selectedPieceId: state.selectedPieceId === action.id ? null : state.selectedPieceId,
       }
     }
@@ -197,15 +206,12 @@ function reducer(state: EditorState, action: Action): EditorState {
       const updatedElements = state.elements.map(el =>
         piece.elementIds.includes(el.id) ? { ...el, pieceId: undefined } : el
       )
-      const newConnections = state.connections.filter(
-        c => c.from.pieceId !== action.pieceId && c.to.pieceId !== action.pieceId
-      )
       return {
         ...state,
         ...pushUndo(state),
         elements: updatedElements,
         pieces: state.pieces.filter(p => p.id !== action.pieceId),
-        connections: newConnections,
+        ...withoutPiece(state, action.pieceId),
         selectedPieceId: state.selectedPieceId === action.pieceId ? null : state.selectedPieceId,
       }
     }
@@ -231,6 +237,7 @@ function reducer(state: EditorState, action: Action): EditorState {
         pieces: action.pieces,
         measurements: action.measurements,
         connections: action.connections ?? [],
+        placements: action.placements ?? [],
         instructions: action.instructions ?? null,
         lastFeatures: action.lastFeatures ?? null,
         lastMeasurements: action.lastMeasurements ?? null,
@@ -280,6 +287,7 @@ function reducer(state: EditorState, action: Action): EditorState {
         elements: prev.elements,
         pieces: prev.pieces,
         connections: prev.connections,
+        placements: prev.placements,
         undoStack: state.undoStack.slice(0, -1),
         redoStack: [snapshot(state), ...state.redoStack].slice(0, MAX_UNDO),
         selectedIds: [],
@@ -297,6 +305,7 @@ function reducer(state: EditorState, action: Action): EditorState {
         elements: next.elements,
         pieces: next.pieces,
         connections: next.connections,
+        placements: next.placements,
         undoStack: [...state.undoStack, snapshot(state)].slice(-MAX_UNDO),
         redoStack: state.redoStack.slice(1),
         selectedIds: [],

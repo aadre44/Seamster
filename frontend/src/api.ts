@@ -15,7 +15,7 @@ import type {
   GarmentFeatures,
   Measurements,
   PatternPiece,
-  SeamConnection,
+  Placement, SeamConnection,
   SewingInstructions,
   ShapeMode,
 } from './types'
@@ -64,6 +64,7 @@ export interface GeneratedPattern {
   pieces?: PatternPiece[]
   measurements?: Record<string, number>
   connections?: SeamConnection[]
+  placements?: Placement[]
   notice?: string
 }
 

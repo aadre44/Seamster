@@ -54,10 +54,37 @@ export interface AnchorPointElement {
 
 export type CanvasElement = LineElement | CurveElement | GrainLineElement | NotchElement | AnchorPointElement
 
+// One side of a seam. `range` sews only part of the edge (fractions of its
+// length, default the whole edge); `side` picks one copy of a cut-2 or on-fold
+// piece (default: both, each sewn on its own side of the body).
+export interface SeamEnd {
+  pieceId: string
+  edgeId: string
+  range?: [number, number]
+  side?: 'left' | 'right'
+}
+
+export type AttachmentSource = 'inferred' | 'user'
+
 export interface SeamConnection {
   label: string
-  from: { pieceId: string; edgeId: string }
-  to: { pieceId: string; edgeId: string }
+  from: SeamEnd
+  to: SeamEnd
+  reversed?: boolean // user override; by default the direction is taken from the 3D geometry
+  source?: AttachmentSource
+}
+
+// A piece applied onto another (patch pocket, flap, appliqué). `transform`
+// maps the piece's canvas coordinates into the host's canvas coordinates:
+// optional mirror in x, then rotate (degrees) about the piece's bbox centre, then translate.
+export interface Placement {
+  id: string
+  pieceId: string
+  hostId: string
+  transform: { dx: number; dy: number; rotation: number; flip?: boolean }
+  side?: 'left' | 'right' // default: both copies of the host
+  stitched: string[] // edge ids sewn down to the host; the rest stay open
+  source?: AttachmentSource
 }
 
 export interface PatternPiece {
@@ -74,6 +101,9 @@ export interface PatternPiece {
   // Non-engine pieces render amber on the canvas and offer "Save as template".
   source?: string
   detail?: string // the detail token that produced a non-engine piece
+  // Which side of the garment the piece ends up on once sewn: facings, fly
+  // facings and pocket bags sit inside. Default: inferred from the name.
+  layer?: 'outer' | 'inside'
 }
 
 export type ToolType = 'select' | 'line' | 'curve' | 'seam-allowance' | 'grain-line' | 'notch' | 'point' | 'eraser'
@@ -87,6 +117,7 @@ export interface EditorSnapshot {
   elements: CanvasElement[]
   pieces: PatternPiece[]
   connections: SeamConnection[]
+  placements: Placement[]
 }
 
 export interface EditorState {
@@ -94,6 +125,7 @@ export interface EditorState {
   pieces: PatternPiece[]
   measurements: Record<string, number>
   connections: SeamConnection[]
+  placements: Placement[]
   selectedIds: string[]
   selectedPieceId: string | null
   activeTool: ToolType

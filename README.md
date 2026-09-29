@@ -93,7 +93,7 @@ Snap priority: endpoint > midpoint > grid > angle.
 
 ## Assembly View
 
-After generating a pattern with AI Assist, an **Assembly View** button appears in the header. Click it to replace the canvas with a view showing how the pieces connect.
+The header tabs **Pattern | Assembly | 3D Body** switch the main view; the Pattern tab always takes you back to the editor. **Assembly** shows how the pieces connect (it is disabled until the canvas has pattern pieces).
 
 - **Flat / Assembly mode** — pieces are arranged edge-to-edge using BFS seam alignment. Each piece is rotated and positioned so its shared seam edge sits flush against the neighbouring piece, letting you visualise the 3D construction at a glance. This mode activates automatically when the pattern has `connections` data.
 - **Grid mode** — pieces are laid out in a grid. Dashed arcs connect matching seam edges across pieces. Toggle between modes with the button at the top-right of the view.
@@ -116,13 +116,13 @@ Seam colour coding:
 | yoke_seam | Purple |
 | fold lines | Light grey (dashed) |
 
-Assembly View is only shown when the canvas has at least one pattern piece. Connections are computed automatically by the backend when generating a pattern and stored in the `.psnap` file.
+Connections are computed automatically by the backend when generating a pattern and saved in the `.psnap` file, together with placements (pieces such as pockets applied onto another piece). Assembly editing is being built — see [Docs/assembly.md](Docs/assembly.md).
 
 ---
 
 ## 3D Body View
 
-The **🧍 3D Body** header button replaces the canvas with a 3D mannequin built from body measurements. It's available at any time, with or without a pattern. Click the button again to return to the editor.
+The **🧍 3D Body** tab replaces the canvas with a 3D mannequin built from body measurements. It's available at any time, with or without a pattern. Click the **Pattern** tab to return to the editor.
 
 - **Orbit** — drag to rotate, scroll to zoom, right-drag to pan.
 - **Body panel** (top of the right sidebar while the view is open) — sliders for height, bust, underbust, waist, waist-to-hip, hip, neck, shoulder width, arm length, upper arm, wrist, inseam, thigh, knee, calf and ankle. The mannequin reshapes live as you drag.
@@ -421,11 +421,11 @@ Seamster/
 
 ### File format (`.psnap`)
 
-JSON with top-level keys: `version`, `elements`, `pieces`, `measurements`, `connections`.
+JSON with top-level keys: `version`, `elements`, `pieces`, `measurements`, `connections`, `placements` (optional; plus `instructions`, `lastFeatures`, `lastMeasurements` when present). Every save path writes the same document (`frontend/src/utils/psnap.ts`).
 
 - Each `line` element has `isFold: boolean` and `seamLabel: string` fields.
 - Each `curve` element has a `seamLabel: string` field.
-- `connections` is an array of `{ label, from: { pieceId, edgeId }, to: { pieceId, edgeId } }` objects — the engine's stitch map, built from edge `seamLabel`s. A shared label alone is not enough; pairing depends on the kind of seam. **Construction seams** (`side_seam`, `shoulder`, `inseam`, `crotch`, `sleeve_seam`, `center_front/back`) join front↔back panels of one section and must match in length (±15% / 1.5 cm), so a bodice side seam never pairs with a skirt side seam. **Horizontal joins** (`waist_seam`, `yoke_seam`) pair same-side pieces (front bodice ↔ front skirt). **Openings** (`hem`, `neckline`, `armhole`, `waist`, `wrist`, novel attachment labels) pair a garment shell with a *different* shell (sleeve, collar, cuff, waistband, facing, flounce) and never front↔back, so hem↔hem is never a seam. Multi-edge seams (e.g. the trouser side seam, drawn as 4 segments per leg) are paired 1:1 in outline order — never as a cross-product — with reversed traversal detected by segment-length mismatch; each edge belongs to at most one connection per opposing piece.
+- `connections` is an array of `{ label, from: { pieceId, edgeId, range?, side? }, to: {…}, reversed?, source? }` objects (optional fields: see [Docs/assembly.md](Docs/assembly.md)) — the engine's stitch map, built from edge `seamLabel`s. A shared label alone is not enough; pairing depends on the kind of seam. **Construction seams** (`side_seam`, `shoulder`, `inseam`, `crotch`, `sleeve_seam`, `center_front/back`) join front↔back panels of one section and must match in length (±15% / 1.5 cm), so a bodice side seam never pairs with a skirt side seam. **Horizontal joins** (`waist_seam`, `yoke_seam`) pair same-side pieces (front bodice ↔ front skirt). **Openings** (`hem`, `neckline`, `armhole`, `waist`, `wrist`, novel attachment labels) pair a garment shell with a *different* shell (sleeve, collar, cuff, waistband, facing, flounce) and never front↔back, so hem↔hem is never a seam. Multi-edge seams (e.g. the trouser side seam, drawn as 4 segments per leg) are paired 1:1 in outline order — never as a cross-product — with reversed traversal detected by segment-length mismatch; each edge belongs to at most one connection per opposing piece.
 
 ---
 
@@ -443,6 +443,7 @@ Detailed technical docs live in [Docs/](Docs/):
 | [Docs/canvas-decisions.md](Docs/canvas-decisions.md) | **Canvas design decisions** — coordinate system, all tools, snapping, line/curve creation, selection, moving, node/endpoint handles, undo, keyboard shortcuts |
 | [Docs/presentation.md](Docs/presentation.md) | **Presentation overview** — project summary, tech-stack rationale, shirt photo→export flow chart, 3 problems faced, future improvements (Mermaid diagrams) |
 | [Docs/3d-body.md](Docs/3d-body.md) | **3D body & garment fit** — procedural avatar (ellipse loft, landmark table, shape presets, monotone smoothing), body-profile resolution, rendering notes, tests, and the fit-preview / drape roadmap |
+| [Docs/assembly.md](Docs/assembly.md) | **Assembly** — seam connections and placements data model, how seams are inferred and edited, how they reach the 3D drape |
 | [Docs/pattern-piece-construction-notes.md](Docs/pattern-piece-construction-notes.md) | **Construction nuances per garment/piece** — on-fold vs cut-2, the strap/back/front-opening topology axes (halter split vs non-split, shoulderless = sleeveless), and the source of truth for piece-generation rules |
 
 ---
