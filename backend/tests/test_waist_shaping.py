@@ -87,3 +87,14 @@ def test_waist_length_shirt_hem_stays_at_the_waist():
     front = block["front_bodice"]
     bottom = max(p.y for p in front.outline)
     assert max(p.x for p in front.outline if abs(p.y - bottom) < 1e-6) < (98.0 + 4.0) / 4
+
+
+@pytest.mark.parametrize("fit", ["shift", "a_line", "fit_and_flare", "empire"])
+@pytest.mark.parametrize("category,waist_to_hem", [("mini", 42.0), ("knee", 60.0), ("midi", 85.0)])
+def test_dress_skirt_reaches_the_length_category(fit, category, waist_to_hem):
+    """Dress lengths are waist-to-hem: a knee dress's skirt must reach the knee,
+    not stop at the hip (which flared the hem out like a peplum)."""
+    block = build_dress_block(_m(), fit_style=fit, length_category=category)
+    skirt_len = max(p.y for p in block["front_skirt"].outline)
+    empire_drop = 10.0 if fit == "empire" else 0.0
+    assert math.isclose(skirt_len, waist_to_hem + empire_drop, abs_tol=0.5)

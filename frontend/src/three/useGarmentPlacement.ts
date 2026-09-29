@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
-import type { GarmentCopyData, GarmentJob, GarmentMessage } from './garmentWorker'
+import type { GarmentJob, GarmentMessage, GarmentPieceData } from './garmentWorker'
 import type { ResolvedBody } from './types'
 
 export interface GarmentState {
   placementId: number // changes when the topology (pieces/copies) changes
   frame: number // changes whenever positions change
-  pieces: { id: string; name: string; copies: GarmentCopyData[] }[]
+  pieces: GarmentPieceData[]
   skipped: { id: string; name: string; reason: string }[]
   draping: boolean
   error?: string

@@ -143,7 +143,7 @@ Frames render on demand, when the camera moves or the mesh changes. React contex
 
 ## Garment fit preview (phase 2)
 
-In the 3D view, **Show garment** places the current pattern on the body; **Fit map** colours bands where the garment is **snug** (amber, no ease) or **tight** (red, fabric smaller than the body). Placement runs in a Web Worker (`garmentWorker.ts`). Only the newest request is built; while it builds, a spinner shows in the panel.
+In the 3D view, **Show garment** places the current pattern on the body; **Fit map** colours bands where the garment is **snug** (amber, no ease) or **tight** (red, fabric smaller than the body). The garment is drawn in one fabric colour with its sewn seams (connections, darts, centre seams) as thin lines; **Color by piece** switches to one colour per piece. Placement runs in a Web Worker (`garmentWorker.ts`). Only the newest request is built; while it builds, a spinner shows in the panel.
 
 ### Body-agnostic by design
 The garment code talks to the body only through **`BodyQuery`** (`bodyQuery.ts`):

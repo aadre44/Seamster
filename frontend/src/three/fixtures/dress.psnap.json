@@ -1,1 +1,625 @@
-{"version": 1, "elements": [{"id": "690c3fca-ab09-4dcd-af3b-b9c6e803ebe0", "type": "curve", "start": {"x": 2.0, "y": 14.7}, "cp1": {"x": 7.6335, "y": 14.7}, "cp2": {"x": 12.2, "y": 9.0142}, "end": {"x": 12.2, "y": 2.0}, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "seamLabel": "neckline"}, {"id": "752de825-6158-4519-afce-2382f99bf891", "type": "line", "start": {"x": 12.2, "y": 2.0}, "end": {"x": 21.5, "y": 3.5}, "isFold": false, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "seamLabel": "shoulder"}, {"id": "32f21e71-0e7d-49b3-a88d-d029fe7ab9b8", "type": "line", "start": {"x": 21.5, "y": 3.5}, "end": {"x": 26.0, "y": 29.0}, "isFold": false, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "seamLabel": "armhole"}, {"id": "9f0d6d92-c1ec-4873-83ea-08f0e915ed0e", "type": "line", "start": {"x": 26.0, "y": 29.0}, "end": {"x": 24.5, "y": 47.0}, "isFold": false, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "seamLabel": "side_seam"}, {"id": "93a4154f-dae4-4f6d-8088-082ca05e027b", "type": "line", "start": {"x": 24.5, "y": 47.0}, "end": {"x": 2.0, "y": 47.0}, "isFold": false, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "seamLabel": "waist_seam"}, {"id": "c1620328-759b-434b-ab8f-ef0bf144754f", "type": "line", "start": {"x": 2.0, "y": 47.0}, "end": {"x": 2.0, "y": 14.7}, "isFold": true, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "seamLabel": "center_front"}, {"id": "ea0eddd6-3d27-45a3-8646-879a4da5c5de", "type": "grain-line", "start": {"x": 14.0, "y": 15.5}, "end": {"x": 14.0, "y": 40.25}, "pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615"}, {"id": "cc09772e-e7ca-4749-8f64-ea6bf5bd677f", "type": "line", "start": {"x": 31.0, "y": 2.0}, "end": {"x": 54.5, "y": 2.0}, "isFold": false, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "seamLabel": "waist_seam"}, {"id": "f8e78348-9d6e-4c17-b584-5a6e24e6542b", "type": "line", "start": {"x": 54.5, "y": 2.0}, "end": {"x": 56.0, "y": 22.0}, "isFold": false, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "seamLabel": "side_seam"}, {"id": "bfb86ba0-eb7b-403d-b9bf-15ca619f7a49", "type": "line", "start": {"x": 56.0, "y": 22.0}, "end": {"x": 66.0, "y": 27.0}, "isFold": false, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "seamLabel": "side_seam"}, {"id": "58f81fd2-c8a6-4b4f-84a8-b93b36021a1a", "type": "line", "start": {"x": 66.0, "y": 27.0}, "end": {"x": 31.0, "y": 27.0}, "isFold": false, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "seamLabel": "hem"}, {"id": "641f6c5a-bc44-49b0-918f-7a4166c4dd57", "type": "line", "start": {"x": 31.0, "y": 27.0}, "end": {"x": 31.0, "y": 2.0}, "isFold": true, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "seamLabel": "center_front"}, {"id": "ffa74f33-172e-4f57-824d-fbb05c17a067", "type": "line", "start": {"x": 39.9, "y": 2.0}, "end": {"x": 40.4, "y": 12.0}, "isFold": false, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e"}, {"id": "3179ac25-7cb9-4618-871d-2efe579eb8d0", "type": "line", "start": {"x": 40.9, "y": 2.0}, "end": {"x": 40.4, "y": 12.0}, "isFold": false, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e"}, {"id": "ae8c42c7-7dfc-4981-8aca-e0e9a19c69c8", "type": "grain-line", "start": {"x": 43.5, "y": 7.0}, "end": {"x": 43.5, "y": 23.25}, "pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e"}, {"id": "1c68cfc5-fced-4fbf-854b-7f1c3cc2986b", "type": "line", "start": {"x": 71.0, "y": 2.0}, "end": {"x": 95.0, "y": 2.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "seamLabel": "waist_seam"}, {"id": "82c459b3-fee7-44bb-961a-2d344e50e8a5", "type": "line", "start": {"x": 95.0, "y": 2.0}, "end": {"x": 96.0, "y": 22.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "seamLabel": "side_seam"}, {"id": "3e089baa-7b87-4d05-9cc0-492e32f6b76d", "type": "line", "start": {"x": 96.0, "y": 22.0}, "end": {"x": 106.0, "y": 27.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "seamLabel": "side_seam"}, {"id": "26249ace-74f8-4660-ac3d-07b707ea8912", "type": "line", "start": {"x": 106.0, "y": 27.0}, "end": {"x": 71.0, "y": 27.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "seamLabel": "hem"}, {"id": "6f056081-dd12-4538-a65d-d30d075855b3", "type": "line", "start": {"x": 71.0, "y": 27.0}, "end": {"x": 71.0, "y": 2.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "seamLabel": "center_back"}, {"id": "94a9b225-c302-4cc1-86ec-4143f8c7c7c2", "type": "line", "start": {"x": 77.825, "y": 2.0}, "end": {"x": 78.2, "y": 15.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117"}, {"id": "e522b3bf-c419-4034-867d-221e8c7ec321", "type": "line", "start": {"x": 78.575, "y": 2.0}, "end": {"x": 78.2, "y": 15.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117"}, {"id": "c9153563-8f0a-48d7-8408-8e71ea2b74f5", "type": "line", "start": {"x": 86.225, "y": 2.0}, "end": {"x": 86.6, "y": 15.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117"}, {"id": "e052eafa-ffb5-4344-810f-6fcce96f56e6", "type": "line", "start": {"x": 86.975, "y": 2.0}, "end": {"x": 86.6, "y": 15.0}, "isFold": false, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117"}, {"id": "36a2e3cf-38df-435c-ac70-3a5595d4e48c", "type": "grain-line", "start": {"x": 83.5, "y": 7.0}, "end": {"x": 83.5, "y": 23.25}, "pieceId": "93434de3-69dc-4326-afee-f91a9726e117"}, {"id": "06214630-3088-42a2-b69b-4e11e43ec86e", "type": "line", "start": {"x": 111.0, "y": 2.0}, "end": {"x": 121.2, "y": 2.0}, "isFold": false, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "seamLabel": "neckline"}, {"id": "fe80d926-596d-4b49-893e-f57a432ef526", "type": "line", "start": {"x": 121.2, "y": 2.0}, "end": {"x": 130.5, "y": 3.5}, "isFold": false, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "seamLabel": "shoulder"}, {"id": "0c991be0-4f6a-430f-a490-29762255f459", "type": "line", "start": {"x": 130.5, "y": 3.5}, "end": {"x": 135.0, "y": 29.0}, "isFold": false, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "seamLabel": "armhole"}, {"id": "1f82c402-a4c3-4884-ac7b-a50fc9b36652", "type": "line", "start": {"x": 135.0, "y": 29.0}, "end": {"x": 133.5, "y": 47.0}, "isFold": false, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "seamLabel": "side_seam"}, {"id": "0cc318a3-1d32-4c06-931c-5c7d1dd17b73", "type": "line", "start": {"x": 133.5, "y": 47.0}, "end": {"x": 111.0, "y": 47.0}, "isFold": false, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "seamLabel": "waist_seam"}, {"id": "1054932a-b83f-4da0-8ad7-e8abc75b3e85", "type": "line", "start": {"x": 111.0, "y": 47.0}, "end": {"x": 111.0, "y": 2.0}, "isFold": true, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "seamLabel": "center_back"}, {"id": "2ed95896-eb41-4fac-b9eb-4b633ae64030", "type": "grain-line", "start": {"x": 123.0, "y": 15.5}, "end": {"x": 123.0, "y": 40.25}, "pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082"}], "pieces": [{"id": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "name": "Front Bodice", "elementIds": ["690c3fca-ab09-4dcd-af3b-b9c6e803ebe0", "752de825-6158-4519-afce-2382f99bf891", "32f21e71-0e7d-49b3-a88d-d029fe7ab9b8", "9f0d6d92-c1ec-4873-83ea-08f0e915ed0e", "93a4154f-dae4-4f6d-8088-082ca05e027b", "c1620328-759b-434b-ab8f-ef0bf144754f"], "cutQty": 2, "onFold": true, "seamAllowance": 1.5, "closed": true, "notes": "front bodice panel; cut on fold at CF; sew to Back Bodice at shoulder seams and side seams; join to Front Skirt at waist seam", "source": "engine"}, {"id": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "name": "Front Skirt", "elementIds": ["cc09772e-e7ca-4749-8f64-ea6bf5bd677f", "f8e78348-9d6e-4c17-b584-5a6e24e6542b", "bfb86ba0-eb7b-403d-b9bf-15ca619f7a49", "58f81fd2-c8a6-4b4f-84a8-b93b36021a1a", "641f6c5a-bc44-49b0-918f-7a4166c4dd57"], "cutQty": 2, "onFold": true, "seamAllowance": 1.5, "closed": true, "notes": "front skirt panel; sew to Back Skirt at side seams; join to Front Bodice at waist seam", "source": "engine"}, {"id": "93434de3-69dc-4326-afee-f91a9726e117", "name": "Back Skirt", "elementIds": ["1c68cfc5-fced-4fbf-854b-7f1c3cc2986b", "82c459b3-fee7-44bb-961a-2d344e50e8a5", "3e089baa-7b87-4d05-9cc0-492e32f6b76d", "26249ace-74f8-4660-ac3d-07b707ea8912", "6f056081-dd12-4538-a65d-d30d075855b3"], "cutQty": 2, "onFold": false, "seamAllowance": 1.5, "closed": true, "notes": "back skirt panel; sew to Front Skirt at side seams; join to Back Bodice at waist seam", "source": "engine"}, {"id": "7b522a3a-4dda-4865-b221-7e34afe26082", "name": "Back Bodice", "elementIds": ["06214630-3088-42a2-b69b-4e11e43ec86e", "fe80d926-596d-4b49-893e-f57a432ef526", "0c991be0-4f6a-430f-a490-29762255f459", "1f82c402-a4c3-4884-ac7b-a50fc9b36652", "0cc318a3-1d32-4c06-931c-5c7d1dd17b73", "1054932a-b83f-4da0-8ad7-e8abc75b3e85"], "cutQty": 2, "onFold": true, "seamAllowance": 1.5, "closed": true, "notes": "back bodice panel cut on fold; center back zip at CB; sew to Front Bodice at shoulder seams and side seams; join to skirt at waist seam", "source": "engine"}], "measurements": {"waist": 74.0, "hip": 98.0, "waistToHip": 20.0, "garmentLength": 100, "bust": 92.0}, "connections": [{"label": "shoulder", "from": {"pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "edgeId": "752de825-6158-4519-afce-2382f99bf891"}, "to": {"pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "edgeId": "fe80d926-596d-4b49-893e-f57a432ef526"}}, {"label": "side_seam", "from": {"pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "edgeId": "9f0d6d92-c1ec-4873-83ea-08f0e915ed0e"}, "to": {"pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "edgeId": "1f82c402-a4c3-4884-ac7b-a50fc9b36652"}}, {"label": "side_seam", "from": {"pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "edgeId": "f8e78348-9d6e-4c17-b584-5a6e24e6542b"}, "to": {"pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "edgeId": "82c459b3-fee7-44bb-961a-2d344e50e8a5"}}, {"label": "side_seam", "from": {"pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "edgeId": "bfb86ba0-eb7b-403d-b9bf-15ca619f7a49"}, "to": {"pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "edgeId": "3e089baa-7b87-4d05-9cc0-492e32f6b76d"}}, {"label": "waist_seam", "from": {"pieceId": "092f4f6c-cf32-4edf-9e2e-e8cd1f007615", "edgeId": "93a4154f-dae4-4f6d-8088-082ca05e027b"}, "to": {"pieceId": "b37febc4-1fad-44f5-af53-bd7ec272c11e", "edgeId": "cc09772e-e7ca-4749-8f64-ea6bf5bd677f"}}, {"label": "waist_seam", "from": {"pieceId": "93434de3-69dc-4326-afee-f91a9726e117", "edgeId": "1c68cfc5-fced-4fbf-854b-7f1c3cc2986b"}, "to": {"pieceId": "7b522a3a-4dda-4865-b221-7e34afe26082", "edgeId": "0cc318a3-1d32-4c06-931c-5c7d1dd17b73"}}]}
+{
+  "version": 1,
+  "elements": [
+    {
+      "id": "ba8fc5a3-9e9f-4bf4-9749-5aebb94402c4",
+      "type": "curve",
+      "start": {
+        "x": 2.0,
+        "y": 14.7
+      },
+      "cp1": {
+        "x": 7.6335,
+        "y": 14.7
+      },
+      "cp2": {
+        "x": 12.2,
+        "y": 9.0142
+      },
+      "end": {
+        "x": 12.2,
+        "y": 2.0
+      },
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "seamLabel": "neckline"
+    },
+    {
+      "id": "9c666e55-abd3-45a1-abc1-1001b4bb522f",
+      "type": "line",
+      "start": {
+        "x": 12.2,
+        "y": 2.0
+      },
+      "end": {
+        "x": 17.25,
+        "y": 3.5
+      },
+      "isFold": false,
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "seamLabel": "shoulder"
+    },
+    {
+      "id": "729a9153-8be8-4864-afb8-09a49fbd6735",
+      "type": "line",
+      "start": {
+        "x": 17.25,
+        "y": 3.5
+      },
+      "end": {
+        "x": 26.0,
+        "y": 29.0
+      },
+      "isFold": false,
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "seamLabel": "armhole"
+    },
+    {
+      "id": "fbf48fed-f92a-48d7-b56f-99ba2500c455",
+      "type": "line",
+      "start": {
+        "x": 26.0,
+        "y": 29.0
+      },
+      "end": {
+        "x": 24.5,
+        "y": 47.0
+      },
+      "isFold": false,
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "seamLabel": "side_seam"
+    },
+    {
+      "id": "ae0a5a1b-27b1-4030-9d1c-2521a522f313",
+      "type": "line",
+      "start": {
+        "x": 24.5,
+        "y": 47.0
+      },
+      "end": {
+        "x": 2.0,
+        "y": 47.0
+      },
+      "isFold": false,
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "seamLabel": "waist_seam"
+    },
+    {
+      "id": "f2cc33f0-56a5-477c-ae74-0b909fec4add",
+      "type": "line",
+      "start": {
+        "x": 2.0,
+        "y": 47.0
+      },
+      "end": {
+        "x": 2.0,
+        "y": 14.7
+      },
+      "isFold": true,
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "seamLabel": "center_front"
+    },
+    {
+      "id": "f1694325-d1db-44ed-a15d-aab1a60e81da",
+      "type": "grain-line",
+      "start": {
+        "x": 14.0,
+        "y": 15.5
+      },
+      "end": {
+        "x": 14.0,
+        "y": 40.25
+      },
+      "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487"
+    },
+    {
+      "id": "7fafb380-6bc5-4f3a-b2d3-5df10f6d36cf",
+      "type": "line",
+      "start": {
+        "x": 31.0,
+        "y": 2.0
+      },
+      "end": {
+        "x": 54.5,
+        "y": 2.0
+      },
+      "isFold": false,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+      "seamLabel": "waist_seam"
+    },
+    {
+      "id": "701c4828-d060-4379-a589-7bb10354e4a1",
+      "type": "line",
+      "start": {
+        "x": 54.5,
+        "y": 2.0
+      },
+      "end": {
+        "x": 56.0,
+        "y": 22.0
+      },
+      "isFold": false,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+      "seamLabel": "side_seam"
+    },
+    {
+      "id": "43d95e4b-e2ae-423d-8998-31f166cdc9a7",
+      "type": "line",
+      "start": {
+        "x": 56.0,
+        "y": 22.0
+      },
+      "end": {
+        "x": 66.0,
+        "y": 62.0
+      },
+      "isFold": false,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+      "seamLabel": "side_seam"
+    },
+    {
+      "id": "9ee3cee1-e5b5-4d3b-b159-ce9e02b36f3c",
+      "type": "line",
+      "start": {
+        "x": 66.0,
+        "y": 62.0
+      },
+      "end": {
+        "x": 31.0,
+        "y": 62.0
+      },
+      "isFold": false,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+      "seamLabel": "hem"
+    },
+    {
+      "id": "552ce4cf-6195-45e9-a62f-c338e750d5df",
+      "type": "line",
+      "start": {
+        "x": 31.0,
+        "y": 62.0
+      },
+      "end": {
+        "x": 31.0,
+        "y": 2.0
+      },
+      "isFold": true,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+      "seamLabel": "center_front"
+    },
+    {
+      "id": "861f9668-dc34-4115-aba3-c12929dbfcd2",
+      "type": "line",
+      "start": {
+        "x": 39.9,
+        "y": 2.0
+      },
+      "end": {
+        "x": 40.4,
+        "y": 12.0
+      },
+      "isFold": false,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734"
+    },
+    {
+      "id": "8695ad82-2c9b-47ca-97ba-d7557eb92492",
+      "type": "line",
+      "start": {
+        "x": 40.9,
+        "y": 2.0
+      },
+      "end": {
+        "x": 40.4,
+        "y": 12.0
+      },
+      "isFold": false,
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734"
+    },
+    {
+      "id": "3f87e501-5d93-41bc-9be9-9bcc6d5081d8",
+      "type": "grain-line",
+      "start": {
+        "x": 43.5,
+        "y": 7.0
+      },
+      "end": {
+        "x": 43.5,
+        "y": 53.0
+      },
+      "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734"
+    },
+    {
+      "id": "6042c5ca-c433-48c3-a5bf-d1fd36f7d921",
+      "type": "line",
+      "start": {
+        "x": 71.0,
+        "y": 2.0
+      },
+      "end": {
+        "x": 95.0,
+        "y": 2.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+      "seamLabel": "waist_seam"
+    },
+    {
+      "id": "4c863e78-a8d5-475b-bd43-3cbf295a3e08",
+      "type": "line",
+      "start": {
+        "x": 95.0,
+        "y": 2.0
+      },
+      "end": {
+        "x": 96.0,
+        "y": 22.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+      "seamLabel": "side_seam"
+    },
+    {
+      "id": "29b061d5-3660-430f-9390-789b363969a3",
+      "type": "line",
+      "start": {
+        "x": 96.0,
+        "y": 22.0
+      },
+      "end": {
+        "x": 106.0,
+        "y": 62.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+      "seamLabel": "side_seam"
+    },
+    {
+      "id": "1662c479-8000-4cdf-a5d8-7fd5559724b3",
+      "type": "line",
+      "start": {
+        "x": 106.0,
+        "y": 62.0
+      },
+      "end": {
+        "x": 71.0,
+        "y": 62.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+      "seamLabel": "hem"
+    },
+    {
+      "id": "4e07c33e-bee4-47bd-9d79-88a1f0acd605",
+      "type": "line",
+      "start": {
+        "x": 71.0,
+        "y": 62.0
+      },
+      "end": {
+        "x": 71.0,
+        "y": 2.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+      "seamLabel": "center_back"
+    },
+    {
+      "id": "159e81c9-4487-4320-b1f9-d0e89b99b704",
+      "type": "line",
+      "start": {
+        "x": 77.825,
+        "y": 2.0
+      },
+      "end": {
+        "x": 78.2,
+        "y": 15.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d"
+    },
+    {
+      "id": "3867d2ff-b84d-4d99-ab6e-3dcb909bc2bc",
+      "type": "line",
+      "start": {
+        "x": 78.575,
+        "y": 2.0
+      },
+      "end": {
+        "x": 78.2,
+        "y": 15.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d"
+    },
+    {
+      "id": "d7e67e2a-305b-4225-9fbd-5ec28bb5db5b",
+      "type": "line",
+      "start": {
+        "x": 86.225,
+        "y": 2.0
+      },
+      "end": {
+        "x": 86.6,
+        "y": 15.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d"
+    },
+    {
+      "id": "498263a1-d769-4ea3-b524-4d0541682383",
+      "type": "line",
+      "start": {
+        "x": 86.975,
+        "y": 2.0
+      },
+      "end": {
+        "x": 86.6,
+        "y": 15.0
+      },
+      "isFold": false,
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d"
+    },
+    {
+      "id": "d32645d6-bbcc-4737-9fff-34d7a07d1557",
+      "type": "grain-line",
+      "start": {
+        "x": 83.5,
+        "y": 7.0
+      },
+      "end": {
+        "x": 83.5,
+        "y": 53.0
+      },
+      "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d"
+    },
+    {
+      "id": "fbd60ad9-fde8-44c8-947e-83896cfeff71",
+      "type": "line",
+      "start": {
+        "x": 111.0,
+        "y": 2.0
+      },
+      "end": {
+        "x": 121.2,
+        "y": 2.0
+      },
+      "isFold": false,
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "seamLabel": "neckline"
+    },
+    {
+      "id": "d403e4a4-fbac-4e36-9a2c-4bc2f29f211f",
+      "type": "line",
+      "start": {
+        "x": 121.2,
+        "y": 2.0
+      },
+      "end": {
+        "x": 126.25,
+        "y": 3.5
+      },
+      "isFold": false,
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "seamLabel": "shoulder"
+    },
+    {
+      "id": "065f2a4d-10fa-49af-9bc3-64342ec2108b",
+      "type": "line",
+      "start": {
+        "x": 126.25,
+        "y": 3.5
+      },
+      "end": {
+        "x": 135.0,
+        "y": 29.0
+      },
+      "isFold": false,
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "seamLabel": "armhole"
+    },
+    {
+      "id": "6b291095-4e72-473b-8331-42a66c003618",
+      "type": "line",
+      "start": {
+        "x": 135.0,
+        "y": 29.0
+      },
+      "end": {
+        "x": 133.5,
+        "y": 47.0
+      },
+      "isFold": false,
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "seamLabel": "side_seam"
+    },
+    {
+      "id": "7500ffd2-b061-4c70-9058-520ac75b94b9",
+      "type": "line",
+      "start": {
+        "x": 133.5,
+        "y": 47.0
+      },
+      "end": {
+        "x": 111.0,
+        "y": 47.0
+      },
+      "isFold": false,
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "seamLabel": "waist_seam"
+    },
+    {
+      "id": "5c7c9d66-f350-4f0d-82fd-f508ccbf21a0",
+      "type": "line",
+      "start": {
+        "x": 111.0,
+        "y": 47.0
+      },
+      "end": {
+        "x": 111.0,
+        "y": 2.0
+      },
+      "isFold": true,
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "seamLabel": "center_back"
+    },
+    {
+      "id": "4a84b832-6ab9-4db5-a3e5-70c1b4754234",
+      "type": "grain-line",
+      "start": {
+        "x": 123.0,
+        "y": 15.5
+      },
+      "end": {
+        "x": 123.0,
+        "y": 40.25
+      },
+      "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb"
+    }
+  ],
+  "pieces": [
+    {
+      "id": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+      "name": "Front Bodice",
+      "elementIds": [
+        "ba8fc5a3-9e9f-4bf4-9749-5aebb94402c4",
+        "9c666e55-abd3-45a1-abc1-1001b4bb522f",
+        "729a9153-8be8-4864-afb8-09a49fbd6735",
+        "fbf48fed-f92a-48d7-b56f-99ba2500c455",
+        "ae0a5a1b-27b1-4030-9d1c-2521a522f313",
+        "f2cc33f0-56a5-477c-ae74-0b909fec4add"
+      ],
+      "cutQty": 2,
+      "onFold": true,
+      "seamAllowance": 1.5,
+      "closed": true,
+      "notes": "front bodice panel; cut on fold at CF; sew to Back Bodice at shoulder seams and side seams; join to Front Skirt at waist seam",
+      "source": "engine"
+    },
+    {
+      "id": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+      "name": "Front Skirt",
+      "elementIds": [
+        "7fafb380-6bc5-4f3a-b2d3-5df10f6d36cf",
+        "701c4828-d060-4379-a589-7bb10354e4a1",
+        "43d95e4b-e2ae-423d-8998-31f166cdc9a7",
+        "9ee3cee1-e5b5-4d3b-b159-ce9e02b36f3c",
+        "552ce4cf-6195-45e9-a62f-c338e750d5df"
+      ],
+      "cutQty": 2,
+      "onFold": true,
+      "seamAllowance": 1.5,
+      "closed": true,
+      "notes": "front skirt panel; sew to Back Skirt at side seams; join to Front Bodice at waist seam",
+      "source": "engine"
+    },
+    {
+      "id": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+      "name": "Back Skirt",
+      "elementIds": [
+        "6042c5ca-c433-48c3-a5bf-d1fd36f7d921",
+        "4c863e78-a8d5-475b-bd43-3cbf295a3e08",
+        "29b061d5-3660-430f-9390-789b363969a3",
+        "1662c479-8000-4cdf-a5d8-7fd5559724b3",
+        "4e07c33e-bee4-47bd-9d79-88a1f0acd605"
+      ],
+      "cutQty": 2,
+      "onFold": false,
+      "seamAllowance": 1.5,
+      "closed": true,
+      "notes": "back skirt panel; sew to Front Skirt at side seams; join to Back Bodice at waist seam",
+      "source": "engine"
+    },
+    {
+      "id": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+      "name": "Back Bodice",
+      "elementIds": [
+        "fbd60ad9-fde8-44c8-947e-83896cfeff71",
+        "d403e4a4-fbac-4e36-9a2c-4bc2f29f211f",
+        "065f2a4d-10fa-49af-9bc3-64342ec2108b",
+        "6b291095-4e72-473b-8331-42a66c003618",
+        "7500ffd2-b061-4c70-9058-520ac75b94b9",
+        "5c7c9d66-f350-4f0d-82fd-f508ccbf21a0"
+      ],
+      "cutQty": 2,
+      "onFold": true,
+      "seamAllowance": 1.5,
+      "closed": true,
+      "notes": "back bodice panel cut on fold; center back zip at CB; sew to Front Bodice at shoulder seams and side seams; join to skirt at waist seam",
+      "source": "engine"
+    }
+  ],
+  "measurements": {
+    "waist": 74.0,
+    "hip": 98.0,
+    "waistToHip": 20.0,
+    "garmentLength": 100.0,
+    "bust": 92.0
+  },
+  "connections": [
+    {
+      "label": "side_seam",
+      "from": {
+        "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+        "edgeId": "fbf48fed-f92a-48d7-b56f-99ba2500c455"
+      },
+      "to": {
+        "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+        "edgeId": "6b291095-4e72-473b-8331-42a66c003618"
+      }
+    },
+    {
+      "label": "side_seam",
+      "from": {
+        "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+        "edgeId": "701c4828-d060-4379-a589-7bb10354e4a1"
+      },
+      "to": {
+        "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+        "edgeId": "4c863e78-a8d5-475b-bd43-3cbf295a3e08"
+      }
+    },
+    {
+      "label": "side_seam",
+      "from": {
+        "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+        "edgeId": "43d95e4b-e2ae-423d-8998-31f166cdc9a7"
+      },
+      "to": {
+        "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+        "edgeId": "29b061d5-3660-430f-9390-789b363969a3"
+      }
+    },
+    {
+      "label": "shoulder",
+      "from": {
+        "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+        "edgeId": "9c666e55-abd3-45a1-abc1-1001b4bb522f"
+      },
+      "to": {
+        "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+        "edgeId": "d403e4a4-fbac-4e36-9a2c-4bc2f29f211f"
+      }
+    },
+    {
+      "label": "waist_seam",
+      "from": {
+        "pieceId": "e1caa1d9-8dd2-4cb3-942c-404ecd19a487",
+        "edgeId": "ae0a5a1b-27b1-4030-9d1c-2521a522f313"
+      },
+      "to": {
+        "pieceId": "a934911f-3afb-4fa5-9412-9b7bcff34734",
+        "edgeId": "7fafb380-6bc5-4f3a-b2d3-5df10f6d36cf"
+      }
+    },
+    {
+      "label": "waist_seam",
+      "from": {
+        "pieceId": "09e4fb53-4d5a-4b78-a049-d30c4eb16f2d",
+        "edgeId": "6042c5ca-c433-48c3-a5bf-d1fd36f7d921"
+      },
+      "to": {
+        "pieceId": "0c0557d3-bfd2-4e65-af41-e4c22153bbcb",
+        "edgeId": "7500ffd2-b061-4c70-9058-520ac75b94b9"
+      }
+    }
+  ]
+}

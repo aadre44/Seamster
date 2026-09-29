@@ -80,17 +80,21 @@ function KeyLight({ height }: { height: number }) {
   )
 }
 
-// Soft fabric colours, one per piece.
-const FABRIC = ['#7c9cc9', '#c98f7c', '#86b59a', '#b59ac9', '#c9b87c', '#7cb8c9', '#c97ca4', '#9aa0b5']
+// One fabric colour for the whole garment, like real cloth; optional distinct
+// colours per piece for inspecting how the pattern is assembled.
+const FABRIC = '#7f9cc9'
+const PIECE_COLORS = ['#7c9cc9', '#c98f7c', '#86b59a', '#b59ac9', '#c9b87c', '#7cb8c9', '#c97ca4', '#9aa0b5']
 const SNUG = new THREE.Color('#f5a524')
 const TIGHT = new THREE.Color('#e5484d')
+// Stitch lines sit this far (cm) off the fabric so they are not hidden by it.
+const SEAM_LIFT = 0.12
 
-function GarmentMeshes({ result, fitMap }: { result: GarmentState; fitMap: boolean }) {
+function GarmentMeshes({ result, fitMap, colorByPiece }: { result: GarmentState; fitMap: boolean; colorByPiece: boolean }) {
   const { invalidate } = useThree()
   // Geometry is rebuilt only when the placement (topology) or colouring
   // changes; drape frames just move the vertices.
   const meshes = useMemo(() => result.pieces.flatMap((piece, i) => {
-    const base = new THREE.Color(FABRIC[i % FABRIC.length])
+    const base = new THREE.Color(colorByPiece ? PIECE_COLORS[i % PIECE_COLORS.length] : FABRIC)
     return piece.copies.map((copy, ci) => {
       const g = new THREE.BufferGeometry()
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(copy.positions), 3))
@@ -102,10 +106,15 @@ function GarmentMeshes({ result, fitMap }: { result: GarmentState; fitMap: boole
         colors.set([c.r, c.g, c.b], v * 3)
       })
       g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, geometry: g }
+      // Seam stitch lines: consecutive vertex pairs along each sewn edge.
+      const pairs: number[] = []
+      for (const edge of piece.seams) for (let k = 0; k < edge.length - 1; k++) pairs.push(edge[k], edge[k + 1])
+      const seam = new THREE.BufferGeometry()
+      seam.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairs.length * 3), 3))
+      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, geometry: g, seam, pairs }
     })
-  }), [result.placementId, fitMap])
-  useEffect(() => () => meshes.forEach(m => m.geometry.dispose()), [meshes])
+  }), [result.placementId, fitMap, colorByPiece])
+  useEffect(() => () => meshes.forEach(m => { m.geometry.dispose(); m.seam.dispose() }), [meshes])
 
   useEffect(() => {
     for (const m of meshes) {
@@ -115,9 +124,20 @@ function GarmentMeshes({ result, fitMap }: { result: GarmentState; fitMap: boole
       ;(attr.array as Float32Array).set(src)
       attr.needsUpdate = true
       m.geometry.computeVertexNormals()
+      const normals = m.geometry.getAttribute('normal').array as Float32Array
+      const line = m.seam.getAttribute('position') as THREE.BufferAttribute
+      const out = line.array as Float32Array
+      m.pairs.forEach((v, k) => {
+        for (let d = 0; d < 3; d++) out[k * 3 + d] = src[v * 3 + d] + normals[v * 3 + d] * SEAM_LIFT
+      })
+      line.needsUpdate = true
+      m.seam.computeBoundingSphere()
     }
     invalidate()
   }, [result, meshes, invalidate])
+
+  const seamMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#2f3e5c', transparent: true, opacity: 0.55 }), [])
+  useEffect(() => () => seamMaterial.dispose(), [seamMaterial])
 
   const material = useMemo(
     () => new THREE.MeshStandardMaterial({
@@ -130,7 +150,12 @@ function GarmentMeshes({ result, fitMap }: { result: GarmentState; fitMap: boole
 
   return (
     <>
-      {meshes.map(m => <mesh key={m.key} geometry={m.geometry} material={material} castShadow receiveShadow />)}
+      {meshes.map(m => (
+        <group key={m.key}>
+          <mesh geometry={m.geometry} material={material} castShadow receiveShadow />
+          {m.pairs.length > 0 && <lineSegments geometry={m.seam} material={seamMaterial} />}
+        </group>
+      ))}
     </>
   )
 }
@@ -146,6 +171,7 @@ export default function BodyModelView() {
   const [showGarment, setShowGarment] = useState(true)
   const [fitMap, setFitMap] = useState(true)
   const [drape, setDrape] = useState(true)
+  const [colorByPiece, setColorByPiece] = useState(false)
   const garment = useGarmentPlacement(body, state.pieces, state.elements, state.connections, hasPattern && showGarment, drape)
   const placed = garment.result
 
@@ -190,7 +216,7 @@ export default function BodyModelView() {
         {geometry && (
           <mesh geometry={geometry} material={material} castShadow receiveShadow />
         )}
-        {placed && showGarment && <GarmentMeshes result={placed} fitMap={fitMap} />}
+        {placed && showGarment && <GarmentMeshes result={placed} fitMap={fitMap} colorByPiece={colorByPiece} />}
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[800, 800]} />
           <shadowMaterial transparent opacity={0.16} />
@@ -218,6 +244,10 @@ export default function BodyModelView() {
                 <input type="checkbox" checked={drape} onChange={e => setDrape(e.target.checked)} />
                 <span>Drape with gravity</span>
                 {placed?.draping && <span className="ml-auto text-[10px] text-gray-400">settling…</span>}
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={colorByPiece} onChange={e => setColorByPiece(e.target.checked)} />
+                <span>Color by piece</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={fitMap} onChange={e => setFitMap(e.target.checked)} />

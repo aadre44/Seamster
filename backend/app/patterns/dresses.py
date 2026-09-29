@@ -75,7 +75,7 @@ _NECKLINE_DEPTH_EXTRA: dict[str, float] = {
 # Necklines whose CF opening is shaped as a cubic Bézier arc
 _CURVED_NECKLINES = {"crew", "round", "scoop", "sweetheart"}
 
-# ── Length category → fixed total dress length in cm (None = use m.length_cm) ─
+# ── Length category → waist-to-hem length in cm (None = use m.length_cm) ─────
 _LENGTH_CM: dict[str, float | None] = {
     "mini":       42.0,
     "above_knee": 52.0,
@@ -354,9 +354,12 @@ def build_dress_block(
     )
 
     # ── Skirt block ───────────────────────────────────────────────────────────
-    # Skirt length = remaining dress length below bodice
+    # Dress lengths (category table and m.length_cm) are waist-to-hem, so the
+    # skirt runs the full length from the natural waist; an empire skirt also
+    # covers the gap between the underbust seam and the natural waist.
     # Empire: "waist" = underbust circ ≈ bust - 8 cm
-    skirt_L = max(total_L - bodice_h, wh + 5.0)
+    waist_drop = (arm_depth + 18.0) - bodice_h
+    skirt_L = max(total_L + waist_drop, wh + 5.0)
 
     hip_qt = (H + 2.0) / 4          # quarter hip with standard ease
 
