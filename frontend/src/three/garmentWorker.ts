@@ -52,7 +52,7 @@ self.onmessage = async (e: MessageEvent<GarmentJob>) => {
   const job = e.data
   latest = job.id
   try {
-    const { placed, skipped } = placeGarment(job.pieces, job.elements, proceduralBodyQuery(job.body))
+    const { placed, skipped } = placeGarment(job.pieces, job.elements, proceduralBodyQuery(job.body), job.connections)
     const pieces = placed.map(p => ({ id: p.id, name: p.name, copies: p.copies.map(c => ({ ...c, positions: c.positions.slice() })) }))
     post({ kind: 'placed', id: job.id, pieces, skipped, done: !job.drape || placed.length === 0 },
       pieces.flatMap(p => p.copies.flatMap(c => [c.positions.buffer, c.indices.buffer, c.ease.buffer])))

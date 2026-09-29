@@ -26,7 +26,7 @@ const placements = new Map<string, { psnap: Psnap; placement: GarmentPlacement; 
 for (const g of GARMENTS) {
   const psnap = load(g)
   const t0 = performance.now()
-  const placement = placeGarment(psnap.pieces, psnap.elements, query)
+  const placement = placeGarment(psnap.pieces, psnap.elements, query, psnap.connections)
   placements.set(g, { psnap, placement, ms: performance.now() - t0 })
 }
 

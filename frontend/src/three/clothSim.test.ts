@@ -21,7 +21,7 @@ const grid = new SdfGrid(sdf, bounds)
 
 function drape(fixture: unknown) {
   const psnap = fixture as Psnap
-  const { placed } = placeGarment(psnap.pieces, psnap.elements, query)
+  const { placed } = placeGarment(psnap.pieces, psnap.elements, query, psnap.connections)
   const t0 = performance.now()
   const cloth = new Cloth(placed, psnap.connections, grid)
   const start = new Float32Array(cloth.x)
@@ -31,6 +31,10 @@ function drape(fixture: unknown) {
     energy.push(cloth.kineticEnergy())
   }
   return { cloth, placed, start, energy, ms: performance.now() - t0 }
+}
+
+const FIXTURES: Record<string, unknown> = {
+  skirt: skirtFixture, trousers: trousersFixture, shirt: shirtFixture, dress: dressFixture,
 }
 
 const results = {
@@ -58,13 +62,32 @@ describe('drape simulation', () => {
         expect(late).toBeLessThan(early / 4)
       })
 
-      // Seams stay closed. The one known exception is the trouser crotch point:
-      // it is sewn between the thighs, which touch in this body model, so the
-      // front and back curves are held a few cm apart there.
-      it('keeps the seams sewn', () => {
-        const gaps = r.cloth.stitchGaps().sort((a, b) => a - b)
-        expect(gaps[Math.floor(gaps.length * 0.95)]).toBeLessThan(1.0)
-        expect(gaps[gaps.length - 1]).toBeLessThan(name === 'trousers' ? 6 : 2.5)
+      // Both sides of every seam are sampled identically and welded (they share
+      // particles), so no seam can open: nothing falls back to a stitch, and
+      // sewn edges end up at exactly the same place.
+      it('keeps every seam closed', () => {
+        expect(r.cloth.weldedSeams).toBeGreaterThan(0)
+        expect(r.cloth.stitchGaps()).toHaveLength(0)
+        const psnap = FIXTURES[name] as Psnap
+        let worst = 0
+        for (const c of psnap.connections) {
+          const pa = r.placed.find(p => p.id === c.from.pieceId)
+          const pb = r.placed.find(p => p.id === c.to.pieceId)
+          if (!pa || !pb) continue
+          const ends = (p: typeof pa, edgeId: string, copy: number) => {
+            const parts = p.edges.map((e, i) => ({ e, i })).filter(({ e }) => e.id === edgeId || e.id.startsWith(`${edgeId}#after-dart-`))
+            const range = r.cloth.ranges.find(g => g.piece === r.placed.indexOf(p) && g.copy === copy)!
+            const first = p.mesh.edgeVerts[parts[0].i][0]
+            const lastPart = p.mesh.edgeVerts[parts[parts.length - 1].i]
+            const last = lastPart[lastPart.length - 1]
+            return [first, last].map(v => Array.from(r.cloth.x.slice((range.start + v) * 3, (range.start + v) * 3 + 3)))
+          }
+          const [a0, a1] = ends(pa, c.from.edgeId, 0)
+          const [b0, b1] = ends(pb, c.to.edgeId, pb.region === 'sleeve' && pa.back ? 1 : 0)
+          const d = (p: number[], q: number[]) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])
+          worst = Math.max(worst, Math.min(Math.max(d(a0, b0), d(a1, b1)), Math.max(d(a0, b1), d(a1, b0))))
+        }
+        expect(worst).toBeLessThan(0.05)
       })
 
       it('keeps the fabric outside the body', () => {

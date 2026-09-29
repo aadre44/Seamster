@@ -1,4 +1,4 @@
-import type { CanvasElement, PatternPiece } from '../types'
+import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
 import type { BodyQuery, Pt, Section } from './bodyQuery'
 import { perimeter } from './bodyQuery'
 import { classifyPiece } from './pieceClassifier'
@@ -463,7 +463,85 @@ function copiesFor(p: Profile): CopySpec[] {
   return both ? [{ mirrorWorld: false, frontHalf: true }, { mirrorWorld: true, frontHalf: true }] : [{ mirrorWorld: false, frontHalf: true }]
 }
 
-export function placeGarment(pieces: PatternPiece[], elements: CanvasElement[], body: BodyQuery): GarmentPlacement {
+// The segments an outline edge became (an edge darts were cut into is split:
+// id, id#after-dart-k, …), in outline order.
+export function edgeParts(edges: { id: string }[], edgeId: string): number[] {
+  const out: number[] = []
+  edges.forEach((e, i) => { if (e.id === edgeId || e.id.startsWith(`${edgeId}#after-dart-`)) out.push(i) })
+  return out
+}
+
+const polylineLength = (pts: Pt[]) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0)
+
+// Sewn edges must have matching vertices so the drape can weld them (share
+// particles) — a seam held by constraints alone opens into a visible crack.
+// Edges joined by connections (transitively: a sleeve armhole is sewn to both
+// bodice armholes) get ONE vertex count, sampled uniformly by arc length; an
+// edge split by darts gets that count spread across its segments.
+function conformSeamCounts(
+  profiles: Profile[],
+  shapes: Map<Profile, PieceShape>,
+  connections: SeamConnection[],
+): Map<Profile, (number | undefined)[]> {
+  const byId = new Map(profiles.map(p => [p.piece.id, p]))
+  const parent = new Map<string, string>()
+  const find = (k: string): string => {
+    let r = k
+    while (parent.get(r) !== undefined && parent.get(r) !== r) r = parent.get(r)!
+    return r
+  }
+  const node = (pieceId: string, edgeId: string) => {
+    const p = byId.get(pieceId)
+    if (!p || !edgeParts(shapes.get(p)!.edges, edgeId).length) return null
+    const k = `${pieceId}|${edgeId}`
+    if (!parent.has(k)) parent.set(k, k)
+    return k
+  }
+  for (const c of connections) {
+    const a = node(c.from.pieceId, c.from.edgeId)
+    const b = node(c.to.pieceId, c.to.edgeId)
+    if (a && b) parent.set(find(b), find(a))
+  }
+  const groups = new Map<string, string[]>()
+  for (const k of parent.keys()) {
+    const r = find(k)
+    groups.set(r, [...(groups.get(r) ?? []), k])
+  }
+  const counts = new Map<Profile, (number | undefined)[]>(profiles.map(p => [p, shapes.get(p)!.edges.map(() => undefined)]))
+  for (const members of groups.values()) {
+    const info = members.map(k => {
+      const [pieceId, edgeId] = k.split('|')
+      const p = byId.get(pieceId)!
+      const edges = shapes.get(p)!.edges
+      const parts = edgeParts(edges, edgeId)
+      const lens = parts.map(i => polylineLength(edges[i].pts))
+      return { p, parts, lens, total: lens.reduce((a, b) => a + b, 0) }
+    })
+    const n = Math.max(...info.map(m => Math.max(m.parts.length, Math.round(m.total / MESH_SPACING), 1)))
+    for (const m of info) {
+      const out = counts.get(m.p)!
+      if (m.parts.length === 1) {
+        out[m.parts[0]] = n
+        continue
+      }
+      // Largest-remainder split of n intervals across the segments (each ≥ 1).
+      const raw = m.lens.map(l => (n * l) / Math.max(m.total, 1e-9))
+      const k = raw.map(r => Math.max(1, Math.floor(r)))
+      while (k.reduce((a, b) => a + b, 0) > n) k[k.indexOf(Math.max(...k))]--
+      const order = raw.map((r, i) => ({ i, f: r - Math.floor(r) })).sort((a, b) => b.f - a.f)
+      for (let j = 0; k.reduce((a, b) => a + b, 0) < n; j++) k[order[j % order.length].i]++
+      m.parts.forEach((pi, j) => { out[pi] = k[j] })
+    }
+  }
+  return counts
+}
+
+export function placeGarment(
+  pieces: PatternPiece[],
+  elements: CanvasElement[],
+  body: BodyQuery,
+  connections: SeamConnection[] = [],
+): GarmentPlacement {
   const byId = new Map(elements.map(e => [e.id, e]))
   const skipped: GarmentPlacement['skipped'] = []
   const profiles: Profile[] = []
@@ -496,11 +574,14 @@ export function placeGarment(pieces: PatternPiece[], elements: CanvasElement[], 
     return { p: c.mirrorWorld ? [-q[0], q[1], q[2]] : q, ease: m.ease }
   }
 
+  // Darts are cut out of the mesh and sewn shut in the drape (their legs become edges).
+  const shapes = new Map(profiles.map(p => [p, cutDarts(p.shape, p.darts)]))
+  const seamCounts = conformSeamCounts(profiles, shapes, connections)
+
   const placed: PlacedPiece[] = profiles.map(p => {
     const specs = copiesFor(p)
-    // Darts are cut out of the mesh and sewn shut in the drape (their legs become edges).
-    const meshShape = cutDarts(p.shape, p.darts)
-    const mesh = triangulateShape(meshShape, MESH_SPACING)
+    const meshShape = shapes.get(p)!
+    const mesh = triangulateShape(meshShape, MESH_SPACING, seamCounts.get(p))
     const copies = specs.map(c => {
       const positions = new Float32Array(mesh.pts.length * 3)
       const ease = new Float32Array(mesh.pts.length)

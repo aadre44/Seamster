@@ -59,6 +59,8 @@ export class Cloth {
   private readonly tr: Float32Array
   // alias[i] = the particle i is welded to (itself when not welded).
   private readonly alias: Int32Array
+  // Seams between pieces that were welded (the rest fell back to stitches).
+  weldedSeams = 0
   private readonly normal = new Float32Array(3)
 
   constructor(placed: PlacedPiece[], connections: SeamConnection[], private readonly body: SdfGrid) {
@@ -108,14 +110,31 @@ export class Cloth {
     const sa: number[] = []
     const sb: number[] = []
     const sw: number[] = []
-    const stitch = (A: EdgeRef, B: EdgeRef) => {
+    // Do two sewn edges run in opposite directions? (From where the wrap put them.)
+    const reversedPair = (A: EdgeRef, B: EdgeRef) => {
       const pos = (r: CopyRange, v: number) => [this.x[(r.start + v) * 3], this.x[(r.start + v) * 3 + 1], this.x[(r.start + v) * 3 + 2]]
       const d = (p: number[], q: number[]) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])
       const a0 = pos(A.range, A.verts[0])
       const a1 = pos(A.range, A.verts[A.verts.length - 1])
       const b0 = pos(B.range, B.verts[0])
       const b1 = pos(B.range, B.verts[B.verts.length - 1])
-      const reversed = d(a0, b1) + d(a1, b0) < d(a0, b0) + d(a1, b1)
+      return d(a0, b1) + d(a1, b0) < d(a0, b0) + d(a1, b1)
+    }
+
+    // Welded particles share one simulated particle (alias → root).
+    const alias = Int32Array.from({ length: n }, (_, i) => i)
+    const root = (i: number): number => {
+      while (alias[i] !== i) i = alias[i]
+      return i
+    }
+    const weldPair = (a: number, b: number) => {
+      const ra = root(a)
+      const rb = root(b)
+      if (ra !== rb) alias[rb] = ra
+    }
+
+    const stitch = (A: EdgeRef, B: EdgeRef) => {
+      const reversed = reversedPair(A, B)
       const link = (from: EdgeRef, to: EdgeRef, flip: boolean) => {
         from.verts.forEach((va, i) => {
           const t = flip ? 1 - from.t[i] : from.t[i]
@@ -137,9 +156,10 @@ export class Cloth {
     }
 
     // An outline edge that darts were cut into is now several segments
-    // (id, id#after-dart-k…). Sewn, the darts close, so as a seam it is the
-    // segments chained in order with the dart gaps skipped; t runs along the
-    // sewn length.
+    // (id, id#after-dart-k…). Sewn, the darts close — each segment's first
+    // vertex lands on the previous one's last (the dart legs are welded) — so
+    // as a seam it is the segments chained with those duplicates dropped; t
+    // runs along the sewn length.
     const seamRef = (pi: number, ci: number, edgeId: string): EdgeRef | null => {
       const p = placed[pi]
       const parts = p.edges
@@ -152,18 +172,22 @@ export class Cloth {
       const verts: number[] = []
       const len: number[] = []
       let total = 0
-      for (const { ei } of parts) {
+      parts.forEach(({ ei }, s) => {
         edgeVerts[ei].forEach((v, k) => {
-          if (k > 0) total += Math.hypot(pts[v][0] - pts[verts[verts.length - 1]][0], pts[v][1] - pts[verts[verts.length - 1]][1])
+          if (s > 0 && k === 0) return
+          if (verts.length && k > 0) total += Math.hypot(pts[v][0] - pts[edgeVerts[ei][k - 1]][0], pts[v][1] - pts[edgeVerts[ei][k - 1]][1])
           verts.push(v)
           len.push(total)
         })
-      }
+      })
       return { range, verts, t: len.map(l => (total > 0 ? l / total : 0)) }
     }
 
     // Seams between pieces, copy by copy on the same side of the body; a
-    // sleeve's front half is sewn to the front bodice, its back half to the back.
+    // sleeve's front half is sewn to the front bodice, its back half to the
+    // back. Placement samples both sides of a seam identically, so the seam is
+    // welded vertex to vertex and cannot open; stitched only if the sampling
+    // somehow differs.
     for (const c of connections) {
       const pa = placed.findIndex(p => p.id === c.from.pieceId)
       const pb = placed.findIndex(p => p.id === c.to.pieceId)
@@ -174,7 +198,15 @@ export class Cloth {
         if (placed[pb].region === 'sleeve' && sB.frontHalf === placed[pa].back) return
         const A = seamRef(pa, ia, c.from.edgeId)
         const B = seamRef(pb, ib, c.to.edgeId)
-        if (A && B) stitch(A, B)
+        if (!A || !B) return
+        if (A.verts.length !== B.verts.length) {
+          stitch(A, B)
+          return
+        }
+        const flip = reversedPair(A, B)
+        const last = B.verts.length - 1
+        A.verts.forEach((v, k) => weldPair(A.range.start + v, B.range.start + B.verts[flip ? last - k : k]))
+        this.weldedSeams++
       }))
     }
 
@@ -182,11 +214,6 @@ export class Cloth {
     // crotch, sleeve underarm) join identical vertices one-to-one, so they are
     // welded — both copies share the particles — rather than stitched: a fold is
     // continuous fabric, and a stitch would leave a visible hairline.
-    const alias = Int32Array.from({ length: n }, (_, i) => i)
-    const root = (i: number): number => {
-      while (alias[i] !== i) i = alias[i]
-      return i
-    }
     placed.forEach((p, pi) => {
       p.edges.forEach((e, ei) => {
         const sleeveSeam = p.region === 'sleeve' && (e.isFold || e.label === 'sleeve_seam')

@@ -214,7 +214,7 @@ With **Drape with gravity** on (the default), the static wrap is the starting po
 - **Strain limiting:** an extra pass pulls over-stretched edges back.
 - **Bending:** soft (0.12) constraints between the far corners of neighbouring triangles.
 - **Tethers:** long-range attachments (Kim et al. 2012). Each particle may be no farther from its nearest vertex on the edge its piece hangs from (shoulder / waist / armhole) than its flat distance plus 10%. There's no tether within 15 cm of the anchor. This carries the garment's weight to where it hangs.
-- **Stitches:** every connection in the stitch map is sewn copy by copy on the same side of the body. A sleeve's front half is sewn to the front bodice and its back half to the back. Matching points are found by arc-length fraction, so eased seams gather evenly. A connection to an edge that darts split is treated as its chained segments, with the dart gaps skipped.
+- **Seams are welded:** every connection in the stitch map is sewn copy by copy on the same side of the body; a sleeve's front half is sewn to the front bodice and its back half to the back. Placement samples both sides of a seam **identically** (`conformSeamCounts`): edges joined by connections, transitively, share one vertex count, spread uniformly by arc length. A sleeve armhole joined to both bodice armholes therefore matches both. The seam's vertices are then welded 1:1, so the two sides share particles and **cannot open**. Eased seams gather evenly because matching is by arc-length fraction. An edge split by darts gets its count spread across its segments and is sewn as one chain. Constraint stitching remains only as a fallback if sampling ever differed; the tests assert it never happens. (Stitching alone left seams 0.5–1 cm open, which showed as visible cracks.)
 - **Welds:** a piece's own seams between its mirrored copies (fold, CF/CB, crotch, sleeve underarm) and the two legs of each dart share particles one to one. A fold is continuous fabric, and welding leaves no hairline.
 - **Darts:** darts are cut out of the mesh (`cutDarts`: their legs become edges) and sewn shut. That's what takes the dart intake out of the waist; with the wedge left in, a darted skirt slid down to the high hip.
 - **Collision:** against a narrow-band grid of the body's distance field (`SdfGrid`: 1 cm cells, trilinear lookups), keeping the fabric 0.35 cm off the skin, and against the floor. Two contact passes per substep resolve corners where two contacts meet, such as foot and floor.
@@ -226,19 +226,19 @@ With **Drape with gravity** on (the default), the static wrap is the starting po
 
 **Results.** From the drape tests on real engine patterns:
 
-| Garment | Particles | Time (test) | Stretch where the pattern fits: mean / 98th pct | Seams: 95% of points within |
+| Garment | Particles | Time (test) | Stretch where the pattern fits: mean / 98th pct | Seams |
 |---|---|---|---|---|
-| Skirt (A-line, darts) | ~2000 | ~2 s | 0.33% / 2.9% | 1 cm |
-| Trousers (straight, darts) | ~3200 | ~4 s | 1.1% / 5.7% | 1 cm |
-| Shirt (regular, sleeves) | ~3600 | ~4 s | 0.32% / 2.9% | 1 cm |
-| Dress (a-line, darted skirt) | ~2000 | ~2 s | 0.33% / 3.0% | 1 cm |
+| Skirt (A-line, darts) | ~2000 | ~2 s | 0.34% / 3.0% | welded (0 gap) |
+| Trousers (straight, darts) | ~3200 | ~4 s | 1.2% / 5.7% | welded (0 gap) |
+| Shirt (regular, sleeves) | ~3600 | ~4 s | 0.37% / 3.2% | welded (0 gap) |
+| Dress (a-line, darted skirt) | ~2000 | ~2 s | 0.37% / 3.2% | welded (0 gap) |
 
 All four settle: kinetic energy falls by more than 4×. At least 99% of cloth ends up outside the body, none of it more than 1 cm inside. The skirt stays at the waist, trousers hang from the waist (they settle up to about 4 cm, onto their drafted crotch drop), and the shirt hangs from the shoulders.
 
 **What the drape revealed.** A hip-length shirt drafted its hem at *waist* width, so it could not cover the hips. Fixed in `shirts.py` (`_hem_qt`): below the waist, the hem widens to the hip quarter + ease by hip level.
 
 **Known limits.**
-- **Crotch point:** the trouser crotch point is sewn between the thighs, which touch in this body model, so a few centimetres of the crotch junction stay apart there. The seam test allows it explicitly.
+- **Crotch point:** the trouser crotch point is welded shut, but it sits between the thighs, which touch in this body model, so the fabric there is wedged against the body.
 - **Full-length hems:** they wedge between the foot and the floor and stretch locally.
 - **No self-collision:** layers (sleeve against bodice, overlap fronts) can pass through each other.
 - **No fabric properties yet:** the stiffness and weight sliders are future work.

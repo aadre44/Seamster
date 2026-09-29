@@ -205,14 +205,14 @@ export interface PieceMesh {
   edgeT: number[][]
 }
 
-// Samples a polyline every ~spacing by arc length; returns points (without the
-// final endpoint) and their arc-length fractions.
-function resample(pts: Pt[], spacing: number): { pts: Pt[]; t: number[] } {
+// Samples a polyline every ~spacing by arc length (or into exactly `count`
+// intervals); returns points (without the final endpoint) and their arc-length fractions.
+function resample(pts: Pt[], spacing: number, count?: number): { pts: Pt[]; t: number[] } {
   const cum = [0]
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
   const total = cum[cum.length - 1]
   if (total < 1e-6) return { pts: [], t: [] }
-  const n = Math.max(1, Math.round(total / spacing))
+  const n = count ?? Math.max(1, Math.round(total / spacing))
   const out: Pt[] = []
   const ts: number[] = []
   let seg = 0
@@ -228,13 +228,14 @@ function resample(pts: Pt[], spacing: number): { pts: Pt[]; t: number[] } {
 
 // Triangulates a piece with interior points on a grid (so the flat piece can
 // bend on the body), keeping track of which boundary vertices lie on which
-// outline edge (so seams can be stitched).
-export function triangulateShape(shape: PieceShape, spacing: number): PieceMesh {
+// outline edge (so seams can be sewn). `counts` fixes the number of intervals
+// on particular edges, so both sides of a seam get matching vertices.
+export function triangulateShape(shape: PieceShape, spacing: number, counts?: (number | undefined)[]): PieceMesh {
   const boundary: Pt[] = []
   const edgeVerts: number[][] = []
   const edgeT: number[][] = []
-  for (const e of shape.edges) {
-    const r = resample(e.pts, spacing)
+  for (const [ei, e] of shape.edges.entries()) {
+    const r = resample(e.pts, spacing, counts?.[ei])
     const verts: number[] = []
     r.pts.forEach(p => {
       verts.push(boundary.length)
