@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { inferAttachments } from '../../api'
 import { useEditor } from '../../context/EditorContext'
 import type { CanvasElement, PatternPiece, SeamConnection, SeamEnd } from '../../types'
 import { edgeName, hasSides, labelColour, seamFit, sewnLength } from './seams'
@@ -21,15 +23,43 @@ interface Props {
 export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, pending }: Props) {
   const { state, dispatch } = useEditor()
   const { connections } = state
+  const [inferring, setInferring] = useState(false)
+  const [inferError, setInferError] = useState('')
   const pieceOf = (id: string) => pieces.find(p => p.id === id)
   const endName = (end: SeamEnd) => `${pieceOf(end.pieceId)?.name ?? '?'} · ${edgeName(pieceOf(end.pieceId), end.edgeId, byId)}`
   const sel = selected !== null ? connections[selected] : undefined
   const update = (c: SeamConnection, tag?: string) => selected !== null && dispatch({ type: 'UPDATE_CONNECTION', index: selected, connection: c, tag })
 
+  const reinfer = async () => {
+    if (!window.confirm('Replace the automatic seams and pocket placements with freshly inferred ones? Seams and placements you made yourself are kept.')) return
+    setInferring(true)
+    setInferError('')
+    try {
+      const r = await inferAttachments(state.elements, state.pieces)
+      onSelect(null)
+      dispatch({ type: 'APPLY_INFERRED', connections: r.connections, placements: r.placements, layers: r.layers })
+    } catch {
+      setInferError('Could not reach the pattern server to infer seams.')
+    } finally {
+      setInferring(false)
+    }
+  }
+
   return (
     <div className="w-72 shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col" data-testid="seams-panel">
       <div className="px-3 py-2 border-b border-gray-100">
-        <div className="text-xs font-semibold text-gray-700">Seams ({connections.length})</div>
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold text-gray-700">Seams ({connections.length})</div>
+          <button
+            onClick={reinfer}
+            disabled={inferring}
+            title="Work out seams for collars, cuffs, flies, pocket bags and where pockets go"
+            className="text-[11px] px-2 py-0.5 rounded border border-teal-300 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
+          >
+            {inferring ? 'Inferring…' : 'Re-infer'}
+          </button>
+        </div>
+        {inferError && <div className="text-[11px] text-red-600 mt-1">{inferError}</div>}
         <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">
           {pending
             ? <span className="text-teal-700">Now click the edge to sew <b>{endName(pending)}</b> to. Esc cancels.</span>
@@ -152,6 +182,7 @@ function EndEditor({ end, name, length, sided, onChange }: {
           <button className="ml-auto text-[10px] text-teal-700 hover:underline" onClick={() => setRange(0, 1)}>whole</button>
         )}
       </div>
+      {end.half && <div className="text-[11px] text-gray-500">On the {end.half} half of the sleeve</div>}
       {sided && (
         <label className="flex items-center justify-between text-[11px] text-gray-500">
           Side (wearer's)

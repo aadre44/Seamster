@@ -119,7 +119,11 @@ def test_only_physically_sewn_trouser_seams_connect():
     psnap = _trouser_psnap()
     assert _connections_between(psnap, "crotch", "Front Leg", "Back Leg") == []
     assert _connections_between(psnap, "waist", "Front Leg", "Back Leg") == []
-    assert {c["label"] for c in psnap["connections"]} == {"side_seam", "inseam"}
+    fly = {p["id"] for p in psnap["pieces"] if p["name"].startswith("Fly ")}
+    legs = [c for c in psnap["connections"] if not fly & {c["from"]["pieceId"], c["to"]["pieceId"]}]
+    assert {c["label"] for c in legs} == {"side_seam", "inseam"}
+    # The only other seams: the fly facing / shield onto the front CF (attachments.py).
+    assert {c["label"] for c in psnap["connections"]} - {"side_seam", "inseam"} == {"fly"}
 
 
 # ── Orientation: reversed traversal is detected by length mismatch ────────────

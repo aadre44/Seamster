@@ -225,3 +225,27 @@ describe('connection editing', () => {
     expect(reducer(s, { type: 'UNDO' }).connections[0].from.range).toBeUndefined()
   })
 })
+
+describe('re-infer (APPLY_INFERRED)', () => {
+  const mine: SeamConnection = { label: 'seam', from: { pieceId: 'A', edgeId: 'a' }, to: { pieceId: 'B', edgeId: 'b' }, source: 'user' }
+  const old: SeamConnection = { label: 'hem', from: { pieceId: 'A', edgeId: 'h' }, to: { pieceId: 'C', edgeId: 'c' }, source: 'inferred' }
+  const fresh: SeamConnection = { label: 'neckline', from: { pieceId: 'K', edgeId: 'k', range: [0, 0.5] }, to: { pieceId: 'A', edgeId: 'n', side: 'left' }, source: 'inferred' }
+  const myPocket = { id: 'p1', pieceId: 'P', hostId: 'A', transform: { dx: 0, dy: 0, rotation: 0 }, stitched: [], source: 'user' as const }
+  const autoPocket = { ...myPocket, id: 'p2', source: 'inferred' as const }
+
+  it('keeps the user’s seams and placements and replaces the rest', () => {
+    const s0 = { ...initialState, connections: [mine, old], placements: [myPocket],
+      pieces: [piece('K', []), { ...piece('F', []), layer: 'outer' as const }] }
+    const s1 = reducer(s0, {
+      type: 'APPLY_INFERRED',
+      connections: [fresh, { ...mine, source: 'inferred' }],
+      placements: [autoPocket, { ...autoPocket, id: 'p3', pieceId: 'Q' }],
+      layers: { K: 'inside', F: 'inside' },
+    })
+    expect(s1.connections).toEqual([mine, fresh]) // the old inferred seam is gone; mine isn't duplicated
+    expect(s1.placements.map(p => p.id)).toEqual(['p1', 'p3']) // P stays where the user put it
+    expect(s1.pieces.find(p => p.id === 'K')!.layer).toBe('inside')
+    expect(s1.pieces.find(p => p.id === 'F')!.layer).toBe('outer') // set by the user: kept
+    expect(reducer(s1, { type: 'UNDO' }).connections).toEqual([mine, old])
+  })
+})

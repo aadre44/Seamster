@@ -204,8 +204,12 @@ export class Cloth {
       if (pa < 0 || pb < 0) continue
       placed[pa].copySpecs.forEach((sA, ia) => placed[pb].copySpecs.forEach((sB, ib) => {
         if (sA.mirrorWorld !== sB.mirrorWorld) return
-        if (placed[pa].region === 'sleeve' && sA.frontHalf === placed[pb].back) return
-        if (placed[pb].region === 'sleeve' && sB.frontHalf === placed[pa].back) return
+        // A sleeve half is sewn to the front or back piece on its side — or to
+        // the half a seam end names (a cuff wraps both halves).
+        const halfOk = (region: string, spec: typeof sA, half: SeamEnd['half'], otherBack: boolean) =>
+          region !== 'sleeve' || (half ? spec.frontHalf === (half === 'front') : spec.frontHalf !== otherBack)
+        if (!halfOk(placed[pa].region, sA, c.from.half, placed[pb].back)) return
+        if (!halfOk(placed[pb].region, sB, c.to.half, placed[pa].back)) return
         const A = seamRef(pa, ia, c.from)
         const B = seamRef(pb, ib, c.to)
         if (!A || !B) return

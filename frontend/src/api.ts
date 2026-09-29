@@ -79,6 +79,20 @@ export function generatePattern(
   )
 }
 
+// ── /infer-attachments ───────────────────────────────────────────────────────
+
+/** Seams, placements and piece layers inferred for the current pieces (the
+ * Assembly view's Re-infer). */
+export interface InferredAttachments {
+  connections: SeamConnection[]
+  placements: Placement[]
+  layers: Record<string, 'outer' | 'inside'>
+}
+
+export function inferAttachments(elements: CanvasElement[], pieces: PatternPiece[]): Promise<InferredAttachments> {
+  return request<InferredAttachments>('/infer-attachments', jsonInit({ elements, pieces }))
+}
+
 // ── /refine ───────────────────────────────────────────────────────────────────
 
 export interface RefineSummary {

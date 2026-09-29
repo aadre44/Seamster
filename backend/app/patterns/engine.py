@@ -1561,4 +1561,9 @@ def generate_pattern(
     # Vision contours first — a detail covered by a traced contour must not also
     # get an LLM-guessed piece for the same physical feature.
     psnap, handled = _append_vision_pieces(psnap, features, measurements)
-    return _append_novel_pieces(psnap, features, measurements, exclude=handled)
+    psnap = _append_novel_pieces(psnap, features, measurements, exclude=handled)
+    # Trims (collars, cuffs, flies, pockets…) get their seams / placements last,
+    # once every piece is in.
+    from app.patterns.attachments import apply_attachments
+
+    return apply_attachments(psnap)

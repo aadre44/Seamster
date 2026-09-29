@@ -15,6 +15,7 @@ interface SeamEnd {
   pieceId: string; edgeId: string
   range?: [number, number]   // part of the edge sewn, as fractions of its length (default whole edge)
   side?: 'left' | 'right'    // one copy of a cut-2 / on-fold piece (default: both, each on its own side)
+  half?: 'front' | 'back'    // one half of an on-fold sleeve (a cuff wraps both)
 }
 interface SeamConnection {
   label: string; from: SeamEnd; to: SeamEnd
@@ -94,4 +95,40 @@ All the new fields are optional, so older `.psnap` files load unchanged.
 Generated patterns arrive with seams from the backend's `_compute_connections`
 (`backend/app/patterns/engine.py`), keyed on edge `seamLabel`s and the kind of
 seam (construction / join / opening — see the README file-format section).
-Trim attachments and pocket placements are inferred next (planned).
+
+Trims are then handled by `backend/app/patterns/attachments.py`
+(`apply_attachments`, the last step of `generate_pattern`). Trims are mostly
+plain rectangles with unlabelled edges, and one trim edge often runs along
+several host edges, so the rules work from piece **names and geometry**:
+
+| Trim (name) | Sewn to | Notes |
+|---|---|---|
+| Collar, hood, neck band / binding / facing | neckline | half trim (cut on the CB fold, or shorter than 1.5× the half neckline): CB → shoulder → CF, copies pair by side; full trim: CF(right) → CB → CF(left) with host `side`s |
+| Waistband | waist | same scheme, starting at CF |
+| Cuff, wrist / sleeve band | wrist | all round an on-fold sleeve: its front `half`, then its back `half` |
+| Armhole facing / binding | armhole | front then back |
+| Hem facing, ruffle, frill, flounce | hem | from CF |
+| Fly facing / fly shield | front CF from the waist | `side` left / right (wearer's); inside |
+| Placket | front CF from the neckline | |
+| Front facing | front CF from the neckline | inside |
+| Pocket bag (in-seam) | front side seam just below the waist (the skirt / leg, not a bodice) | inside |
+| Patch pocket, welt | **placement** on a host | chest/breast → left front at bust line; back → back leg / skirt below the waist; cargo → front leg outer thigh; otherwise front skirt / leg below the waist, or a jacket/shirt front above the hem |
+| Welt pocket bag | **placement** under its welt | inside, stitched along its mouth only |
+
+- The core helper `_sew` walks a *path* of host edges (each step one element,
+  walked forwards or backwards, optionally with a side / half); where the path
+  crosses to the next element the trim's range is split. So every connection
+  pairs a stretch of one trim element with a stretch of one host element, and a
+  trim edge's stretches tile it without overlapping. `reversed` is set exactly
+  (element starts meet unless one of them is walked backwards).
+- Placements stitch every edge except the mouth (the top-most edge); bags only
+  the mouth. `transform` is a translation (rotation 0).
+- Each trim gets a `layer`: inside for facings, bags, lining, fly pieces.
+- Belt loops, ties and straps are not attached yet.
+- Everything is `source: "inferred"`.
+
+**Re-infer** (Seams panel) sends the current elements and pieces to
+`POST /api/infer-attachments` (`backend/app/api/attachments.py`: shell seams +
+the rules above; malformed pieces → 422). `APPLY_INFERRED` keeps the user's
+seams and placements (`source: 'user'`), replaces the rest, skips inferred
+seams that duplicate a user seam, and sets layers only where the user has not.

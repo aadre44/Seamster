@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import app.db_models  # noqa: F401 — register ORM models with Base.metadata
 from app.models.features import GarmentType
 from app.api.analyze import router as analyze_router
+from app.api.attachments import router as attachments_router
 from app.api.export import router as export_router
 from app.api.generate import router as generate_router
 from app.api.instructions import router as instructions_router
@@ -44,6 +45,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze_router, prefix="/api")
+app.include_router(attachments_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(generate_router, prefix="/api")
 app.include_router(instructions_router, prefix="/api")

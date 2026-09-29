@@ -116,7 +116,7 @@ Seam colour coding:
 | yoke_seam | Purple |
 | fold lines | Light grey (dashed) |
 
-Connections are computed automatically by the backend when generating a pattern and saved in the `.psnap` file, together with placements (pieces such as pockets applied onto another piece).
+Connections are computed automatically by the backend when generating a pattern and saved in the `.psnap` file, together with placements (pieces such as pockets applied onto another piece). Trims are included: collars go round the neckline, cuffs round the wrist, the fly facing and shield onto the left/right front, pocket bags into the side seam, and patch/welt pockets are placed on their host. **Re-infer** (Seams panel, needs the backend) works this out again for the current pieces — including hand-drawn ones — and keeps the seams you made yourself.
 
 **Editing seams:** click an edge, then the edge on another piece it is sewn to, to add a seam. Click a seam's arc (or its row in the **Seams** panel) to edit it: drag the round handles to sew only part of an edge, pick the side of the body for cut-2 pieces, set the sewing direction, rename or delete it. Each seam shows whether its two sides match, are eased, or don't fit. Undo/redo work here too. The 3D drape sews exactly these seams, partial ones included. **Pieces** keeps the pieces in a fixed grid while you edit; **Laid flat** lays them open along their seams. Details: [Docs/assembly.md](Docs/assembly.md).
 
@@ -368,6 +368,7 @@ Seamster/
         ├── api/export.py               POST /api/export/pdf — returns tiled PDF binary
         ├── api/analyze.py              POST /api/analyze — LLM vision → GarmentFeatures JSON
         ├── api/generate.py             POST /api/generate — parametric engine → .psnap JSON
+        ├── api/attachments.py          POST /api/infer-attachments — seams, trim seams, pocket placements for any pattern
         ├── api/refine.py               POST /api/refine — photo + psnap → vision-reshaped psnap
         ├── api/instructions.py         POST /api/instructions — features+pieces → sewing instructions JSON
         ├── patterns/
@@ -384,6 +385,7 @@ Seamster/
         │   ├── shaping.py              Garment-shape layer: hem contour + taper modifiers, control-point warp, mode dispatch (vest/bodice)
         │   ├── modifiers.py            Legacy silhouette modifiers (used by skirt tests only)
         │   ├── engine.py               generate_pattern() → full .psnap JSON dict; _compute_connections() auto-builds SeamConnection list from edge_labels
+        │   ├── attachments.py          Trim seams (collar, cuff, fly, bags…) along host-edge paths with ranges; pocket placements; layers
         │   ├── instruction_generator.py  LLM call → structured sewing instructions JSON
         │   ├── llm_fallback.py         LLM-generated parametric pieces for unsupported details (template-cached, validate/repair loop, placeholder fallback)
         │   ├── learned_pieces.py       Template store + 7 formula-driven geometries (rectangle, shaped_rectangle, trapezoid, godet, quarter/half-circle flounce, curved_band)

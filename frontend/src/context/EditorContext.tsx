@@ -32,6 +32,7 @@ type Action =
   | { type: 'UPDATE_CONNECTION'; index: number; connection: SeamConnection; tag?: string }
   | { type: 'DELETE_CONNECTION'; index: number }
   | { type: 'SET_CONNECTIONS'; connections: SeamConnection[] }
+  | { type: 'APPLY_INFERRED'; connections: SeamConnection[]; placements: Placement[]; layers: Record<string, 'outer' | 'inside'> }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
   | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
   | { type: 'RESET_BODY_PROFILE' }
@@ -268,6 +269,25 @@ function reducer(state: EditorState, action: Action): EditorState {
 
     case 'SET_CONNECTIONS':
       return { ...state, ...pushUndo(state), connections: action.connections }
+
+    case 'APPLY_INFERRED': {
+      // Re-infer: the user's own seams and placements stay; everything else is
+      // replaced. An inferred seam the user already made is not added twice.
+      const endKey = (e: SeamConnection['from']) => `${e.pieceId}|${e.edgeId}|${e.range?.join(',') ?? ''}|${e.side ?? ''}|${e.half ?? ''}`
+      const key = (c: SeamConnection) => [endKey(c.from), endKey(c.to)].sort().join('~')
+      const userSeams = state.connections.filter(c => c.source === 'user')
+      const taken = new Set(userSeams.map(key))
+      const userPlaced = state.placements.filter(p => p.source === 'user')
+      const placedPieces = new Set(userPlaced.map(p => p.pieceId))
+      return {
+        ...state,
+        ...pushUndo(state),
+        connections: [...userSeams, ...action.connections.filter(c => !taken.has(key(c)))],
+        placements: [...userPlaced, ...action.placements.filter(p => !placedPieces.has(p.pieceId))],
+        // Layers the user never set come from the inference.
+        pieces: state.pieces.map(p => (p.layer === undefined && action.layers[p.id] ? { ...p, layer: action.layers[p.id] } : p)),
+      }
+    }
 
     case 'SET_BODY_PROFILE_FIELD':
       return {

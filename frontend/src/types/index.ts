@@ -56,12 +56,14 @@ export type CanvasElement = LineElement | CurveElement | GrainLineElement | Notc
 
 // One side of a seam. `range` sews only part of the edge (fractions of its
 // length, default the whole edge); `side` picks one copy of a cut-2 or on-fold
-// piece (default: both, each sewn on its own side of the body).
+// piece (default: both, each sewn on its own side of the body); `half` picks
+// the front or back half of an on-fold sleeve (a cuff wraps both halves).
 export interface SeamEnd {
   pieceId: string
   edgeId: string
   range?: [number, number]
   side?: 'left' | 'right'
+  half?: 'front' | 'back'
 }
 
 export type AttachmentSource = 'inferred' | 'user'
