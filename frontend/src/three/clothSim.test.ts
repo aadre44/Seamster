@@ -10,7 +10,8 @@ import { SdfGrid } from './sdfGrid'
 import { placeGarment } from './garmentWrap'
 import { Cloth, DRAPE } from './clothSim'
 import { EASE_TIGHT } from './garmentWrap'
-import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
+import type { CanvasElement, PatternPiece, SeamConnection, SeamEnd } from '../types'
+import { seamParts } from './pieceGeometry'
 
 interface Psnap { elements: CanvasElement[]; pieces: PatternPiece[]; connections: SeamConnection[] }
 
@@ -74,16 +75,16 @@ describe('drape simulation', () => {
           const pa = r.placed.find(p => p.id === c.from.pieceId)
           const pb = r.placed.find(p => p.id === c.to.pieceId)
           if (!pa || !pb) continue
-          const ends = (p: typeof pa, edgeId: string, copy: number) => {
-            const parts = p.edges.map((e, i) => ({ e, i })).filter(({ e }) => e.id === edgeId || e.id.startsWith(`${edgeId}#after-dart-`))
+          const ends = (p: typeof pa, end: SeamEnd, copy: number) => {
+            const parts = seamParts(p.edges, end).map(i => ({ e: p.edges[i], i }))
             const range = r.cloth.ranges.find(g => g.piece === r.placed.indexOf(p) && g.copy === copy)!
             const first = p.mesh.edgeVerts[parts[0].i][0]
             const lastPart = p.mesh.edgeVerts[parts[parts.length - 1].i]
             const last = lastPart[lastPart.length - 1]
             return [first, last].map(v => Array.from(r.cloth.x.slice((range.start + v) * 3, (range.start + v) * 3 + 3)))
           }
-          const [a0, a1] = ends(pa, c.from.edgeId, 0)
-          const [b0, b1] = ends(pb, c.to.edgeId, pb.region === 'sleeve' && pa.back ? 1 : 0)
+          const [a0, a1] = ends(pa, c.from, 0)
+          const [b0, b1] = ends(pb, c.to, pb.region === 'sleeve' && pa.back ? 1 : 0)
           const d = (p: number[], q: number[]) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])
           worst = Math.max(worst, Math.min(Math.max(d(a0, b0), d(a1, b1)), Math.max(d(a0, b1), d(a1, b0))))
         }

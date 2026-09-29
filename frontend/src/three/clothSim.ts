@@ -1,6 +1,7 @@
-import type { SeamConnection } from '../types'
+import type { SeamConnection, SeamEnd } from '../types'
 import type { PlacedPiece } from './garmentWrap'
 import type { SdfGrid } from './sdfGrid'
+import { seamParts } from './pieceGeometry'
 
 // Drape: position-based dynamics cloth ("small steps": many substeps, one
 // constraint pass each — Macklin et al. 2019), seeded from the static wrap.
@@ -155,16 +156,14 @@ export class Cloth {
       return { range, verts: placed[pi].mesh.edgeVerts[ei], t: placed[pi].mesh.edgeT[ei] }
     }
 
-    // An outline edge that darts were cut into is now several segments
-    // (id, id#after-dart-k…). Sewn, the darts close — each segment's first
-    // vertex lands on the previous one's last (the dart legs are welded) — so
-    // as a seam it is the segments chained with those duplicates dropped; t
-    // runs along the sewn length.
-    const seamRef = (pi: number, ci: number, edgeId: string): EdgeRef | null => {
+    // A seam end can be several outline edges: an edge darts were cut into
+    // (sewn, the darts close — each segment's first vertex lands on the previous
+    // one's last, the dart legs being welded), or split where other seams' ranges
+    // end (consecutive parts share their end vertex). As a seam it is the parts
+    // chained with those duplicates dropped; t runs along the sewn length.
+    const seamRef = (pi: number, ci: number, end: SeamEnd): EdgeRef | null => {
       const p = placed[pi]
-      const parts = p.edges
-        .map((e, ei) => ({ e, ei }))
-        .filter(({ e }) => e.id === edgeId || e.id.startsWith(`${edgeId}#after-dart-`))
+      const parts = seamParts(p.edges, end).map(ei => ({ e: p.edges[ei], ei }))
       if (!parts.length) return null
       if (parts.length === 1) return edgeRef(pi, ci, parts[0].ei)
       const range = this.ranges.find(r => r.piece === pi && r.copy === ci)!
@@ -188,6 +187,17 @@ export class Cloth {
     // back. Placement samples both sides of a seam identically, so the seam is
     // welded vertex to vertex and cannot open; stitched only if the sampling
     // somehow differs.
+    // Which side of the body (the wearer's left is +x) a copy was placed on.
+    const sideOf = (r: CopyRange): 'left' | 'right' => {
+      let sx = 0
+      for (let i = r.start; i < r.start + r.count; i++) sx += this.x[i * 3]
+      return sx >= 0 ? 'left' : 'right'
+    }
+    // Is a seam end's chain (in loop order) running against its element?
+    const runsBackwards = (pi: number, end: SeamEnd) => {
+      const parts = seamParts(placed[pi].edges, end)
+      return parts.length > 0 && placed[pi].edges[parts[0]].flipped
+    }
     for (const c of connections) {
       const pa = placed.findIndex(p => p.id === c.from.pieceId)
       const pb = placed.findIndex(p => p.id === c.to.pieceId)
@@ -196,14 +206,20 @@ export class Cloth {
         if (sA.mirrorWorld !== sB.mirrorWorld) return
         if (placed[pa].region === 'sleeve' && sA.frontHalf === placed[pb].back) return
         if (placed[pb].region === 'sleeve' && sB.frontHalf === placed[pa].back) return
-        const A = seamRef(pa, ia, c.from.edgeId)
-        const B = seamRef(pb, ib, c.to.edgeId)
+        const A = seamRef(pa, ia, c.from)
+        const B = seamRef(pb, ib, c.to)
         if (!A || !B) return
+        if (c.from.side && sideOf(A.range) !== c.from.side) return
+        if (c.to.side && sideOf(B.range) !== c.to.side) return
         if (A.verts.length !== B.verts.length) {
           stitch(A, B)
           return
         }
-        const flip = reversedPair(A, B)
+        // By default the direction comes from where the wrap put the two edges;
+        // `reversed` (set in Assembly) says how the elements themselves pair up.
+        const flip = c.reversed === undefined
+          ? reversedPair(A, B)
+          : c.reversed !== (runsBackwards(pa, c.from) !== runsBackwards(pb, c.to))
         const last = B.verts.length - 1
         A.verts.forEach((v, k) => weldPair(A.range.start + v, B.range.start + B.verts[flip ? last - k : k]))
         this.weldedSeams++
@@ -451,6 +467,15 @@ export class Cloth {
     x[k] -= tx * f
     x[k + 1] -= ty * f
     x[k + 2] -= tz * f
+  }
+
+  // Do two particles share one simulated particle (welded)?
+  welded(a: number, b: number): boolean {
+    const root = (i: number) => {
+      while (this.alias[i] !== i) i = this.alias[i]
+      return i
+    }
+    return root(a) === root(b)
   }
 
   kineticEnergy(): number {

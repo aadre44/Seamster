@@ -6,6 +6,7 @@ import type { PlacedPiece } from './garmentWrap'
 import { SdfGrid } from './sdfGrid'
 import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
 import type { ResolvedBody } from './types'
+import { seamParts } from './pieceGeometry'
 
 export interface GarmentJob {
   id: number
@@ -26,17 +27,17 @@ export interface GarmentPieceData { id: string; name: string; copies: GarmentCop
 // connection — including the parts an edge was split into by darts), a dart
 // leg, or the piece's own centre / crotch / underarm seam. Folds are not seams.
 function seamEdges(p: PlacedPiece, connections: SeamConnection[]): number[][] {
-  const sewnIds = new Set<string>()
+  const sewn = new Set<number>()
   for (const c of connections) {
-    if (c.from.pieceId === p.id) sewnIds.add(c.from.edgeId)
-    if (c.to.pieceId === p.id) sewnIds.add(c.to.edgeId)
+    for (const end of [c.from, c.to]) {
+      if (end.pieceId === p.id) seamParts(p.edges, end).forEach(i => sewn.add(i))
+    }
   }
   const out: number[][] = []
   p.edges.forEach((e, i) => {
     if (e.isFold) return
-    const base = e.id.split('#after-dart-')[0]
     const own = e.label === 'dart' || e.label === 'sleeve_seam' || ['center_front', 'center_back', 'crotch'].includes(e.label)
-    if (sewnIds.has(base) || own) out.push(p.mesh.edgeVerts[i])
+    if (sewn.has(i) || own) out.push(p.mesh.edgeVerts[i])
   })
   return out
 }

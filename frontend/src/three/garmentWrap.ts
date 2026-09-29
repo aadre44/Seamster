@@ -1,9 +1,9 @@
-import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
+import type { CanvasElement, PatternPiece, SeamConnection, SeamEnd } from '../types'
 import type { BodyQuery, Pt, Section } from './bodyQuery'
 import { perimeter } from './bodyQuery'
 import { classifyPiece } from './pieceClassifier'
 import type { Region } from './pieceClassifier'
-import { allPoints, cutDarts, edgesWith, extractOutline, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
+import { allPoints, cutDarts, edgesWith, extractOutline, rangeCuts, seamParts, splitAtRanges, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
 import type { DartLegs, OutlineEdge, PieceMesh, PieceShape } from './pieceGeometry'
 import type { Vec3 } from './types'
 
@@ -51,7 +51,8 @@ export interface PlacedPiece {
   copies: PlacedCopy[]
   copySpecs: CopySpec[] // mirrorWorld = the body's left side; frontHalf = sleeve half
   mesh: PieceMesh // flat (pattern-space) mesh shared by every copy
-  edges: { id: string; label: string; isFold: boolean }[] // same order as mesh.edgeVerts
+  // Same order as mesh.edgeVerts; base/span/flipped as in OutlineEdge (seamParts finds a seam's edges).
+  edges: Pick<OutlineEdge, 'id' | 'label' | 'isFold' | 'base' | 'span' | 'flipped'>[]
   // Maps a point in the piece's original pattern coordinates onto the body for one copy.
   mapPoint: (x: number, y: number, copy: number) => Vec3
 }
@@ -463,14 +464,6 @@ function copiesFor(p: Profile): CopySpec[] {
   return both ? [{ mirrorWorld: false, frontHalf: true }, { mirrorWorld: true, frontHalf: true }] : [{ mirrorWorld: false, frontHalf: true }]
 }
 
-// The segments an outline edge became (an edge darts were cut into is split:
-// id, id#after-dart-k, …), in outline order.
-export function edgeParts(edges: { id: string }[], edgeId: string): number[] {
-  const out: number[] = []
-  edges.forEach((e, i) => { if (e.id === edgeId || e.id.startsWith(`${edgeId}#after-dart-`)) out.push(i) })
-  return out
-}
-
 const polylineLength = (pts: Pt[]) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0)
 
 // Sewn edges must have matching vertices so the drape can weld them (share
@@ -490,16 +483,22 @@ function conformSeamCounts(
     while (parent.get(r) !== undefined && parent.get(r) !== r) r = parent.get(r)!
     return r
   }
-  const node = (pieceId: string, edgeId: string) => {
-    const p = byId.get(pieceId)
-    if (!p || !edgeParts(shapes.get(p)!.edges, edgeId).length) return null
-    const k = `${pieceId}|${edgeId}`
-    if (!parent.has(k)) parent.set(k, k)
+  // One node per seam end (a piece's edge, or the part of it a range covers).
+  const ends = new Map<string, SeamEnd>()
+  const node = (end: SeamEnd) => {
+    const p = byId.get(end.pieceId)
+    if (!p || !seamParts(shapes.get(p)!.edges, end).length) return null
+    const [lo, hi] = end.range ?? [0, 1]
+    const k = `${end.pieceId}|${end.edgeId}|${lo}|${hi}`
+    if (!parent.has(k)) {
+      parent.set(k, k)
+      ends.set(k, end)
+    }
     return k
   }
   for (const c of connections) {
-    const a = node(c.from.pieceId, c.from.edgeId)
-    const b = node(c.to.pieceId, c.to.edgeId)
+    const a = node(c.from)
+    const b = node(c.to)
     if (a && b) parent.set(find(b), find(a))
   }
   const groups = new Map<string, string[]>()
@@ -510,10 +509,10 @@ function conformSeamCounts(
   const counts = new Map<Profile, (number | undefined)[]>(profiles.map(p => [p, shapes.get(p)!.edges.map(() => undefined)]))
   for (const members of groups.values()) {
     const info = members.map(k => {
-      const [pieceId, edgeId] = k.split('|')
-      const p = byId.get(pieceId)!
+      const end = ends.get(k)!
+      const p = byId.get(end.pieceId)!
       const edges = shapes.get(p)!.edges
-      const parts = edgeParts(edges, edgeId)
+      const parts = seamParts(edges, end)
       const lens = parts.map(i => polylineLength(edges[i].pts))
       return { p, parts, lens, total: lens.reduce((a, b) => a + b, 0) }
     })
@@ -546,7 +545,9 @@ export function placeGarment(
   const skipped: GarmentPlacement['skipped'] = []
   const profiles: Profile[] = []
   for (const piece of pieces) {
-    const shape = extractOutline(piece, byId)
+    const outline = extractOutline(piece, byId)
+    // Seams covering part of an edge split it, so each seam is whole edges.
+    const shape = outline && splitAtRanges(outline, rangeCuts(piece.id, connections.flatMap(c => [c.from, c.to])))
     if (!shape) {
       skipped.push({ id: piece.id, name: piece.name, reason: 'outline is not a closed loop' })
       continue
@@ -605,7 +606,7 @@ export function placeGarment(
       copies,
       copySpecs: specs,
       mesh,
-      edges: meshShape.edges.map(e => ({ id: e.id, label: e.label, isFold: e.isFold })),
+      edges: meshShape.edges.map(({ id, label, isFold, base, span, flipped }) => ({ id, label, isFold, base, span, flipped })),
       mapPoint: (x, y, copy) => {
         const [X, Y] = p.toLocal([x, y])
         return map(p, X, Y, specs[copy]).p

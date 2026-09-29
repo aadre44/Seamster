@@ -1,5 +1,5 @@
 import cdt2d from 'cdt2d'
-import type { CanvasElement, PatternPiece } from '../types'
+import type { CanvasElement, PatternPiece, SeamEnd } from '../types'
 import type { Pt } from './bodyQuery'
 
 // A pattern piece's outline as an ordered, closed loop of labelled edges,
@@ -10,6 +10,12 @@ export interface OutlineEdge {
   label: string
   isFold: boolean
   pts: Pt[] // along the loop, both endpoints included
+  // The canvas element this edge (or part of an edge) comes from, the stretch
+  // of that element it covers (fractions of its length, in the element's own
+  // start→end direction) and whether the loop runs it end→start.
+  base: string
+  span: [number, number]
+  flipped: boolean
 }
 
 export interface PieceShape {
@@ -53,7 +59,7 @@ export function extractOutline(piece: PatternPiece, byId: Map<string, CanvasElem
     if (!e) return null
     const pts = edgePoints(e)
     if (!pts) continue
-    raw.push({ id, label: (e as { seamLabel?: string }).seamLabel ?? '', isFold: e.type === 'line' && e.isFold, pts })
+    raw.push({ id, label: (e as { seamLabel?: string }).seamLabel ?? '', isFold: e.type === 'line' && e.isFold, pts, base: id, span: [0, 1], flipped: false })
   }
   if (raw.length < 2) return null
   const edges: OutlineEdge[] = [raw[0]]
@@ -63,7 +69,7 @@ export function extractOutline(piece: PatternPiece, byId: Map<string, CanvasElem
     const i = rest.findIndex(e => near(e.pts[0], end) || near(e.pts[e.pts.length - 1], end))
     if (i < 0) return null
     const [next] = rest.splice(i, 1)
-    edges.push(near(next.pts[0], end) ? next : { ...next, pts: [...next.pts].reverse() })
+    edges.push(near(next.pts[0], end) ? next : { ...next, pts: [...next.pts].reverse(), flipped: true })
   }
   const first = edges[0].pts[0]
   const last = edges[edges.length - 1].pts[edges[edges.length - 1].pts.length - 1]
@@ -111,8 +117,8 @@ export function cutDarts(shape: PieceShape, darts: DartLegs[]): PieceShape {
     edges = [
       ...edges.slice(0, ei),
       { ...e, pts: before },
-      { id: `dart:${k}:a`, label: 'dart', isFold: false, pts: [first[0], apex] },
-      { id: `dart:${k}:b`, label: 'dart', isFold: false, pts: [apex, second[0]] },
+      { id: `dart:${k}:a`, label: 'dart', isFold: false, pts: [first[0], apex], base: `dart:${k}:a`, span: [0, 1], flipped: false },
+      { id: `dart:${k}:b`, label: 'dart', isFold: false, pts: [apex, second[0]], base: `dart:${k}:b`, span: [0, 1], flipped: false },
       { ...e, id: `${e.id}#after-dart-${k}`, pts: after },
       ...edges.slice(ei + 1),
     ]
@@ -120,6 +126,81 @@ export function cutDarts(shape: PieceShape, darts: DartLegs[]): PieceShape {
   const loop: Pt[] = []
   for (const e of edges) loop.push(...e.pts.slice(0, -1))
   return { edges, loop }
+}
+
+const polylineLength = (pts: Pt[]) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0)
+
+// Splits a polyline at arc-length fractions (sorted, strictly inside (0, 1)).
+function splitPolyline(pts: Pt[], fractions: number[]): Pt[][] {
+  const total = polylineLength(pts)
+  const parts: Pt[][] = []
+  let cur: Pt[] = [pts[0]]
+  let walked = 0
+  let k = 0
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+    while (k < fractions.length && fractions[k] * total <= walked + seg) {
+      const f = seg > 0 ? (fractions[k] * total - walked) / seg : 0
+      const cut: Pt = [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f]
+      cur.push(cut)
+      parts.push(cur)
+      cur = [cut]
+      k++
+    }
+    cur.push(pts[i])
+    walked += seg
+  }
+  parts.push(cur)
+  // Drop zero-length slivers left by cuts landing on a vertex.
+  return parts.map(p => p.filter((q, j) => j === 0 || Math.hypot(q[0] - p[j - 1][0], q[1] - p[j - 1][1]) > 1e-9))
+}
+
+// Splits edges where a seam covers only part of them (SeamEnd.range), so each
+// sewn stretch is whole edges and can be welded vertex to vertex. `cuts` maps
+// an element id to fractions of its length, in the element's own direction.
+// The parts keep the element as `base`, with ids <id>#range-<k>.
+export function splitAtRanges(shape: PieceShape, cuts: Map<string, number[]>): PieceShape {
+  if (!cuts.size) return shape
+  const edges: OutlineEdge[] = []
+  for (const e of shape.edges) {
+    const fs = [...new Set((cuts.get(e.id) ?? []).filter(f => f > 1e-4 && f < 1 - 1e-4))].sort((a, b) => a - b)
+    if (!fs.length || e.base !== e.id) {
+      edges.push(e)
+      continue
+    }
+    // Along the loop the element may run backwards.
+    const along = e.flipped ? fs.map(f => 1 - f).reverse() : fs
+    const bounds = [0, ...fs, 1] // element direction
+    const m = bounds.length - 1
+    splitPolyline(e.pts, along).forEach((pts, k) => {
+      const j = e.flipped ? m - 1 - k : k
+      edges.push({ ...e, id: k === 0 ? e.id : `${e.id}#range-${k}`, pts, span: [bounds[j], bounds[j + 1]] })
+    })
+  }
+  const loop: Pt[] = []
+  for (const e of edges) loop.push(...e.pts.slice(0, -1))
+  return { edges, loop }
+}
+
+// Where seam ends cut an element short of its full length, per element id.
+export function rangeCuts(pieceId: string, ends: SeamEnd[]): Map<string, number[]> {
+  const cuts = new Map<string, number[]>()
+  for (const end of ends) {
+    if (end.pieceId !== pieceId || !end.range) continue
+    cuts.set(end.edgeId, [...(cuts.get(end.edgeId) ?? []), ...end.range])
+  }
+  return cuts
+}
+
+// The outline edges a seam end covers, in loop order: every part of the
+// element (split by darts or by other seams' ranges) within the end's range.
+export function seamParts(edges: Pick<OutlineEdge, 'base' | 'span'>[], end: Pick<SeamEnd, 'edgeId' | 'range'>): number[] {
+  const [lo, hi] = end.range ?? [0, 1]
+  const out: number[] = []
+  edges.forEach((e, i) => {
+    if (e.base === end.edgeId && e.span[0] >= Math.min(lo, hi) - 1e-4 && e.span[1] <= Math.max(lo, hi) + 1e-4) out.push(i)
+  })
+  return out
 }
 
 export function transformShape(shape: PieceShape, fn: (p: Pt) => Pt): PieceShape {

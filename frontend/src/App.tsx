@@ -213,8 +213,8 @@ function Editor() {
 
       {/* Main row */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left toolbar */}
-        <Toolbar />
+        {/* Left toolbar (drawing tools only apply to the pattern) */}
+        {view === 'canvas' && <Toolbar />}
 
         {/* Main view (fills remaining space) */}
         {view === 'body' ? (

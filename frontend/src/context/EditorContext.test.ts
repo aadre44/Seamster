@@ -195,3 +195,33 @@ describe('placements', () => {
     expect(reducer(deleted, { type: 'UNDO' }).placements).toEqual([pocket])
   })
 })
+
+describe('connection editing', () => {
+  const c: SeamConnection = { label: 'side_seam', from: { pieceId: 'A', edgeId: 'a' }, to: { pieceId: 'B', edgeId: 'b' }, source: 'user' }
+
+  it('adds, updates and deletes seams, each undoable', () => {
+    const s0 = { ...initialState, connections: [] }
+    const s1 = reducer(s0, { type: 'ADD_CONNECTION', connection: c })
+    expect(s1.connections).toEqual([c])
+    const s2 = reducer(s1, { type: 'UPDATE_CONNECTION', index: 0, connection: { ...c, reversed: true } })
+    expect(s2.connections[0].reversed).toBe(true)
+    const s3 = reducer(s2, { type: 'DELETE_CONNECTION', index: 0 })
+    expect(s3.connections).toEqual([])
+    expect(reducer(s3, { type: 'UNDO' }).connections[0].reversed).toBe(true)
+    expect(reducer(reducer(reducer(s3, { type: 'UNDO' }), { type: 'UNDO' }), { type: 'UNDO' }).connections).toEqual([])
+  })
+
+  it('ignores a seam that already exists either way round', () => {
+    const s1 = reducer({ ...initialState }, { type: 'ADD_CONNECTION', connection: c })
+    const s2 = reducer(s1, { type: 'ADD_CONNECTION', connection: { ...c, from: c.to, to: c.from } })
+    expect(s2).toBe(s1)
+  })
+
+  it('makes a tagged gesture (dragging a range) one undo step', () => {
+    let s = reducer({ ...initialState }, { type: 'ADD_CONNECTION', connection: c })
+    for (const hi of [0.9, 0.8, 0.7]) {
+      s = reducer(s, { type: 'UPDATE_CONNECTION', index: 0, connection: { ...c, from: { ...c.from, range: [0, hi] } }, tag: 'range' })
+    }
+    expect(reducer(s, { type: 'UNDO' }).connections[0].from.range).toBeUndefined()
+  })
+})

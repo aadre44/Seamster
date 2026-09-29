@@ -28,6 +28,10 @@ type Action =
   | { type: 'MIRROR_PIECE'; pieceId: string; op: 'flipH' | 'flipV' }
   | { type: 'LOAD_STATE'; elements: CanvasElement[]; pieces: PatternPiece[]; measurements: Record<string, number>; connections?: SeamConnection[]; placements?: Placement[]; instructions?: SewingInstructions | null; lastFeatures?: GarmentFeatures | null; lastMeasurements?: Measurements | null }
   | { type: 'SET_INSTRUCTIONS'; instructions: SewingInstructions | null; loading: boolean; features?: GarmentFeatures; measurements?: Measurements }
+  | { type: 'ADD_CONNECTION'; connection: SeamConnection }
+  | { type: 'UPDATE_CONNECTION'; index: number; connection: SeamConnection; tag?: string }
+  | { type: 'DELETE_CONNECTION'; index: number }
+  | { type: 'SET_CONNECTIONS'; connections: SeamConnection[] }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
   | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
   | { type: 'RESET_BODY_PROFILE' }
@@ -243,6 +247,27 @@ function reducer(state: EditorState, action: Action): EditorState {
         lastMeasurements: action.lastMeasurements ?? null,
         bodyProfile: state.bodyProfile,
       }
+
+    case 'ADD_CONNECTION': {
+      const same = (a: SeamConnection['from'], b: SeamConnection['from']) => a.pieceId === b.pieceId && a.edgeId === b.edgeId
+      const c = action.connection
+      if (state.connections.some(o => (same(o.from, c.from) && same(o.to, c.to)) || (same(o.from, c.to) && same(o.to, c.from)))) return state
+      return { ...state, ...pushUndo(state), connections: [...state.connections, c] }
+    }
+
+    case 'UPDATE_CONNECTION':
+      // A tag (e.g. while dragging a range handle) makes the whole gesture one undo step.
+      return {
+        ...state,
+        ...pushUndo(state, action.tag ?? null),
+        connections: state.connections.map((c, i) => (i === action.index ? action.connection : c)),
+      }
+
+    case 'DELETE_CONNECTION':
+      return { ...state, ...pushUndo(state), connections: state.connections.filter((_, i) => i !== action.index) }
+
+    case 'SET_CONNECTIONS':
+      return { ...state, ...pushUndo(state), connections: action.connections }
 
     case 'SET_BODY_PROFILE_FIELD':
       return {

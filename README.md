@@ -116,7 +116,9 @@ Seam colour coding:
 | yoke_seam | Purple |
 | fold lines | Light grey (dashed) |
 
-Connections are computed automatically by the backend when generating a pattern and saved in the `.psnap` file, together with placements (pieces such as pockets applied onto another piece). Assembly editing is being built — see [Docs/assembly.md](Docs/assembly.md).
+Connections are computed automatically by the backend when generating a pattern and saved in the `.psnap` file, together with placements (pieces such as pockets applied onto another piece).
+
+**Editing seams:** click an edge, then the edge on another piece it is sewn to, to add a seam. Click a seam's arc (or its row in the **Seams** panel) to edit it: drag the round handles to sew only part of an edge, pick the side of the body for cut-2 pieces, set the sewing direction, rename or delete it. Each seam shows whether its two sides match, are eased, or don't fit. Undo/redo work here too. The 3D drape sews exactly these seams, partial ones included. **Pieces** keeps the pieces in a fixed grid while you edit; **Laid flat** lays them open along their seams. Details: [Docs/assembly.md](Docs/assembly.md).
 
 ---
 
@@ -336,7 +338,10 @@ Seamster/
 │       │   ├── MeasurementPanel.tsx    Body measurements with range validation
 │       │   ├── AIAssistModal.tsx       Phase 2: photo upload + feature review + generate workflow
 │       │   ├── InstructionsPanel.tsx   Sewing instructions drawer — sections, steps, tips
-│       │   ├── AssemblyView.tsx        Assembly view — flat-lay BFS alignment + grid view with seam arc connections
+│       │   ├── AssemblyView.tsx        Assembly view — edit seams (click edge → edge, range handles), Pieces / Laid flat layouts
+│       │   ├── assembly/geometry.ts    Layouts (shelf grid, laid-flat seam alignment), edge sampling for seam ranges
+│       │   ├── assembly/seams.ts       Seam names, sewn lengths, match / ease / mismatch
+│       │   ├── assembly/SeamsPanel.tsx Seams list + seam editor (range, side, direction, delete)
 │       │   ├── BodyModelView.tsx       3D body view (lazy-loaded) — react-three-fiber canvas, orbit controls, on-demand rendering
 │       │   └── BodyCustomizationPanel.tsx  Body sliders + shape preset + reset (sidebar, 3D view only)
 │       ├── three/
@@ -352,7 +357,8 @@ Seamster/
 │       │   └── pdfExport.ts            Backend-assisted tiled PDF (A4)
 │       ├── utils/
 │       │   ├── formulaEval.ts          Sandboxed expression parser (no eval) for parametric dims
-│       │   └── pieceTransforms.ts      Flip H/V, rotate, mirror-copy geometry
+│       │   ├── pieceTransforms.ts      Flip H/V, rotate, mirror-copy geometry
+│       │   └── psnap.ts                .psnap read/write used by every save/open path
 │       └── types/
 │           └── index.ts                Element, Piece, SeamConnection, Measurement TypeScript interfaces
 │
