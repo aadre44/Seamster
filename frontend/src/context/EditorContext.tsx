@@ -34,6 +34,7 @@ type Action =
   | { type: 'SET_CONNECTIONS'; connections: SeamConnection[] }
   | { type: 'APPLY_INFERRED'; connections: SeamConnection[]; placements: Placement[]; layers: Record<string, 'outer' | 'inside'> }
   | { type: 'ADD_PLACEMENT'; placement: Placement }
+  | { type: 'REPLACE_ATTACHMENTS'; pieceIds: string[]; connections: SeamConnection[]; layers?: Record<string, 'outer' | 'inside'> }
   | { type: 'UPDATE_PLACEMENT'; placement: Placement; tag?: string }
   | { type: 'DELETE_PLACEMENT'; id: string }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
@@ -274,6 +275,20 @@ function reducer(state: EditorState, action: Action): EditorState {
     case 'SET_CONNECTIONS':
       return { ...state, ...pushUndo(state), connections: action.connections }
 
+    case 'REPLACE_ATTACHMENTS': {
+      // Everything the given pieces were sewn or placed with goes; the new seams
+      // come in (e.g. auto-placing a fly). One undo step.
+      const ids = new Set(action.pieceIds)
+      const layers = action.layers ?? {}
+      return {
+        ...state,
+        ...pushUndo(state),
+        connections: [...state.connections.filter(c => !ids.has(c.from.pieceId) && !ids.has(c.to.pieceId)), ...action.connections],
+        placements: state.placements.filter(p => !ids.has(p.pieceId)),
+        pieces: state.pieces.map(p => (layers[p.id] ? { ...p, layer: layers[p.id] } : p)),
+      }
+    }
+
     case 'ADD_PLACEMENT':
       // A piece is placed on one host at a time.
       return {
@@ -299,13 +314,19 @@ function reducer(state: EditorState, action: Action): EditorState {
       const key = (c: SeamConnection) => [endKey(c.from), endKey(c.to)].sort().join('~')
       const userSeams = state.connections.filter(c => c.source === 'user')
       const taken = new Set(userSeams.map(key))
+      // An edge the user has sewn is theirs: no inferred seam is added on it.
+      const edgeKey = (e: SeamConnection['from']) => `${e.pieceId}|${e.edgeId}`
+      const sewnEdges = new Set(userSeams.flatMap(c => [edgeKey(c.from), edgeKey(c.to)]))
       const userPlaced = state.placements.filter(p => p.source === 'user')
       const placedPieces = new Set(userPlaced.map(p => p.pieceId))
+      // A piece the user sewn on by hand is not also placed.
+      const sewnPieces = new Set(userSeams.flatMap(c => [c.from.pieceId, c.to.pieceId]))
       return {
         ...state,
         ...pushUndo(state),
-        connections: [...userSeams, ...action.connections.filter(c => !taken.has(key(c)))],
-        placements: [...userPlaced, ...action.placements.filter(p => !placedPieces.has(p.pieceId))],
+        connections: [...userSeams, ...action.connections.filter(c =>
+          !taken.has(key(c)) && !sewnEdges.has(edgeKey(c.from)) && !sewnEdges.has(edgeKey(c.to)))],
+        placements: [...userPlaced, ...action.placements.filter(p => !placedPieces.has(p.pieceId) && !sewnPieces.has(p.pieceId))],
         // Layers the user never set come from the inference.
         pieces: state.pieces.map(p => (p.layer === undefined && action.layers[p.id] ? { ...p, layer: action.layers[p.id] } : p)),
       }

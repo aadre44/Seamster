@@ -285,6 +285,11 @@ after the shell, in passes (a trim may hang from another trim). See
   cuffs 2); settles; welded with no stitch fallback; stitched pocket edges within
   0.5 cm of the host; inside pieces under the host (median normal offset < 0),
   pockets on top.
+- **Topstitching:** the front's `fly_topstitch` marking (the fly "J") is drawn
+  in gold thread on the copy the fly facing is sewn to, pinned to the mesh by
+  barycentric weights so it follows the drape (`garmentWorker.topstitchMarks`).
+  Stitch and seam lines are lifted off the fabric on its outer side (vertex
+  normals flipped away from the body's centre line where needed).
 - Known limit: a button-front's overlap is drawn as ease (the two fronts are
   welded at their extension edges, not overlapped across the CF).
 

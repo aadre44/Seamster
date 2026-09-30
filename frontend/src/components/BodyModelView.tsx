@@ -113,10 +113,21 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
       for (const edge of piece.seams) for (let k = 0; k < edge.length - 1; k++) pairs.push(edge[k], edge[k + 1])
       const seam = new THREE.BufferGeometry()
       seam.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairs.length * 3), 3))
-      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, inside: piece.layer === 'inside', geometry: g, seam, pairs }
+      // Topstitching (fly J): consecutive pinned points as segments.
+      const stitchPts: { tri: number[]; w: number[] }[] = []
+      const stitchPairs: number[] = []
+      for (const mk of piece.marks.filter(mk => mk.copy === ci)) {
+        const n = mk.w.length / 3
+        const first = stitchPts.length
+        for (let k = 0; k < n; k++) stitchPts.push({ tri: mk.tri.slice(k * 3, k * 3 + 3), w: mk.w.slice(k * 3, k * 3 + 3) })
+        for (let k = 0; k < n - 1; k++) stitchPairs.push(first + k, first + k + 1)
+      }
+      const topstitch = new THREE.BufferGeometry()
+      topstitch.setAttribute('position', new THREE.BufferAttribute(new Float32Array(stitchPairs.length * 3), 3))
+      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, inside: piece.layer === 'inside', geometry: g, seam, pairs, topstitch, stitchPts, stitchPairs }
     })
   }), [result.placementId, fitMap, colorByPiece])
-  useEffect(() => () => meshes.forEach(m => { m.geometry.dispose(); m.seam.dispose() }), [meshes])
+  useEffect(() => () => meshes.forEach(m => { m.geometry.dispose(); m.seam.dispose(); m.topstitch.dispose() }), [meshes])
 
   useEffect(() => {
     for (const m of meshes) {
@@ -126,7 +137,14 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
       ;(attr.array as Float32Array).set(src)
       attr.needsUpdate = true
       m.geometry.computeVertexNormals()
-      const normals = m.geometry.getAttribute('normal').array as Float32Array
+      const raw = m.geometry.getAttribute('normal').array as Float32Array
+      // Lift lines off the fabric on its outer side: mirrored copies are wound
+      // the other way, so their vertex normals may point into the body.
+      const normals = new Float32Array(raw.length)
+      for (let v = 0; v < raw.length / 3; v++) {
+        const out = raw[v * 3] * src[v * 3] + raw[v * 3 + 2] * src[v * 3 + 2] >= 0 ? 1 : -1
+        for (let d = 0; d < 3; d++) normals[v * 3 + d] = raw[v * 3 + d] * out
+      }
       const line = m.seam.getAttribute('position') as THREE.BufferAttribute
       const out = line.array as Float32Array
       m.pairs.forEach((v, k) => {
@@ -134,12 +152,24 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
       })
       line.needsUpdate = true
       m.seam.computeBoundingSphere()
+      if (m.stitchPairs.length) {
+        const at = m.stitchPts.map(({ tri, w }) => [0, 1, 2].map(d =>
+          tri.reduce((sum, v, k) => sum + w[k] * (src[v * 3 + d] + normals[v * 3 + d] * SEAM_LIFT * 1.5), 0)))
+        const ts = m.topstitch.getAttribute('position') as THREE.BufferAttribute
+        const arr = ts.array as Float32Array
+        m.stitchPairs.forEach((pi, k) => arr.set(at[pi], k * 3))
+        ts.needsUpdate = true
+        m.topstitch.computeBoundingSphere()
+      }
     }
     invalidate()
   }, [result, meshes, invalidate])
 
   const seamMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#2f3e5c', transparent: true, opacity: 0.55 }), [])
   useEffect(() => () => seamMaterial.dispose(), [seamMaterial])
+  // Topstitching thread, as on jeans.
+  const threadMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#c9a24a' }), [])
+  useEffect(() => () => threadMaterial.dispose(), [threadMaterial])
 
   const material = useMemo(
     () => new THREE.MeshStandardMaterial({
@@ -167,6 +197,7 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
           <mesh geometry={m.geometry} material={xray && !m.inside ? glass : material} castShadow={!xray || m.inside} receiveShadow
             renderOrder={xray && !m.inside ? 1 : 0} />
           {m.pairs.length > 0 && <lineSegments geometry={m.seam} material={seamMaterial} />}
+          {m.stitchPairs.length > 0 && <lineSegments geometry={m.topstitch} material={threadMaterial} />}
         </group>
       ))}
     </>

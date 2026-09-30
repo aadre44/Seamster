@@ -3,6 +3,8 @@ import { inferAttachments } from '../../api'
 import { useEditor } from '../../context/EditorContext'
 import type { CanvasElement, PatternPiece, Placement, SeamConnection, SeamEnd } from '../../types'
 import { pieceEdges } from './geometry'
+import { flySeams, guessFly, isFlyHost } from './autoFly'
+import type { FlyPlan } from './autoFly'
 import { edgeName, hasSides, labelColour, seamFit, sewnLength } from './seams'
 import type { Fit } from './seams'
 
@@ -28,6 +30,8 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
   const { connections, placements } = state
   const placed = placements.find(p => p.id === selectedPlacement)
   const [inferring, setInferring] = useState(false)
+  const [fly, setFly] = useState<FlyPlan | null>(null)
+  const canFly = pieces.some(p => isFlyHost(p, byId)) && pieces.length > 1
   const [inferError, setInferError] = useState('')
   const pieceOf = (id: string) => pieces.find(p => p.id === id)
   const endName = (end: SeamEnd) => `${pieceOf(end.pieceId)?.name ?? '?'} · ${edgeName(pieceOf(end.pieceId), end.edgeId, byId)}`
@@ -54,6 +58,15 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
       <div className="px-3 py-2 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="text-xs font-semibold text-gray-700">Seams ({connections.length})</div>
+          {canFly && (
+            <button
+              onClick={() => setFly(f => (f ? null : guessFly(pieces, byId)))}
+              title="Sew the fly facing and fly shield to the centre front, the way a fly is constructed"
+              className={`ml-auto mr-1 text-[11px] px-2 py-0.5 rounded border ${fly ? 'bg-teal-600 text-white border-teal-600' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}
+            >
+              Fly…
+            </button>
+          )}
           <button
             onClick={reinfer}
             disabled={inferring}
@@ -71,8 +84,11 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
         </div>
       </div>
 
+      {fly && <FlyForm plan={fly} pieces={pieces} byId={byId} onChange={setFly} onDone={() => setFly(null)} />}
+
       {placed && (
         <PlacementEditor
+          onFly={() => { onSelectPlacement(null); setFly({ ...guessFly(pieces, byId), ...(/shield/i.test(pieceOf(placed.pieceId)?.name ?? '') ? { shield: placed.pieceId } : { facing: placed.pieceId }) }) }}
           placement={placed}
           piece={pieceOf(placed.pieceId)}
           host={pieceOf(placed.hostId)}
@@ -168,12 +184,67 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
   )
 }
 
-function PlacementEditor({ placement, piece, host, byId, onDone }: {
+function FlyForm({ plan, pieces, byId, onChange, onDone }: {
+  plan: FlyPlan
+  pieces: PatternPiece[]
+  byId: Map<string, CanvasElement>
+  onChange: (p: FlyPlan) => void
+  onDone: () => void
+}) {
+  const { dispatch } = useEditor()
+  const [error, setError] = useState('')
+  const hosts = pieces.filter(p => isFlyHost(p, byId))
+  const others = pieces.filter(p => p.id !== plan.host)
+  const pick = (label: string, value: string | null, options: PatternPiece[], set: (id: string | null) => void, none = true) => (
+    <label className="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+      {label}
+      <select aria-label={label} className="max-w-[9rem] text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
+        value={value ?? ''} onChange={e => set(e.target.value || null)}>
+        {none && <option value="">None</option>}
+        {options.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>
+  )
+  const attach = () => {
+    const seams = flySeams(plan, pieces, byId)
+    const ids = [plan.facing, plan.shield].filter((x): x is string => !!x)
+    if (!seams.length || !ids.length) { setError('Pick the front piece and at least the fly facing.'); return }
+    dispatch({ type: 'REPLACE_ATTACHMENTS', pieceIds: ids, connections: seams, layers: Object.fromEntries(ids.map(id => [id, 'inside' as const])) })
+    onDone()
+  }
+  return (
+    <div className="px-3 py-2 border-b border-gray-200 bg-teal-50/60 space-y-1.5" data-testid="fly-form">
+      <div className="text-[11px] font-medium text-gray-800">Place the fly</div>
+      <div className="text-[11px] text-gray-500 leading-snug">
+        Sews the fly facing along the centre front from the waist down, and the shield on the other side, both inside. Replaces any seams or placements they had.
+      </div>
+      {pick('Front piece', plan.host, hosts, id => onChange({ ...plan, host: id }), false)}
+      {pick('Fly facing', plan.facing, others, id => onChange({ ...plan, facing: id }))}
+      {pick('Fly shield', plan.shield, others.filter(p => p.id !== plan.facing), id => onChange({ ...plan, shield: id }))}
+      <label className="flex items-center justify-between text-[11px] text-gray-600">
+        Facing on the wearer's
+        <select aria-label="Facing side" className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
+          value={plan.facingSide} onChange={e => onChange({ ...plan, facingSide: e.target.value as 'left' | 'right' })}>
+          <option value="left">Left (menswear)</option>
+          <option value="right">Right (womenswear)</option>
+        </select>
+      </label>
+      {error && <div className="text-[11px] text-red-600">{error}</div>}
+      <div className="flex gap-2 pt-0.5">
+        <button onClick={attach} className="text-[11px] px-2 py-0.5 rounded bg-teal-600 text-white hover:bg-teal-700">Attach fly</button>
+        <button onClick={onDone} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function PlacementEditor({ placement, piece, host, byId, onDone, onFly }: {
   placement: Placement
   piece: PatternPiece | undefined
   host: PatternPiece | undefined
   byId: Map<string, CanvasElement>
   onDone: () => void
+  onFly: () => void
 }) {
   const { dispatch } = useEditor()
   const update = (p: Placement, tag?: string) => dispatch({ type: 'UPDATE_PLACEMENT', placement: { ...p, source: 'user' }, tag })
@@ -190,6 +261,11 @@ function PlacementEditor({ placement, piece, host, byId, onDone }: {
           onClick={() => { dispatch({ type: 'DELETE_PLACEMENT', id: placement.id }); onDone() }}
         >Remove</button>
       </div>
+      {piece && /\b(fly|shield)\b/i.test(piece.name) && (
+        <button onClick={onFly} className="w-full text-left text-[11px] px-2 py-1 rounded border border-teal-300 bg-white text-teal-800 hover:bg-teal-50">
+          This is a fly piece: a fly is sewn to the centre front, not placed on it. <b>Attach it automatically…</b>
+        </button>
+      )}
       <div className="text-[11px] text-gray-500">Drag it to move; drag the round handle to turn it.</div>
       <label className="flex items-center justify-between text-[11px] text-gray-600">
         Rotation

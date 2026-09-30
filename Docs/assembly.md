@@ -87,6 +87,23 @@ All the new fields are optional, so older `.psnap` files load unchanged.
 - Reducer actions: `ADD_PLACEMENT`, `UPDATE_PLACEMENT` (optional `tag`: one undo
   step per drag / rotate), `DELETE_PLACEMENT`.
 
+## Auto-placing a fly (`components/assembly/autoFly.ts`)
+
+A fly is sewn, not placed: dragging a fly facing onto the front leg makes a
+pocket-style placement, and a hand-drawn seam doesn't know the side, the start
+at the waist or the direction. **Fly…** (Seams panel header, shown when a piece
+has a centre front and a waist) opens a form prefilled from piece names — front
+piece, fly facing, fly shield, and the facing side (wearer's left for
+menswear, right for womenswear). **Attach fly** sews the facing's straight edge
+closest in length to the CF along the CF from the waist down (split across CF
+elements, ranges and `reversed` set exactly), the shield the same on the other
+side, marks both inside, and replaces any seams or placements they had
+(`REPLACE_ATTACHMENTS`, one undo step). A placed piece named fly/shield shows a
+button to do this instead. The result equals the generator's
+(`attachments.py _fly_rule`; tested). The seams are `source: 'user'`, and
+Re-infer never adds an inferred seam on an edge the user has sewn, nor places a
+piece the user has sewn on.
+
 ## How seams reach the 3D drape
 
 - `pieceGeometry.ts` outline edges carry `base` (the element id), `span` (the

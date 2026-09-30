@@ -120,6 +120,8 @@ Connections are computed automatically by the backend when generating a pattern 
 
 **Editing seams:** click an edge, then the edge on another piece it is sewn to, to add a seam. Click a seam's arc (or its row in the **Seams** panel) to edit it: drag the round handles to sew only part of an edge, pick the side of the body for cut-2 pieces, set the sewing direction, rename or delete it. Each seam shows whether its two sides match, are eased, or don't fit. Undo/redo work here too. The 3D drape sews exactly these seams, partial ones included. **Pieces** keeps the pieces in a fixed grid while you edit; **Laid flat** lays them open along their seams.
 
+**Fly:** **Fly…** in the Seams panel attaches the fly facing and fly shield to the centre front automatically (facing on the wearer's left or right), the way a fly is constructed; the fly's J topstitching then shows on the 3D body. A fly piece dragged onto the front by hand offers the same fix.
+
 **Placing pockets:** drag a piece (e.g. a patch pocket) onto the piece it goes on. Placed, it can be dragged to move, turned with its round handle, set to one side of the body or both, inside or outside, and its edges clicked to switch between stitched and open (the mouth is left open by default). Placements are saved in the `.psnap`. Details: [Docs/assembly.md](Docs/assembly.md).
 
 ---

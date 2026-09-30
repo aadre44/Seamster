@@ -74,7 +74,7 @@ export function copySide(p: PlacedPiece, copy: number): Side {
 
 // The host triangle (flat, local coordinates) containing q, as barycentric
 // weights; the nearest vertex when q is outside the host.
-function barycentric(host: PlacedPiece, q: Pt): { tri: [number, number, number]; w: [number, number, number] } {
+export function barycentric(host: PlacedPiece, q: Pt): { tri: [number, number, number]; w: [number, number, number] } {
   const { pts, tris } = host.mesh
   for (const [a, b, c] of tris) {
     const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c]
