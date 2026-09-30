@@ -2,12 +2,14 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { useEditor } from '../context/EditorContext'
 import { snap, SNAP_COLORS, screenToCm } from '../snapping/snapEngine'
 import type { SnapResult, SnapResult as SR } from '../snapping/snapEngine'
-import type { CanvasElement, PatternPiece, Point } from '../types'
+import type { CanvasElement, PatternPiece, Point, SeamConnection } from '../types'
 import { transformPieceElements } from '../utils/pieceTransforms'
 import { downloadPsnap, loadPsnapAction, toPsnap } from '../utils/psnap'
 import { findPreset } from '../library/presets'
 import { presetContext } from '../library/context'
 import { PRESET_MIME } from './PieceLibrary'
+import { bandEdge, bandSeams, openingEdges } from './assembly/bands'
+import { pieceEdges as pieceEdgesOf } from './assembly/geometry'
 
 // The piece whose outline contains p (for markings dropped onto a piece).
 function pieceAt(pieces: PatternPiece[], elements: CanvasElement[], p: Point): string | undefined {
@@ -442,7 +444,16 @@ export default function Canvas() {
       for (let k = 2; taken.has(name); k++) name = `${piece.name} ${k}`
       piece = { ...piece, name }
     }
-    dispatch({ type: 'INSERT_PRESET', elements, piece })
+    // A waistband, collar or cuff is sewn round its opening straight away,
+    // when the pattern has one (one undo step with the drop).
+    let connections: SeamConnection[] | undefined
+    if (piece && preset.attach) {
+      const all = new Map([...s.elements, ...elements].map(e => [e.id, e]))
+      const edge = pieceEdgesOf(piece, all).find(e => e.seamLabel === preset.attach) ?? bandEdge(piece, all)
+      const hosts = openingEdges(s.pieces, all, preset.attach)
+      connections = edge && hosts.length ? bandSeams(piece, edge, hosts, [...s.pieces, piece], all) ?? undefined : undefined
+    }
+    dispatch({ type: 'INSERT_PRESET', elements, piece, connections })
   }, [dispatch, pan, scale])
 
   const handleFileDrop = useCallback((e: React.DragEvent) => {

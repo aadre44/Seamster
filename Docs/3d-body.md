@@ -296,6 +296,7 @@ after the shell, in passes (a trim may hang from another trim). See
   cuffs 2); settles; welded with no stitch fallback; stitched pocket edges within
   0.5 cm of the host; inside pieces under the host (median normal offset < 0),
   pockets on top.
+- **Folded bands:** a trim with a `fold_line` marking (library waistbands, sleeve band) is cut along it before meshing (`pieceGeometry.clipShape`), keeping the half with its sewn edge — on the body it shows one layer at its finished height. (Simulating both layers of a fold without cloth self-collision made the band buckle.)
 - **Buttons and buttonholes** (markings labelled `button` / `buttonhole`, e.g. from the piece library) are drawn on every copy of their piece — buttons as dark rings, buttonholes in thread — pinned like the topstitching below.
 - **Topstitching:** the front's `fly_topstitch` marking (the fly "J") is drawn
   in gold thread on the copy the fly facing is sewn to, pinned to the mesh by

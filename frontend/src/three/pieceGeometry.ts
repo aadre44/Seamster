@@ -210,6 +210,51 @@ export function splitAtRanges(shape: PieceShape, cuts: Map<string, number[]>): P
   return { edges, loop }
 }
 
+// Cuts a shape along the straight line a–b, keeping the side `keep` is on, and
+// closes it with a new edge along the cut (id `${cutId}`). For a band folded in
+// half lengthwise: in 3D only the finished half — from the sewn edge to the
+// fold — is shown. Assumes the line crosses the outline twice (a band).
+export function clipShape(shape: PieceShape, a: Pt, b: Pt, keep: Pt, cutId: string): PieceShape {
+  const side = (p: Pt) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+  const want = Math.sign(side(keep)) || 1
+  const inside = (p: Pt) => side(p) * want >= -1e-9
+  const cross = (p: Pt, q: Pt): Pt => {
+    const sp = side(p), sq = side(q)
+    const f = sp / (sp - sq)
+    return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f]
+  }
+  // Rotate so the loop starts inside, then keep each edge's inside run.
+  const start = shape.edges.findIndex(e => inside(e.pts[0]))
+  if (start < 0) return shape
+  const order = [...shape.edges.slice(start), ...shape.edges.slice(0, start)]
+  const edges: OutlineEdge[] = []
+  let open: Pt | null = null // where the outline left the kept side
+  for (const e of order) {
+    const run: Pt[] = []
+    for (let i = 0; i < e.pts.length; i++) {
+      const p = e.pts[i]
+      if (i > 0) {
+        const q = e.pts[i - 1]
+        if (inside(q) !== inside(p)) {
+          const c = cross(q, p)
+          if (inside(q)) { run.push(c); if (run.length > 1) edges.push({ ...e, pts: [...run] }); run.length = 0; open = c }
+          else {
+            if (open) edges.push({ id: cutId, label: 'fold', isFold: false, pts: [open, c], base: cutId, span: [0, 1], flipped: false })
+            open = null
+            run.push(c)
+          }
+        }
+      }
+      if (inside(p)) run.push(p)
+    }
+    if (run.length > 1) edges.push({ ...e, pts: run })
+  }
+  if (open) edges.push({ id: cutId, label: 'fold', isFold: false, pts: [open, order[0].pts[0]], base: cutId, span: [0, 1], flipped: false })
+  const loop: Pt[] = []
+  for (const e of edges) loop.push(...e.pts.slice(0, -1))
+  return { edges, loop }
+}
+
 // Where seam ends cut an element short of its full length, per element id.
 export function rangeCuts(pieceId: string, ends: SeamEnd[]): Map<string, number[]> {
   const cuts = new Map<string, number[]>()

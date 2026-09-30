@@ -8,7 +8,7 @@ import type { CanvasElement, CurveElement, LineElement, PatternPiece, Point } fr
 // generator's own. Collars, cuffs and waistbands size themselves to the
 // pattern's neckline, wrist or waist when it has one.
 
-export type PresetCategory = 'Pockets' | 'Collars' | 'Cuffs & bands' | 'Plackets & flaps' | 'Buttons'
+export type PresetCategory = 'Pockets' | 'Waistbands' | 'Collars' | 'Cuffs & bands' | 'Plackets & flaps' | 'Buttons'
 
 export interface PresetContext {
   neck: number | null // whole neckline length of the current pattern (cm)
@@ -28,6 +28,8 @@ export interface Preset {
   name: string
   detail: string // size / what it fits
   make: (ctx: PresetContext) => PresetResult
+  // Sewn round this opening as soon as it is dropped, when the pattern has one.
+  attach?: 'waist' | 'neckline' | 'wrist'
 }
 
 let seq = 0
@@ -112,9 +114,34 @@ function pocket(name: string, w: number, h: number, shape: PocketShape, cutQty: 
 const neckOf = (ctx: PresetContext) => ctx.neck ?? 40
 const waistOf = (ctx: PresetContext) => ctx.waist ?? ctx.measurements.waist ?? 74
 const wristOf = (ctx: PresetContext) => ctx.wrist ?? 22
+const hipOf = (ctx: PresetContext) => ctx.measurements.hip ?? waistOf(ctx) * 1.3
 
 function band(name: string, len: number, h: number, label: string, cutQty = 1): PresetResult {
   return piece(name, [{ to: P(len, 0), label }, { to: P(len, h) }, { to: P(0, h) }, { to: P(0, 0) }], P(0, 0), { cutQty, grainV: false })
+}
+
+// A band cut twice its finished height and folded in half lengthwise: the fold
+// line is marked (dashed) along the middle; the 3D view folds it there.
+function foldedBand(name: string, len: number, finished: number, label: string, cutQty = 1): PresetResult {
+  const r = band(name, len, finished * 2, label, cutQty) // centred: the middle is y = 0
+  const fold: LineElement = { id: uid('el'), type: 'line', start: P(-len / 2, 0), end: P(len / 2, 0), isFold: false, pieceId: r.piece!.id, seamLabel: 'fold_line' }
+  return { ...r, elements: [...r.elements, fold] }
+}
+
+// A shaped (contoured) waistband: a curved strip, its sewn edge (the longer
+// one) on the trousers' waist and its top edge `taper` cm shorter, so it
+// follows the body above the waist. Cut once, not folded (a facing backs it).
+function contouredBand(name: string, len: number, h: number, taper: number): PresetResult {
+  const theta = taper / h // angle the strip turns through
+  const Ro = len / theta, Ri = Ro - h
+  const at = (r: number, a: number) => P(r * Math.sin(a), Ro - r * Math.cos(a))
+  const arc = (r: number, a: number, b: number, label?: string): Seg => {
+    const k = (4 / 3) * Math.tan((b - a) / 4)
+    const p0 = at(r, a), p3 = at(r, b)
+    return { to: p3, cp1: P(p0.x + k * r * Math.cos(a), p0.y + k * r * Math.sin(a)), cp2: P(p3.x - k * r * Math.cos(b), p3.y - k * r * Math.sin(b)), label }
+  }
+  const a0 = -theta / 2, a1 = theta / 2
+  return piece(name, [arc(Ro, a0, a1, 'waist'), { to: at(Ri, a1) }, arc(Ri, a1, a0), { to: at(Ro, a0) }], at(Ro, a0), { grainV: false })
 }
 
 function pointCollar(L: number): PresetResult {
@@ -174,14 +201,22 @@ export const PRESETS: Preset[] = [
   { id: 'pocket-cargo', category: 'Pockets', name: 'Cargo pocket', detail: '18 × 20 cm, square', make: () => pocket('Cargo Pocket', 18, 20, 'square', 2) },
   { id: 'pocket-bag', category: 'Pockets', name: 'In-seam pocket bag', detail: '16 × 20 cm', make: () => pocket('Side Pocket Bag', 16, 20, 'rounded', 2, 4) },
 
-  { id: 'collar-stand', category: 'Collars', name: 'Stand collar', detail: '', make: ctx => band('Collar', neckOf(ctx) + 3, 4, 'neckline', 2) },
-  { id: 'collar-shirt', category: 'Collars', name: 'Shirt collar', detail: '', make: ctx => pointCollar(neckOf(ctx) + 3) },
-  { id: 'collar-mandarin', category: 'Collars', name: 'Mandarin collar', detail: '', make: ctx => band('Mandarin Collar', neckOf(ctx) + 3, 3.5, 'neckline', 2) },
-  { id: 'collar-peterpan', category: 'Collars', name: 'Peter Pan collar', detail: '', make: ctx => peterPan(neckOf(ctx)) },
+  { id: 'collar-stand', category: 'Collars', name: 'Stand collar', detail: '', make: ctx => band('Collar', neckOf(ctx) + 3, 4, 'neckline', 2), attach: 'neckline' },
+  { id: 'collar-shirt', category: 'Collars', name: 'Shirt collar', detail: '', make: ctx => pointCollar(neckOf(ctx) + 3), attach: 'neckline' },
+  { id: 'collar-mandarin', category: 'Collars', name: 'Mandarin collar', detail: '', make: ctx => band('Mandarin Collar', neckOf(ctx) + 3, 3.5, 'neckline', 2), attach: 'neckline' },
+  { id: 'collar-peterpan', category: 'Collars', name: 'Peter Pan collar', detail: '', make: ctx => peterPan(neckOf(ctx)), attach: 'neckline' },
 
-  { id: 'cuff-shirt', category: 'Cuffs & bands', name: 'Shirt cuff', detail: '', make: ctx => band('Cuff', wristOf(ctx) + 2, 6, 'wrist', 2) },
-  { id: 'cuff-band', category: 'Cuffs & bands', name: 'Sleeve band', detail: 'folded, 4 cm', make: ctx => band('Sleeve Band', wristOf(ctx), 8, 'wrist', 2) },
-  { id: 'waistband', category: 'Cuffs & bands', name: 'Waistband', detail: 'folded, 4 cm', make: ctx => band('Waistband', waistOf(ctx) + 4, 8, 'waist') },
+  { id: 'cuff-shirt', category: 'Cuffs & bands', name: 'Shirt cuff', detail: '', make: ctx => band('Cuff', wristOf(ctx) + 2, 6, 'wrist', 2), attach: 'wrist' },
+  { id: 'cuff-band', category: 'Cuffs & bands', name: 'Sleeve band', detail: 'folded, 4 cm', make: ctx => foldedBand('Sleeve Band', wristOf(ctx), 4, 'wrist', 2), attach: 'wrist' },
+
+  // Waistbands: the waist length plus a 4 cm overlap for the fastening.
+  { id: 'waistband', category: 'Waistbands', name: 'Straight waistband', detail: '4 cm, folded', make: ctx => foldedBand('Waistband', waistOf(ctx) + 4, 4, 'waist'), attach: 'waist' },
+  { id: 'wb-narrow', category: 'Waistbands', name: 'Narrow waistband', detail: '2.5 cm, folded', make: ctx => foldedBand('Waistband', waistOf(ctx) + 4, 2.5, 'waist'), attach: 'waist' },
+  { id: 'wb-wide', category: 'Waistbands', name: 'Wide waistband', detail: '6 cm, folded', make: ctx => foldedBand('Waistband', waistOf(ctx) + 4, 6, 'waist'), attach: 'waist' },
+  { id: 'wb-contoured', category: 'Waistbands', name: 'Contoured waistband', detail: '5 cm, shaped', make: ctx => contouredBand('Contoured Waistband', waistOf(ctx) + 4, 5, 6), attach: 'waist' },
+  // Casings go over the hips, so they are hip-length, then gathered by the elastic / cord.
+  { id: 'wb-elastic', category: 'Waistbands', name: 'Elastic waistband', detail: '3 cm casing, gathered', make: ctx => foldedBand('Elastic Waistband', hipOf(ctx) + 4, 3, 'waist'), attach: 'waist' },
+  { id: 'wb-drawstring', category: 'Waistbands', name: 'Drawstring waistband', detail: '3.5 cm casing, gathered', make: ctx => foldedBand('Drawstring Waistband', hipOf(ctx) + 4, 3.5, 'waist'), attach: 'waist' },
 
   { id: 'placket', category: 'Plackets & flaps', name: 'Button placket', detail: '4 × 40 cm', make: () => band('Button Placket', 4, 40, '', 1) },
   { id: 'flap', category: 'Plackets & flaps', name: 'Pocket flap', detail: '15 × 6 cm, pointed', make: () => piece('Pocket Flap', [{ to: P(15, 0), label: 'pocket_opening' }, { to: P(15, 4) }, { to: P(7.5, 6) }, { to: P(0, 4) }, { to: P(0, 0) }], P(0, 0), { cutQty: 2 }) },
@@ -200,7 +235,7 @@ export const PRESETS: Preset[] = [
 export function presetDetail(p: Preset, ctx: PresetContext): string {
   if (p.category === 'Collars') return fits(ctx.neck, 'neckline')
   if (p.id.startsWith('cuff')) return `${fits(ctx.wrist, 'wrist')}${p.detail ? `, ${p.detail}` : ''}`
-  if (p.id === 'waistband') return `${fits(ctx.waist, 'waist')}, ${p.detail}`
+  if (p.category === 'Waistbands') return `${/gathered/.test(p.detail) ? 'goes over your hips' : fits(ctx.waist, 'waist')}, ${p.detail}`
   return p.detail
 }
 

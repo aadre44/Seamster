@@ -185,6 +185,14 @@ showing first how its length compares with the opening (e.g. "14.7 cm left
 over, as the overlap at its end — a waistband overlap is usually 3–4 cm").
 The backend's `_around_rule` follows the same length rules (`_true_span`).
 
+**From the library:** waistbands (straight narrow / standard / wide, contoured,
+elastic, drawstring), collars and cuffs carry an `attach` opening; dropped on
+the canvas they are sewn round it at once with `bandSeams` (`Canvas.dropPreset`,
+`INSERT_PRESET` with `connections`). Elastic / drawstring casings are hip
+length and always gathered evenly along the opening; folded bands carry a
+`fold_line` marking (on the body only their finished half is shown — see
+3d-body.md).
+
 ## Auto-placing a fly (`components/assembly/autoFly.ts`)
 
 A fly is sewn, not placed: dragging a fly facing onto the front leg makes a

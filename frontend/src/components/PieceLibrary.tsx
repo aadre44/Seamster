@@ -7,7 +7,7 @@ import { presetContext } from '../library/context'
 // Drawer of ready-made pieces and markings: drag one onto the canvas.
 export const PRESET_MIME = 'application/x-seamster-preset'
 
-const CATEGORIES: PresetCategory[] = ['Pockets', 'Collars', 'Cuffs & bands', 'Plackets & flaps', 'Buttons']
+const CATEGORIES: PresetCategory[] = ['Pockets', 'Waistbands', 'Collars', 'Cuffs & bands', 'Plackets & flaps', 'Buttons']
 
 function Thumb({ result }: { result: PresetResult }) {
   const shapes = result.elements.filter(e => e.type === 'line' || e.type === 'curve')
@@ -26,7 +26,7 @@ function Thumb({ result }: { result: PresetResult }) {
           fill="none"
           stroke={marking ? '#92400e' : e.type === 'line' && e.isFold ? '#9ca3af' : '#4f46e5'}
           strokeWidth={marking ? 1.5 : 1.2}
-          strokeDasharray={e.type === 'line' && e.isFold ? '3 2' : undefined}
+          strokeDasharray={(e.type === 'line' && e.isFold) || ('seamLabel' in e && e.seamLabel === 'fold_line') ? '3 2' : undefined}
           vectorEffect="non-scaling-stroke" />
       ))}
     </svg>

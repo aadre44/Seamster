@@ -83,7 +83,9 @@ export function bandSeams(
     const b = backs.flatMap(p => outward(p, edgesOf(p.id), byId)) // CB → side
     const half = [...f, ...reverse(b)] // CF → side → CB
     const H = half.reduce((a, s) => a + s.length, 0)
-    const spansBoth = trim.cutQty < 2 && !trim.onFold && L > 1.5 * H && hostPieces.every(p => p.cutQty >= 2 || p.onFold)
+    // All the way round: longer than 1.5 × the half opening (a band cut twice is
+    // two layers of one band, not a left and a right).
+    const spansBoth = !trim.onFold && L > 1.5 * H && hostPieces.every(p => p.cutQty >= 2 || p.onFold)
     const startsAtBack = pieceEdges(trim, byId).some(e => e.type === 'line' && e.isFold) // a collar cut on the CB fold
     path = spansBoth
       ? [...onSide(f, 'right'), ...reverse(b, 'right'), ...onSide(b, 'left'), ...reverse(f, 'left')]
@@ -93,11 +95,13 @@ export function bandSeams(
   if (P <= 0 || L <= 0) return null
   // Length-true when the band is longer (the rest is an overlap at its end);
   // eased along the opening when it is shorter.
-  const scale = L >= P ? 1 / L : 1 / P
+  // An elastic or drawstring casing is gathered evenly along the opening.
+  const gathered = /elastic|drawstring|gather/i.test(trim.name)
+  const scale = L >= P && !gathered ? 1 / L : 1 / P
   const out: SeamConnection[] = []
   // A collar's extra length is its seam allowances, one at each end; a
   // waistband's is the overlap at its end.
-  let at = L > P && label === 'neckline' ? (L - P) / 2 : 0
+  let at = L > P && !gathered && label === 'neckline' ? (L - P) / 2 : 0
   for (const s of path) {
     const lo = at * scale, hi = (at + s.length) * scale
     at += s.length
@@ -109,6 +113,16 @@ export function bandSeams(
     out.push({ label, from, to, reversed: !s.forward, source: 'user' })
   }
   return out
+}
+
+export type Opening = 'waist' | 'neckline' | 'hem' | 'wrist'
+
+// Every edge of the garment (not its trims) along an opening; the waist also
+// takes a skirt's or trousers' waist seam (not a bodice's).
+export function openingEdges(pieces: PatternPiece[], byId: Map<string, CanvasElement>, opening: Opening): { pieceId: string; edgeId: string }[] {
+  return pieces.filter(p => !isTrimName(p.name)).flatMap(p => pieceEdges(p, byId)
+    .filter(e => e.seamLabel === opening || (opening === 'waist' && e.seamLabel === 'waist_seam' && !/bodice/i.test(p.name)))
+    .map(e => ({ pieceId: p.id, edgeId: e.id })))
 }
 
 // A trim edge sewn whole to two or more edges of other pieces (e.g. a

@@ -7,7 +7,7 @@ import type { Edge } from './geometry'
 import { flySeams, guessFly, isFlyHost } from './autoFly'
 import { distances, moveTo } from './placementAids'
 import { DEFAULT_ROW, buttonRow, canButton } from './closures'
-import { bandEdge, bandSeams } from './bands'
+import { bandEdge, bandSeams, openingEdges } from './bands'
 import { isTrimName } from '../../three/pieceClassifier'
 import type { ButtonRowOptions } from './closures'
 import type { FlyPlan } from './autoFly'
@@ -215,7 +215,7 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
   )
 }
 
-type Opening = 'waist' | 'neckline' | 'hem' | 'wrist'
+type Opening = import('./bands').Opening
 const OPENINGS: { key: Opening; label: string }[] = [
   { key: 'waist', label: 'Waist' }, { key: 'neckline', label: 'Neckline' }, { key: 'hem', label: 'Hem' }, { key: 'wrist', label: 'Wrist (cuff)' },
 ]
@@ -230,10 +230,7 @@ function BandForm({ bands, pieces, byId, onDone }: { bands: PatternPiece[]; piec
   const [error, setError] = useState('')
   const trim = bands.find(p => p.id === bandId)
   const edge = trim && bandEdge(trim, byId)
-  // Every edge of the garment (not trims) along that opening.
-  const hosts = pieces.filter(p => !isTrimName(p.name)).flatMap(p => pieceEdges(p, byId)
-    .filter(e => e.seamLabel === opening || (opening === 'waist' && e.seamLabel === 'waist_seam' && !/bodice/i.test(p.name)))
-    .map(e => ({ pieceId: p.id, edgeId: e.id })))
+  const hosts = openingEdges(pieces, byId, opening)
   const planned = trim && edge && hosts.length ? bandSeams(trim, edge, hosts, pieces, byId) : null
   // How the band's length compares with the opening it will be sewn round.
   const fit = (() => {

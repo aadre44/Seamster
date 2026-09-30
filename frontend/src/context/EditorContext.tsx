@@ -20,7 +20,7 @@ type Action =
   | { type: 'DESELECT_ALL' }
   | { type: 'SET_MEASUREMENT'; name: string; value: number }
   | { type: 'ADD_PIECE'; piece: PatternPiece }
-  | { type: 'INSERT_PRESET'; elements: CanvasElement[]; piece?: PatternPiece }
+  | { type: 'INSERT_PRESET'; elements: CanvasElement[]; piece?: PatternPiece; connections?: SeamConnection[] }
   | { type: 'UPDATE_PIECE'; piece: PatternPiece }
   | { type: 'DELETE_PIECE'; id: string }
   | { type: 'SELECT_PIECE'; id: string }
@@ -173,6 +173,7 @@ function reducer(state: EditorState, action: Action): EditorState {
         ...pushUndo(state),
         elements: [...state.elements, ...action.elements],
         pieces: action.piece ? [...state.pieces, action.piece] : state.pieces,
+        connections: action.connections ? [...state.connections, ...action.connections] : state.connections,
         selectedPieceId: action.piece?.id ?? state.selectedPieceId,
         selectedIds: action.piece ? [] : action.elements.map(e => e.id),
       }

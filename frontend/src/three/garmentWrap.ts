@@ -3,7 +3,7 @@ import type { BodyQuery, Pt, Section } from './bodyQuery'
 import { perimeter } from './bodyQuery'
 import { classifyPiece } from './pieceClassifier'
 import type { Region } from './pieceClassifier'
-import { allPoints, cutDarts, edgesWith, extractOutline, rangeCuts, seamParts, splitAtRanges, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
+import { allPoints, clipShape, cutDarts, edgesWith, extractOutline, rangeCuts, seamParts, splitAtRanges, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
 import type { DartLegs, OutlineEdge, PieceMesh, PieceShape } from './pieceGeometry'
 import type { Vec3 } from './types'
 import { placeTrims } from './trimPlacement'
@@ -579,7 +579,15 @@ export function placeGarment(
     if (shape.edges.some(e => e.isFold)) labels.add('fold')
     const cls = classifyPiece(piece.name, labels)
     if (cls.region === 'skip') {
-      trims.push({ piece, shape, reason: cls.reason === 'trim or detail piece' ? 'not attached to the garment' : cls.reason ?? 'not placed' })
+      // A band folded in half lengthwise: on the body only its finished half
+      // (from the sewn edge to the fold) is shown — one layer, finished height.
+      const fold = elements.find(e => e.type === 'line' && e.pieceId === piece.id && e.seamLabel === 'fold_line')
+      const sewn = shape.edges.find(e => connections.some(c => [c.from, c.to].some(end => end.pieceId === piece.id && end.edgeId === e.base)))
+        ?? shape.edges.find(e => ['waist', 'wrist', 'neckline', 'hem'].includes(e.label))
+      const finished = fold && fold.type === 'line' && sewn
+        ? clipShape(shape, [fold.start.x, fold.start.y], [fold.end.x, fold.end.y], sewn.pts[Math.floor(sewn.pts.length / 2)], `${piece.id}#fold`)
+        : shape
+      trims.push({ piece, shape: finished, reason: cls.reason === 'trim or detail piece' ? 'not attached to the garment' : cls.reason ?? 'not placed' })
       continue
     }
     profiles.push(makeProfile(piece, shape, cls.region, cls.back, elements))

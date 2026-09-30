@@ -96,12 +96,13 @@ Snap priority: endpoint > midpoint > grid > angle.
 The **▦ Lib** button in the left toolbar (Pattern tab) opens a drawer of ready-made pieces to drag onto the canvas:
 
 - **Pockets** — chest (11 × 13), patch (rounded / angled / U-shaped), jeans back pocket (pointed), cargo, in-seam pocket bag.
+- **Waistbands** — straight (narrow 2.5 / standard 4 / wide 6 cm finished, cut double with a fold line), contoured (shaped, 5 cm), elastic and drawstring casings (hip length, gathered). Sized to your pattern's waist (+ a 4 cm overlap), or over the hips for casings.
 - **Collars** — stand, shirt (point), mandarin, Peter Pan (cut on the fold); sized to your pattern's neckline when it has one.
 - **Cuffs & bands** — shirt cuff and sleeve band (sized to the wrist), waistband (sized to the waist).
 - **Plackets & flaps** — button placket, pocket flap, welt, belt loop, tie / sash.
 - **Buttons** — 11 / 15 / 20 mm buttons and horizontal / vertical buttonholes. These are markings: dropped on a piece they belong to it, and they show on the 3D body.
 
-Library pieces use the same names and edge labels as generated trims, so **Re-infer** in Assembly attaches them (collars to the neckline, cuffs to the wrist, pockets placed on their piece) and they appear on the 3D body. Presets live in `frontend/src/library/presets.ts`.
+Waistbands, collars and cuffs are **sewn on as soon as you drop them** when the pattern has a waist, neckline or wrist (one undo step). Library pieces use the same names and edge labels as generated trims, so **Re-infer** in Assembly attaches the others (collars to the neckline, cuffs to the wrist, pockets placed on their piece) and they appear on the 3D body. Presets live in `frontend/src/library/presets.ts`.
 
 ## Assembly View
 
