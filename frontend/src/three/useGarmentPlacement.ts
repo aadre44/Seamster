@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
+import type { CanvasElement, PatternPiece, Placement, SeamConnection } from '../types'
 import type { GarmentJob, GarmentMessage, GarmentPieceData } from './garmentWorker'
 import type { ResolvedBody } from './types'
 
@@ -20,6 +20,7 @@ export function useGarmentPlacement(
   pieces: PatternPiece[],
   elements: CanvasElement[],
   connections: SeamConnection[],
+  placements: Placement[],
   enabled: boolean,
   drape: boolean,
 ): { result: GarmentState | null; busy: boolean } {
@@ -87,9 +88,9 @@ export function useGarmentPlacement(
 
   useEffect(() => {
     if (!enabled) return
-    state.current.want = { body, pieces, elements, connections, drape }
+    state.current.want = { body, pieces, elements, connections, placements, drape }
     pump()
-  }, [enabled, body, pieces, elements, connections, drape])
+  }, [enabled, body, pieces, elements, connections, placements, drape])
 
   return { result: enabled ? result : null, busy }
 }

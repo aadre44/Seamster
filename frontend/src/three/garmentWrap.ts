@@ -1,4 +1,4 @@
-import type { CanvasElement, PatternPiece, SeamConnection, SeamEnd } from '../types'
+import type { CanvasElement, PatternPiece, Placement, SeamConnection, SeamEnd } from '../types'
 import type { BodyQuery, Pt, Section } from './bodyQuery'
 import { perimeter } from './bodyQuery'
 import { classifyPiece } from './pieceClassifier'
@@ -6,6 +6,8 @@ import type { Region } from './pieceClassifier'
 import { allPoints, cutDarts, edgesWith, extractOutline, rangeCuts, seamParts, splitAtRanges, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
 import type { DartLegs, OutlineEdge, PieceMesh, PieceShape } from './pieceGeometry'
 import type { Vec3 } from './types'
+import { placeTrims } from './trimPlacement'
+import type { TrimInput } from './trimPlacement'
 
 // Static fit preview: every flat pattern piece is wrapped onto the body.
 //
@@ -42,19 +44,37 @@ export interface PlacedCopy {
 
 export interface CopySpec { mirrorWorld: boolean; frontHalf: boolean }
 
+// A particle held at a point of a host piece's surface (a pocket on its
+// garment, a facing under it): the barycentric point of a host triangle,
+// offset along the triangle's outward normal (negative = under the host).
+export interface Pin {
+  vertex: number // in this piece's mesh
+  host: number // index into the placed pieces
+  hostCopy: number
+  tri: [number, number, number] // host mesh vertices
+  w: [number, number, number]
+  stiffness: number // 1 = stitched down; less = lies on the host
+  offset: number // cm along the host's outward normal
+}
+
 export interface PlacedPiece {
   id: string
   name: string
   region: Region
   back: boolean
   onFold: boolean
+  layer: 'outer' | 'inside'
   copies: PlacedCopy[]
   copySpecs: CopySpec[] // mirrorWorld = the body's left side; frontHalf = sleeve half
-  mesh: PieceMesh // flat (pattern-space) mesh shared by every copy
+  mesh: PieceMesh // flat mesh shared by every copy (in the piece's local coords, see toLocal)
   // Same order as mesh.edgeVerts; base/span/flipped as in OutlineEdge (seamParts finds a seam's edges).
   edges: Pick<OutlineEdge, 'id' | 'label' | 'isFold' | 'base' | 'span' | 'flipped'>[]
   // Maps a point in the piece's original pattern coordinates onto the body for one copy.
   mapPoint: (x: number, y: number, copy: number) => Vec3
+  // Pattern (canvas) coordinates → the mesh's local coordinates.
+  toLocal: (p: Pt) => Pt
+  pins?: Pin[][] // per copy
+  stitchedEdges?: number[] // edges of a placed piece sewn down to its host
 }
 
 export interface GarmentPlacement {
@@ -471,12 +491,11 @@ const polylineLength = (pts: Pt[]) => pts.reduce((s, p, i) => (i ? s + Math.hypo
 // Edges joined by connections (transitively: a sleeve armhole is sewn to both
 // bodice armholes) get ONE vertex count, sampled uniformly by arc length; an
 // edge split by darts gets that count spread across its segments.
-function conformSeamCounts(
-  profiles: Profile[],
-  shapes: Map<Profile, PieceShape>,
+export function conformSeamCounts(
+  items: { id: string; shape: PieceShape }[],
   connections: SeamConnection[],
-): Map<Profile, (number | undefined)[]> {
-  const byId = new Map(profiles.map(p => [p.piece.id, p]))
+): Map<string, (number | undefined)[]> {
+  const shapes = new Map(items.map(it => [it.id, it.shape]))
   const parent = new Map<string, string>()
   const find = (k: string): string => {
     let r = k
@@ -486,8 +505,8 @@ function conformSeamCounts(
   // One node per seam end (a piece's edge, or the part of it a range covers).
   const ends = new Map<string, SeamEnd>()
   const node = (end: SeamEnd) => {
-    const p = byId.get(end.pieceId)
-    if (!p || !seamParts(shapes.get(p)!.edges, end).length) return null
+    const shape = shapes.get(end.pieceId)
+    if (!shape || !seamParts(shape.edges, end).length) return null
     const [lo, hi] = end.range ?? [0, 1]
     const k = `${end.pieceId}|${end.edgeId}|${lo}|${hi}`
     if (!parent.has(k)) {
@@ -506,19 +525,18 @@ function conformSeamCounts(
     const r = find(k)
     groups.set(r, [...(groups.get(r) ?? []), k])
   }
-  const counts = new Map<Profile, (number | undefined)[]>(profiles.map(p => [p, shapes.get(p)!.edges.map(() => undefined)]))
+  const counts = new Map<string, (number | undefined)[]>(items.map(it => [it.id, it.shape.edges.map(() => undefined)]))
   for (const members of groups.values()) {
     const info = members.map(k => {
       const end = ends.get(k)!
-      const p = byId.get(end.pieceId)!
-      const edges = shapes.get(p)!.edges
+      const edges = shapes.get(end.pieceId)!.edges
       const parts = seamParts(edges, end)
       const lens = parts.map(i => polylineLength(edges[i].pts))
-      return { p, parts, lens, total: lens.reduce((a, b) => a + b, 0) }
+      return { id: end.pieceId, parts, lens, total: lens.reduce((a, b) => a + b, 0) }
     })
     const n = Math.max(...info.map(m => Math.max(m.parts.length, Math.round(m.total / MESH_SPACING), 1)))
     for (const m of info) {
-      const out = counts.get(m.p)!
+      const out = counts.get(m.id)!
       if (m.parts.length === 1) {
         out[m.parts[0]] = n
         continue
@@ -540,10 +558,14 @@ export function placeGarment(
   elements: CanvasElement[],
   body: BodyQuery,
   connections: SeamConnection[] = [],
+  placements: Placement[] = [],
 ): GarmentPlacement {
   const byId = new Map(elements.map(e => [e.id, e]))
   const skipped: GarmentPlacement['skipped'] = []
   const profiles: Profile[] = []
+  // Trims, pockets…: placed from what they are sewn to / placed on.
+  const trims: (TrimInput & { reason: string })[] = []
+  const outlines = new Map<string, Pt[]>()
   for (const piece of pieces) {
     const outline = extractOutline(piece, byId)
     // Seams covering part of an edge split it, so each seam is whole edges.
@@ -552,11 +574,12 @@ export function placeGarment(
       skipped.push({ id: piece.id, name: piece.name, reason: 'outline is not a closed loop' })
       continue
     }
+    outlines.set(piece.id, shape.loop)
     const labels = new Set(shape.edges.map(e => e.label).filter(Boolean))
     if (shape.edges.some(e => e.isFold)) labels.add('fold')
     const cls = classifyPiece(piece.name, labels)
     if (cls.region === 'skip') {
-      skipped.push({ id: piece.id, name: piece.name, reason: cls.reason ?? 'not placed' })
+      trims.push({ piece, shape, reason: cls.reason === 'trim or detail piece' ? 'not attached to the garment' : cls.reason ?? 'not placed' })
       continue
     }
     profiles.push(makeProfile(piece, shape, cls.region, cls.back, elements))
@@ -577,12 +600,15 @@ export function placeGarment(
 
   // Darts are cut out of the mesh and sewn shut in the drape (their legs become edges).
   const shapes = new Map(profiles.map(p => [p, cutDarts(p.shape, p.darts)]))
-  const seamCounts = conformSeamCounts(profiles, shapes, connections)
+  const seamCounts = conformSeamCounts(
+    [...profiles.map(p => ({ id: p.piece.id, shape: shapes.get(p)! })), ...trims.map(t => ({ id: t.piece.id, shape: t.shape }))],
+    connections,
+  )
 
   const placed: PlacedPiece[] = profiles.map(p => {
     const specs = copiesFor(p)
     const meshShape = shapes.get(p)!
-    const mesh = triangulateShape(meshShape, MESH_SPACING, seamCounts.get(p))
+    const mesh = triangulateShape(meshShape, MESH_SPACING, seamCounts.get(p.piece.id))
     const copies = specs.map(c => {
       const positions = new Float32Array(mesh.pts.length * 3)
       const ease = new Float32Array(mesh.pts.length)
@@ -603,6 +629,7 @@ export function placeGarment(
       region: p.region,
       back: p.back,
       onFold: p.piece.onFold,
+      layer: p.piece.layer ?? 'outer',
       copies,
       copySpecs: specs,
       mesh,
@@ -611,7 +638,14 @@ export function placeGarment(
         const [X, Y] = p.toLocal([x, y])
         return map(p, X, Y, specs[copy]).p
       },
+      toLocal: p.toLocal,
     }
   })
-  return { placed, skipped }
+  const trimmed = placeTrims(trims, placed, {
+    connections, placements, byId, body, pushOut: q => wrapper.pushOut(q), counts: seamCounts, spacing: MESH_SPACING, outlines,
+  })
+  for (const t of trims) {
+    if (trimmed.unattached.includes(t)) skipped.push({ id: t.piece.id, name: t.piece.name, reason: t.reason })
+  }
+  return { placed: [...placed, ...trimmed.placed], skipped }
 }

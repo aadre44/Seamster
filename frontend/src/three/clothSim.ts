@@ -19,6 +19,9 @@ import { seamParts } from './pieceGeometry'
 // All cloth lives in one particle array; each placed copy is a slice of it.
 
 export const CLOTH_THICKNESS = 0.35 // cm kept between fabric and skin
+// Inside pieces (facings, fly, pocket bags) lie between the skin and the outer
+// fabric, so they may come closer to the body.
+export const INSIDE_THICKNESS = 0.1
 const GRAVITY = 981 // cm/s²
 const STRETCH = 1.0
 const COMPRESS = 0.4
@@ -58,6 +61,17 @@ export class Cloth {
   private readonly ti: Int32Array
   private readonly ta: Int32Array
   private readonly tr: Float32Array
+  // Pins (a pocket on its garment, a facing under it): particle pv held at the
+  // barycentric point of host triangle ph (weights pw), offset po along the
+  // triangle's normal (flipped by ps so + is away from the body), stiffness pk.
+  private readonly pv: Int32Array
+  private readonly ph: Int32Array
+  private readonly pw: Float32Array
+  private readonly po: Float32Array
+  private readonly pk: Float32Array
+  private readonly pinFlip: Float32Array
+  // Collision margin of each particle (thinner for inside pieces).
+  private readonly thick: Float32Array
   // alias[i] = the particle i is welded to (itself when not welded).
   private readonly alias: Int32Array
   // Seams between pieces that were welded (the rest fell back to stitches).
@@ -202,8 +216,11 @@ export class Cloth {
       const pa = placed.findIndex(p => p.id === c.from.pieceId)
       const pb = placed.findIndex(p => p.id === c.to.pieceId)
       if (pa < 0 || pb < 0) continue
+      const sided = !!(c.from.side || c.to.side)
       placed[pa].copySpecs.forEach((sA, ia) => placed[pb].copySpecs.forEach((sB, ib) => {
-        if (sA.mirrorWorld !== sB.mirrorWorld) return
+        // Copies on the same side of the body are sewn together — unless the
+        // seam names its side (a collar that spans both sides of the neck).
+        if (!sided && sA.mirrorWorld !== sB.mirrorWorld) return
         // A sleeve half is sewn to the front or back piece on its side — or to
         // the half a seam end names (a cuff wraps both halves).
         const halfOk = (region: string, spec: typeof sA, half: SeamEnd['half'], otherBack: boolean) =>
@@ -213,8 +230,13 @@ export class Cloth {
         const A = seamRef(pa, ia, c.from)
         const B = seamRef(pb, ib, c.to)
         if (!A || !B) return
-        if (c.from.side && sideOf(A.range) !== c.from.side) return
-        if (c.to.side && sideOf(B.range) !== c.to.side) return
+        // A named side picks that copy; the other end must be on the same side
+        // too, unless it is a single piece spanning both sides.
+        const side = c.from.side ?? c.to.side
+        if (side) {
+          if (placed[pa].copySpecs.length > 1 && sideOf(A.range) !== (c.from.side ?? side)) return
+          if (placed[pb].copySpecs.length > 1 && sideOf(B.range) !== (c.to.side ?? side)) return
+        }
         if (A.verts.length !== B.verts.length) {
           stitch(A, B)
           return
@@ -294,6 +316,7 @@ export class Cloth {
     const ta: number[] = []
     const tr: number[] = []
     placed.forEach((p, pi) => {
+      if (p.region === 'trim') return // trims hang from their seams / pins
       const hangs = p.region === 'sleeve' ? ['armhole'] : p.region === 'torso-upper' ? ['shoulder'] : ['waist', 'waist_seam']
       const anchors = new Set<number>()
       p.edges.forEach((e, ei) => { if (hangs.includes(e.label)) p.mesh.edgeVerts[ei].forEach(v => anchors.add(v)) })
@@ -321,6 +344,112 @@ export class Cloth {
     this.ti = Int32Array.from(ti, i => this.alias[i])
     this.ta = Int32Array.from(ta, i => this.alias[i])
     this.tr = new Float32Array(tr)
+
+    const pv: number[] = []
+    const ph: number[] = []
+    const pw: number[] = []
+    const po: number[] = []
+    const pk: number[] = []
+    const flips: number[] = []
+    const g = new Float32Array(3)
+    placed.forEach((p, pi) => p.pins?.forEach((copyPins, ci) => {
+      const own = this.ranges.find(r => r.piece === pi && r.copy === ci)
+      for (const pin of copyPins) {
+        const host = this.ranges.find(r => r.piece === pin.host && r.copy === pin.hostCopy)
+        if (!own || !host) continue
+        const tri = pin.tri.map(v => this.alias[host.start + v])
+        // Orient the triangle normal away from the body once, here.
+        const n = this.triNormal(tri[0], tri[1], tri[2])
+        let flip = 1
+        if (n) {
+          const c = [0, 1, 2].map(d => (this.x[tri[0] * 3 + d] + this.x[tri[1] * 3 + d] + this.x[tri[2] * 3 + d]) / 3)
+          this.body.normal(c[0], c[1], c[2], g)
+          flip = n[0] * g[0] + n[1] * g[1] + n[2] * g[2] >= 0 ? 1 : -1
+        }
+        pv.push(this.alias[own.start + pin.vertex])
+        ph.push(...tri)
+        pw.push(...pin.w)
+        po.push(n ? pin.offset * flip : 0)
+        pk.push(pin.stiffness)
+        flips.push(flip)
+      }
+    }))
+    this.pv = new Int32Array(pv)
+    this.ph = new Int32Array(ph)
+    this.pw = new Float32Array(pw)
+    this.po = new Float32Array(po)
+    this.pk = new Float32Array(pk)
+    this.pinFlip = new Float32Array(flips)
+    this.thick = new Float32Array(n).fill(CLOTH_THICKNESS)
+    for (const r of this.ranges) {
+      if (placed[r.piece].layer === 'inside') this.thick.fill(INSIDE_THICKNESS, r.start, r.start + r.count)
+    }
+  }
+
+  // Unit normal of triangle (a, b, c) by winding; null if degenerate.
+  private triNormal(a: number, b: number, c: number): [number, number, number] | null {
+    const { x } = this
+    const e1x = x[b * 3] - x[a * 3], e1y = x[b * 3 + 1] - x[a * 3 + 1], e1z = x[b * 3 + 2] - x[a * 3 + 2]
+    const e2x = x[c * 3] - x[a * 3], e2y = x[c * 3 + 1] - x[a * 3 + 1], e2z = x[c * 3 + 2] - x[a * 3 + 2]
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x
+    const l = Math.hypot(nx, ny, nz)
+    return l < 1e-9 ? null : [nx / l, ny / l, nz / l]
+  }
+
+  // Where pin c wants its particle.
+  private pinTarget(c: number, out: Float32Array): void {
+    const { x, ph, pw, po } = this
+    const a = ph[c * 3], b = ph[c * 3 + 1], d = ph[c * 3 + 2]
+    for (let k = 0; k < 3; k++) out[k] = x[a * 3 + k] * pw[c * 3] + x[b * 3 + k] * pw[c * 3 + 1] + x[d * 3 + k] * pw[c * 3 + 2]
+    if (po[c] === 0) return
+    const n = this.triNormal(a, b, d)
+    if (!n) return
+    for (let k = 0; k < 3; k++) out[k] += n[k] * po[c]
+  }
+
+  // The pinned piece follows its host; the host doesn't feel it (pockets are light).
+  private solvePins(): void {
+    const { x, pv, pk } = this
+    const t = new Float32Array(3)
+    for (let c = 0; c < pk.length; c++) {
+      this.pinTarget(c, t)
+      const i = pv[c] * 3
+      for (let k = 0; k < 3; k++) x[i + k] += (t[k] - x[i + k]) * pk[c]
+    }
+  }
+
+  // For every pin of the particles in `range`: how far the particle is from its
+  // host point along the host's outward normal (cm; negative = under the host).
+  pinSides(range: CopyRange): number[] {
+    const out: number[] = []
+    const { x, pv, ph, pw, po } = this
+    for (let c = 0; c < pv.length; c++) {
+      const i = pv[c]
+      if (i < range.start || i >= range.start + range.count || po[c] === 0) continue
+      const a = ph[c * 3], b = ph[c * 3 + 1], d = ph[c * 3 + 2]
+      const n = this.triNormal(a, b, d)
+      if (!n) continue
+      let dot = 0
+      for (let k = 0; k < 3; k++) {
+        const hp = x[a * 3 + k] * pw[c * 3] + x[b * 3 + k] * pw[c * 3 + 1] + x[d * 3 + k] * pw[c * 3 + 2]
+        dot += (x[i * 3 + k] - hp) * n[k]
+      }
+      out.push(dot * this.pinFlip[c]) // pinFlip turns the winding normal outward
+    }
+    return out
+  }
+
+  // Distance of each pinned particle with stiffness ≥ min from where its pin wants it (cm).
+  pinGaps(min = 1): number[] {
+    const out: number[] = []
+    const t = new Float32Array(3)
+    for (let c = 0; c < this.pk.length; c++) {
+      if (this.pk[c] < min) continue
+      this.pinTarget(c, t)
+      const i = this.pv[c] * 3
+      out.push(Math.hypot(t[0] - this.x[i], t[1] - this.x[i + 1], t[2] - this.x[i + 2]))
+    }
+    return out
   }
 
   step(dt: number, substeps: number): void {
@@ -343,6 +472,7 @@ export class Cloth {
       }
       this.solveDistances(false)
       this.solveStitches()
+      this.solvePins()
       this.solveTethers()
       this.solveDistances(true)
       // Two passes: where contacts meet (foot and floor) one push can undo another.
@@ -433,18 +563,19 @@ export class Cloth {
     const { x, body, normal, n } = this
     for (let i = 0; i < n; i++) {
       const k = i * 3
-      if (x[k + 1] < CLOTH_THICKNESS) {
-        const push = CLOTH_THICKNESS - x[k + 1]
-        x[k + 1] = CLOTH_THICKNESS
+      const th = this.thick[i]
+      if (x[k + 1] < th) {
+        const push = th - x[k + 1]
+        x[k + 1] = th
         normal[0] = 0
         normal[1] = 1
         normal[2] = 0
         this.friction(k, push)
       }
       const d = body.sample(x[k], x[k + 1], x[k + 2])
-      if (d >= CLOTH_THICKNESS) continue
+      if (d >= th) continue
       body.normal(x[k], x[k + 1], x[k + 2], normal)
-      const push = CLOTH_THICKNESS - d
+      const push = th - d
       x[k] += normal[0] * push
       x[k + 1] += normal[1] * push
       x[k + 2] += normal[2] * push

@@ -98,3 +98,34 @@ def test_dress_skirt_reaches_the_length_category(fit, category, waist_to_hem):
     skirt_len = max(p.y for p in block["front_skirt"].outline)
     empire_drop = 10.0 if fit == "empire" else 0.0
     assert math.isclose(skirt_len, waist_to_hem + empire_drop, abs_tol=0.5)
+
+
+def test_button_placket_widens_the_front_beyond_the_cf():
+    """The button extension lies past the CF line: the front grows by the
+    placket width (it used to shrink by it, making the shirt 6 cm too small)."""
+    from app.patterns.geometry import CurveSegment
+    from app.patterns.shirts import _PLACKET_WIDTH, build_shirt_block
+
+    def xs(spec):
+        return [p.x for p in spec.outline]
+
+    plain = build_shirt_block(_m(length_cm=70.0))["front_bodice"]
+    placket = build_shirt_block(_m(length_cm=70.0), has_placket=True)["front_bodice"]
+    assert min(xs(placket)) == 0.0
+    assert math.isclose(max(xs(placket)), max(xs(plain)) + _PLACKET_WIDTH)
+    # the armhole curve moved with the rest of the front
+    curves = [(a, b) for a, b in zip(plain.outline, placket.outline) if isinstance(a, CurveSegment)]
+    assert curves and all(math.isclose(b.cp1.x, a.cp1.x + _PLACKET_WIDTH) for a, b in curves if a.x != 0.0)
+
+
+def test_shirt_collar_matches_the_neckline_it_is_sewn_to():
+    """Collar length = the neckline measured along its curves (both halves,
+    front and back) + seam allowances — not the neckline widths, which left a
+    shirt collar ~10–25 % short (fixList #23)."""
+    from app.patterns.shirts import _labelled_length, build_shirt_block
+    for placket in (False, True):
+        m = _m(length_cm=70.0)
+        block = build_shirt_block(m, has_collar=True, has_placket=placket)
+        neck = 2 * (_labelled_length(block["front_bodice"], "neckline") + _labelled_length(block["back_bodice"], "neckline"))
+        collar_len = max(p.x for p in block["collar"].outline)
+        assert math.isclose(collar_len, neck + 2 * m.seam_allowance_cm, abs_tol=0.05)

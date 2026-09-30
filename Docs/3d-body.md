@@ -247,6 +247,47 @@ All four settle: kinetic energy falls by more than 4×. At least 99% of cloth en
 
 ---
 
+## Trims and placed pieces (`trimPlacement.ts`)
+
+Pieces the classifier skips (trims) are placed from what they are attached to,
+after the shell, in passes (a trim may hang from another trim). See
+[assembly.md](assembly.md) for where the attachments come from.
+
+- **Seam-attached trims.** Each trim vertex is located by its nearest point on
+  the sewn trim edge (which seam stretch, how far along, in the element's
+  direction) and its distance d from that edge. Outer trims sewn to an opening
+  (waist, wrist, neckline, hem, armhole, yoke seam) *continue* the host surface
+  past the edge: the host point H plus d along (H − host point 1 cm inside the
+  edge), pushed out of the body. Everything else *overlays* the host: the host
+  point d cm inside the edge, one layer (0.3 cm) out or, for inside pieces, in,
+  with a light pin to that host point.
+- **Copies.** A trim sewn to both named sides (a full collar / waistband) is one
+  copy; one named side → one copy there (fly facing left, shield right);
+  otherwise one per host side for cut-2 / on-fold trims. A trim copy pairs with
+  host copies by side, or by the named sleeve half (a cuff wraps both halves).
+- **Placed pieces** (pockets): mapped through `utils/placement.ts` onto the host
+  (`host.mapPoint`), one layer out (in for inside pieces), one copy per host copy
+  (or the placement's side). Every vertex is pinned to its host point:
+  stiffness 1 on stitched edges, 0.25 elsewhere, so it lies on the garment.
+- **Pins** (`clothSim`): particle → barycentric point of a host triangle +
+  offset along the triangle normal (oriented away from the body at setup). The
+  pinned particle follows; the host does not feel it. `pinGaps()` /
+  `pinSides()` report them for tests.
+- **Layers.** Inside pieces collide at 0.1 cm from the skin (outer fabric 0.35),
+  so they can lie between the body and the outer fabric; they render darker and
+  stay opaque in **X-ray**, which makes the outer fabric 28 % opaque.
+- Trims have no tethers: they hang from their seams and pins. Seams between
+  trims and hosts are conformed and welded like shell seams; a named `side`
+  lifts the same-side rule for the copy pairing (the other end must be on that
+  side unless it is one spanning piece).
+- Tests (`trims.test.ts`, fixtures `trousers-trims` / `shirt-trims`): only
+  unattached pieces skipped; copy counts (fly facing 1, back pockets 2, collar 1,
+  cuffs 2); settles; welded with no stitch fallback; stitched pocket edges within
+  0.5 cm of the host; inside pieces under the host (median normal offset < 0),
+  pockets on top.
+- Known limit: a button-front's overlap is drawn as ease (the two fronts are
+  welded at their extension edges, not overlapped across the CF).
+
 ## Next: sculpted base mesh (Fusion 360)
 
 A body modelled in Fusion 360 is exported as a mesh (OBJ, FBX or STL, converted to `.glb`) and loaded in place of the procedural surface. Fusion gives a single fixed body. To fit it to the user's measurements, the mesh will be **deformed at runtime rather than morphed**:

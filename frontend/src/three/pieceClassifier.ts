@@ -2,7 +2,9 @@
 // labels (reliable for engine pieces) and its name (for user/AI pieces).
 // PatternPiece has no explicit body-region field yet.
 
-export type Region = 'torso-upper' | 'torso-lower' | 'leg' | 'sleeve' | 'skip'
+// 'trim' is never returned here: a skipped piece becomes a trim when a seam or
+// a placement attaches it to a placed piece (trimPlacement.ts).
+export type Region = 'torso-upper' | 'torso-lower' | 'leg' | 'sleeve' | 'trim' | 'skip'
 
 export interface Classification {
   region: Region

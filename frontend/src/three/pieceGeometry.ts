@@ -50,6 +50,34 @@ function edgePoints(e: CanvasElement): Pt[] | null {
 
 const near = (p: Pt, q: Pt) => Math.hypot(p[0] - q[0], p[1] - q[1]) < JOIN_EPS
 
+// A point on an outline element at a fraction of its arc length, in the
+// element's own start→end direction (how seam ranges are measured).
+export function elementSampler(e: CanvasElement): ((f: number) => Pt) | null {
+  const pts = edgePoints(e)
+  if (!pts) return null
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+  const total = cum[cum.length - 1] || 1e-9
+  return f => {
+    const s = Math.min(1, Math.max(0, f)) * total
+    let i = 0
+    while (i < pts.length - 2 && cum[i + 1] < s) i++
+    const g = (s - cum[i]) / Math.max(cum[i + 1] - cum[i], 1e-9)
+    return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * g, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * g]
+  }
+}
+
+// Even-odd point in polygon.
+export function insideLoop(poly: Pt[], x: number, y: number): boolean {
+  let c = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]
+    const [xj, yj] = poly[j]
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c
+  }
+  return c
+}
+
 // Chains the piece's outline elements end to end (reversing any that run
 // backwards). Null when they don't form one closed loop.
 export function extractOutline(piece: PatternPiece, byId: Map<string, CanvasElement>): PieceShape | null {
@@ -258,16 +286,6 @@ export function ysAtX(edges: OutlineEdge[], x: number): number[] {
   return out
 }
 
-function inside(poly: Pt[], x: number, y: number): boolean {
-  let c = false
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i]
-    const [xj, yj] = poly[j]
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c
-  }
-  return c
-}
-
 function segmentDistance(p: Pt, a: Pt, b: Pt): number {
   const dx = b[0] - a[0]
   const dy = b[1] - a[1]
@@ -342,7 +360,7 @@ function triangulateBoundary(boundary: Pt[], spacing: number): { pts: Pt[]; tris
   const interior: Pt[] = []
   for (let y = Math.min(...ys) + spacing / 2; y < Math.max(...ys); y += spacing) {
     for (let x = Math.min(...xs) + spacing / 2; x < Math.max(...xs); x += spacing) {
-      if (!inside(boundary, x, y)) continue
+      if (!insideLoop(boundary, x, y)) continue
       let d = Infinity
       for (let i = 0; i < boundary.length && d > spacing * 0.45; i++) {
         d = Math.min(d, segmentDistance([x, y], boundary[i], boundary[(i + 1) % boundary.length]))

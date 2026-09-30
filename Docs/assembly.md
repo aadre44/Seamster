@@ -153,3 +153,8 @@ several host edges, so the rules work from piece **names and geometry**:
 the rules above; malformed pieces → 422). `APPLY_INFERRED` keeps the user's
 seams and placements (`source: 'user'`), replaces the rest, skips inferred
 seams that duplicate a user seam, and sets layers only where the user has not.
+
+## In 3D
+
+Trims attached by a seam and pieces placed on a host are shown on the body and
+draped with it — see [3d-body.md](3d-body.md#trims-and-placed-pieces-trimplacementts).

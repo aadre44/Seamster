@@ -4,7 +4,7 @@ import { Cloth, DRAPE } from './clothSim'
 import { placeGarment } from './garmentWrap'
 import type { PlacedPiece } from './garmentWrap'
 import { SdfGrid } from './sdfGrid'
-import type { CanvasElement, PatternPiece, SeamConnection } from '../types'
+import type { CanvasElement, PatternPiece, Placement, SeamConnection } from '../types'
 import type { ResolvedBody } from './types'
 import { seamParts } from './pieceGeometry'
 
@@ -14,6 +14,7 @@ export interface GarmentJob {
   pieces: PatternPiece[]
   elements: CanvasElement[]
   connections: SeamConnection[]
+  placements: Placement[]
   drape: boolean
 }
 
@@ -21,13 +22,13 @@ export interface GarmentCopyData { positions: Float32Array; indices: Uint32Array
 
 // seams: the piece's sewn edges (vertex indices along each, same for every copy),
 // drawn as stitch lines so you can see they stay joined.
-export interface GarmentPieceData { id: string; name: string; copies: GarmentCopyData[]; seams: number[][] }
+export interface GarmentPieceData { id: string; name: string; layer: 'outer' | 'inside'; copies: GarmentCopyData[]; seams: number[][] }
 
 // A piece edge is drawn as a seam when it is sewn: to another piece (a
 // connection — including the parts an edge was split into by darts), a dart
 // leg, or the piece's own centre / crotch / underarm seam. Folds are not seams.
 function seamEdges(p: PlacedPiece, connections: SeamConnection[]): number[][] {
-  const sewn = new Set<number>()
+  const sewn = new Set<number>(p.stitchedEdges ?? []) // a placed piece's stitched edges
   for (const c of connections) {
     for (const end of [c.from, c.to]) {
       if (end.pieceId === p.id) seamParts(p.edges, end).forEach(i => sewn.add(i))
@@ -77,10 +78,11 @@ self.onmessage = async (e: MessageEvent<GarmentJob>) => {
   const job = e.data
   latest = job.id
   try {
-    const { placed, skipped } = placeGarment(job.pieces, job.elements, proceduralBodyQuery(job.body), job.connections)
+    const { placed, skipped } = placeGarment(job.pieces, job.elements, proceduralBodyQuery(job.body), job.connections, job.placements)
     const pieces: GarmentPieceData[] = placed.map(p => ({
       id: p.id,
       name: p.name,
+      layer: p.layer,
       copies: p.copies.map(c => ({ ...c, positions: c.positions.slice() })),
       seams: seamEdges(p, job.connections),
     }))

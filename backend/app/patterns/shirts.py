@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
+from app.patterns.finishings import path_length
 from app.patterns.skirts import PieceSpec
 
 EASE_CHEST = 6.0      # standard chest/bust ease added to the full chest circumference
@@ -110,6 +111,13 @@ _FIT_PARAMS: dict[str, dict] = {
     "longline":  dict(shoulder_slope=1.5,  armhole_extra= 0.0, waist_suppress=0.5, drop_shoulder=0.0),
 }
 _DEFAULT_FIT = _FIT_PARAMS["regular"]
+
+
+def _labelled_length(spec: PieceSpec, label: str) -> float:
+    """Total length of a piece's outline edges carrying `label` (curves followed)."""
+    n = len(spec.outline)
+    return sum(path_length([spec.outline[i], spec.outline[(i + 1) % n]])
+               for i, lab in spec.edge_labels.items() if lab == label)
 
 
 def build_shirt_block(
@@ -624,12 +632,17 @@ def build_shirt_block(
                 Point(0.0, L),
             ]
 
-    # Button placket: shift CF edge outward; piece is cut off-fold
+    # Button placket: the extension lies BEYOND the CF line, so the front is
+    # _PLACKET_WIDTH wider. The front edge stays at x = 0 and everything else
+    # moves out (the CF line is now at x = _PLACKET_WIDTH). Moving the front edge
+    # in instead made every button-front shirt 2 × 3 cm too small.
     if has_placket:
-        front_outline = [
-            Point(p.x + _PLACKET_WIDTH, p.y) if p.x == 0.0 else p
-            for p in front_outline
-        ]
+        def _widen(p: Point | CurveSegment) -> Point | CurveSegment:
+            if isinstance(p, CurveSegment):
+                return CurveSegment(p.x + _PLACKET_WIDTH, p.y,
+                                    Point(p.cp1.x + _PLACKET_WIDTH, p.cp1.y), Point(p.cp2.x + _PLACKET_WIDTH, p.cp2.y))
+            return p if p.x == 0.0 else Point(p.x + _PLACKET_WIDTH, p.y)
+        front_outline = [_widen(p) for p in front_outline]
         front_on_fold = False
         front_cut_qty = 2
     elif split_to_hem and not is_halter:
@@ -641,7 +654,7 @@ def build_shirt_block(
         front_on_fold = True
         front_cut_qty = 2
 
-    front_grain_x = chest_qt / 2
+    front_grain_x = chest_qt / 2 + (_PLACKET_WIDTH if has_placket else 0.0)
     _front_fold_note = (
         "has button-placket extension at CF; cut 2 separate pieces; interface placket strip before folding"
         if has_placket else
@@ -670,6 +683,12 @@ def build_shirt_block(
     if back_spec is not None:
         pieces["back_bodice"] = back_spec
     pieces.update(extra_strap_pieces)
+
+    # Neck opening, measured along the neckline edges (a scooped front neckline
+    # is much longer than its width) and across the button extension: the
+    # length a collar or neck band is sewn along.
+    neck_half = _labelled_length(front_spec, "neckline") + (_labelled_length(back_spec, "neckline") if back_spec else 0.0)
+    neck_circ = 2 * neck_half if neck_half > 0 else (back_neck_w + front_neck_w) * 2
 
     # ── Sleeve ────────────────────────────────────────────────────────────────
     sleeve_length = (sleeve_length or "long").lower()
@@ -775,8 +794,7 @@ def build_shirt_block(
 
     # ── Collar ────────────────────────────────────────────────────────────────
     if has_collar:
-        neck_circumference = (back_neck_w + front_neck_w) * 2
-        collar_w = neck_circumference + m.seam_allowance_cm * 2
+        collar_w = neck_circ + m.seam_allowance_cm * 2
         collar_outline = [
             Point(0.0, 0.0),
             Point(collar_w, 0.0),
@@ -801,7 +819,6 @@ def build_shirt_block(
     # Only generated when the vision analysis explicitly detected one.
     # Cut slightly shorter than the neck opening so the rib stretches when sewn in.
     if has_ribbed_collar and not has_collar:
-        neck_circ = (back_neck_w + front_neck_w) * 2
         rib_w = neck_circ * 0.9  # rib stretches ~10% when sewn to opening
         rib_outline = [
             Point(0.0, 0.0),
@@ -825,7 +842,6 @@ def build_shirt_block(
     # ── Turtleneck / Mock Turtleneck Band ─────────────────────────────────────
     if neckline in ("turtleneck", "mock_turtleneck"):
         tube_h = 20.0 if neckline == "turtleneck" else 12.0
-        neck_circ = (back_neck_w + front_neck_w) * 2
         band_w = neck_circ
         band_outline = [
             Point(0.0, 0.0),

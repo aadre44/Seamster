@@ -83,18 +83,20 @@ function KeyLight({ height }: { height: number }) {
 // One fabric colour for the whole garment, like real cloth; optional distinct
 // colours per piece for inspecting how the pattern is assembled.
 const FABRIC = '#7f9cc9'
+// The wrong side of the garment: facings, fly, pocket bags.
+const INSIDE = '#5b739b'
 const PIECE_COLORS = ['#7c9cc9', '#c98f7c', '#86b59a', '#b59ac9', '#c9b87c', '#7cb8c9', '#c97ca4', '#9aa0b5']
 const SNUG = new THREE.Color('#f5a524')
 const TIGHT = new THREE.Color('#e5484d')
 // Stitch lines sit this far (cm) off the fabric so they are not hidden by it.
 const SEAM_LIFT = 0.12
 
-function GarmentMeshes({ result, fitMap, colorByPiece }: { result: GarmentState; fitMap: boolean; colorByPiece: boolean }) {
+function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: GarmentState; fitMap: boolean; colorByPiece: boolean; xray: boolean }) {
   const { invalidate } = useThree()
   // Geometry is rebuilt only when the placement (topology) or colouring
   // changes; drape frames just move the vertices.
   const meshes = useMemo(() => result.pieces.flatMap((piece, i) => {
-    const base = new THREE.Color(colorByPiece ? PIECE_COLORS[i % PIECE_COLORS.length] : FABRIC)
+    const base = new THREE.Color(colorByPiece ? PIECE_COLORS[i % PIECE_COLORS.length] : piece.layer === 'inside' ? INSIDE : FABRIC)
     return piece.copies.map((copy, ci) => {
       const g = new THREE.BufferGeometry()
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(copy.positions), 3))
@@ -111,7 +113,7 @@ function GarmentMeshes({ result, fitMap, colorByPiece }: { result: GarmentState;
       for (const edge of piece.seams) for (let k = 0; k < edge.length - 1; k++) pairs.push(edge[k], edge[k + 1])
       const seam = new THREE.BufferGeometry()
       seam.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairs.length * 3), 3))
-      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, geometry: g, seam, pairs }
+      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, inside: piece.layer === 'inside', geometry: g, seam, pairs }
     })
   }), [result.placementId, fitMap, colorByPiece])
   useEffect(() => () => meshes.forEach(m => { m.geometry.dispose(); m.seam.dispose() }), [meshes])
@@ -147,12 +149,23 @@ function GarmentMeshes({ result, fitMap, colorByPiece }: { result: GarmentState;
     [],
   )
   useEffect(() => () => material.dispose(), [material])
+  // X-ray: the outer fabric turns see-through so the inside pieces show.
+  const glass = useMemo(
+    () => new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.4,
+      transparent: true, opacity: 0.28, depthWrite: false,
+    }),
+    [],
+  )
+  useEffect(() => () => glass.dispose(), [glass])
+  useEffect(() => { invalidate() }, [xray, invalidate])
 
   return (
     <>
       {meshes.map(m => (
         <group key={m.key}>
-          <mesh geometry={m.geometry} material={material} castShadow receiveShadow />
+          <mesh geometry={m.geometry} material={xray && !m.inside ? glass : material} castShadow={!xray || m.inside} receiveShadow
+            renderOrder={xray && !m.inside ? 1 : 0} />
           {m.pairs.length > 0 && <lineSegments geometry={m.seam} material={seamMaterial} />}
         </group>
       ))}
@@ -172,7 +185,9 @@ export default function BodyModelView() {
   const [fitMap, setFitMap] = useState(true)
   const [drape, setDrape] = useState(true)
   const [colorByPiece, setColorByPiece] = useState(false)
-  const garment = useGarmentPlacement(body, state.pieces, state.elements, state.connections, hasPattern && showGarment, drape)
+  const [xray, setXray] = useState(false)
+  const garment = useGarmentPlacement(body, state.pieces, state.elements, state.connections, state.placements, hasPattern && showGarment, drape)
+  const hasInside = !!garment.result?.pieces.some(p => p.layer === 'inside')
   const placed = garment.result
 
   const geometry = useMemo(() => {
@@ -216,7 +231,7 @@ export default function BodyModelView() {
         {geometry && (
           <mesh geometry={geometry} material={material} castShadow receiveShadow />
         )}
-        {placed && showGarment && <GarmentMeshes result={placed} fitMap={fitMap} colorByPiece={colorByPiece} />}
+        {placed && showGarment && <GarmentMeshes result={placed} fitMap={fitMap} colorByPiece={colorByPiece} xray={xray} />}
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[800, 800]} />
           <shadowMaterial transparent opacity={0.16} />
@@ -249,6 +264,12 @@ export default function BodyModelView() {
                 <input type="checkbox" checked={colorByPiece} onChange={e => setColorByPiece(e.target.checked)} />
                 <span>Color by piece</span>
               </label>
+              {hasInside && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={xray} onChange={e => setXray(e.target.checked)} />
+                  <span>X-ray (see inside pieces)</span>
+                </label>
+              )}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={fitMap} onChange={e => setFitMap(e.target.checked)} />
                 <span>Fit map</span>
