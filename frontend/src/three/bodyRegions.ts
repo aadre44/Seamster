@@ -33,7 +33,8 @@ export const BODY_FIELDS: BodyFieldMeta[] = [
   { key: 'ankle',      label: 'Ankle',          minCm: 18,  maxCm: 32,  defaultCm: 23, maleDefaultCm: 24 },
 ]
 
-export const DEFAULT_BODY_PROFILE: BodyProfile = { overrides: {}, shape: 'hourglass' }
+// The editor starts with a male body (Rectangle); a profile without `sex` is female.
+export const DEFAULT_BODY_PROFILE: BodyProfile = { overrides: {}, shape: 'rectangle', sex: 'male' }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 

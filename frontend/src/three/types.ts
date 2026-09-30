@@ -16,7 +16,7 @@ export type BodyField =
 export interface BodyProfile {
   overrides: Partial<Record<BodyField, number>>
   shape: BodyShapePreset
-  sex?: BodySex // default female
+  sex?: BodySex // absent = female (older profiles); the editor defaults to male
 }
 
 export type ResolvedBody = Record<BodyField, number> & { shape: BodyShapePreset; sex: BodySex }

@@ -92,7 +92,7 @@ describe('resolveBody', () => {
   })
 
   it('does not treat a garment sleeve length as an arm length', () => {
-    expect(resolveBody(DEFAULT_BODY_PROFILE, { sleeveLength: 20 }).armLength).toBe(58)
+    expect(resolveBody(DEFAULT_BODY_PROFILE, { sleeveLength: 20 }).armLength).toBe(63) // the default (male) arm
   })
 })
 
@@ -298,7 +298,8 @@ describe('male body', () => {
     expect([b.height, b.bust, b.waist, b.shoulder]).toEqual([178, 100, 86, 46])
     // editor measurements still win (the body follows the pattern's size)
     expect(resolveBody({ overrides: {}, shape: 'rectangle', sex: 'male' }, { bust: 108 }).bust).toBe(108)
-    expect(resolveBody(DEFAULT_BODY_PROFILE, {}).sex).toBe('female')
+    expect(resolveBody(DEFAULT_BODY_PROFILE, {}).sex).toBe('male') // the editor's default body
+    expect(resolveBody({ overrides: {}, shape: 'rectangle' }, {}).sex).toBe('female')
   })
 
   it('has a flat chest taped to the chest measurement, not a bust cup', () => {

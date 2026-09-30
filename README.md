@@ -130,7 +130,7 @@ The **🧍 3D Body** tab replaces the canvas with a 3D mannequin built from body
 
 - **Orbit** — drag to rotate, scroll to zoom, right-drag to pan.
 - **Body panel** (top of the right sidebar while the view is open) — sliders for height, bust, underbust, waist, waist-to-hip, hip, neck, shoulder width, arm length, upper arm, wrist, inseam, thigh, knee, calf and ankle. The mannequin reshapes live as you drag.
-- **Body** — Female or Male. A male body has a flat chest (the **Chest** measurement, no underbust/cup), broader shoulders, a straighter waist and hips, a lower waist line and a broader jaw, and starts from a man's default measurements (178 cm, chest 100, waist 86, shoulder 46).
+- **Body** — Male (the default) or Female. A male body has a flat chest (the **Chest** measurement, no underbust/cup), broader shoulders, a straighter waist and hips, a lower waist line and a broader jaw, and starts from a man's default measurements (178 cm, chest 100, waist 86, shoulder 46).
 - **Shape** — Hourglass / Rectangle / Pear / Apple changes the cross-section depths and the bust, belly and seat projection, not just the circumferences. For a male body the presets read Athletic / Rectangle / Triangle / Oval.
 - **Where values come from** — a slider you move becomes a `custom` value. Fields you haven't set use the Measurements panel (tagged `measured`: bust, waist, hip, waist-to-hip, inseam, shoulder), otherwise a default. **Reset to measurements** clears your custom values.
 - Your body stays as you set it when you open a file or generate a new pattern. It is not part of undo/redo, and is not yet saved in `.psnap`.

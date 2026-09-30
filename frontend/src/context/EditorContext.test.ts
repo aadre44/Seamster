@@ -152,9 +152,9 @@ describe('body profile', () => {
   it('records overrides and shape, and reset clears only the overrides', () => {
     let s = reducer(initialState, { type: 'SET_BODY_PROFILE_FIELD', field: 'waist', value: 81 })
     s = reducer(s, { type: 'SET_BODY_SHAPE', shape: 'apple' })
-    expect(s.bodyProfile).toEqual({ overrides: { waist: 81 }, shape: 'apple' })
+    expect(s.bodyProfile).toEqual({ overrides: { waist: 81 }, shape: 'apple', sex: 'male' })
     s = reducer(s, { type: 'RESET_BODY_PROFILE' })
-    expect(s.bodyProfile).toEqual({ overrides: {}, shape: 'apple' })
+    expect(s.bodyProfile).toEqual({ overrides: {}, shape: 'apple', sex: 'male' })
   })
 
   it('survives LOAD_STATE (opening a file or AI generate)', () => {
