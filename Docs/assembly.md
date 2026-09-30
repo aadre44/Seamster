@@ -42,6 +42,42 @@ All the new fields are optional, so older `.psnap` files load unchanged.
   (default, right for engine patterns); `false` = element start to start;
   `true` = start to end.
 
+## Garment view (`components/assembly/garmentLayout.ts`)
+
+The default Assembly view shows the whole garment the way it is worn: every
+cut copy of every piece (a left and a right front leg, a left and a right back
+leg…), unrolled around the body as if cut down the centre back:
+
+```
+ CB        side       CF        side        CB
+ | R back ||  R front || L front ||  L back |     (Back centred: the backs in the middle)
+```
+
+- **Copies**: a piece cut 2 or on the fold has an L and an R copy (on the fold:
+  its two mirrored halves); a sleeve on the fold also has front / back halves.
+  Keys `pieceId#side[-half]`, sides the wearer's (in 3D, the un-mirrored copy
+  is on +x = the wearer's left).
+- **Rows**: upper torso (bodice) above lower torso / legs (skirt, trousers).
+- **Ring**: from the centre piece (CF, or CB when back-centred) outward, each
+  piece aligned to the previous along the seam between them — the side seam,
+  never the inseam — by `alignToNeighbour` (whole seam, mirror-aware), pushed
+  `LAYOUT_GAP` (1.2 cm) away, then eased further until the two outlines don't
+  cross (front and back hip curves both bulge outward, so they touch near the
+  hip and part toward waist and hem). The other side is the mirror image; a
+  piece reaching past the centre line (a trouser front's crotch extension)
+  moves that side out just clear, so the legs' inseams meet in the middle.
+- **Sleeves** (both halves, cap down) above their side; **trims** and
+  unattached pieces in a tray row underneath.
+- `copyAt(point)` finds the copy under a layout point (or the nearest within
+  the gap). The layout is pure geometry, shared with the 3D side.
+- Seam arcs join the copies each connection applies to (paired by side; a
+  sleeve half by the other piece's front/back), and are omitted between
+  neighbours that visibly touch. Clicking edges on two copies of the same side
+  makes a symmetric seam; across sides (L ↔ R) it sets `side` on both ends.
+- Placements are drawn on every host copy they apply to — both sides for a
+  pair (🔗), one side when `side` is set; a piece dropped on a copy of a cut-2 /
+  on-fold host is placed on that side only.
+
 ## Editing seams (`components/AssemblyView.tsx`, `components/assembly/`)
 
 - **Add**: click an edge, then the edge on another piece it is sewn to. The new

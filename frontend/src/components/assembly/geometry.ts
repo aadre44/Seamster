@@ -174,6 +174,50 @@ function seamSpan(edges: Edge[]): [Pt, Pt] {
   return best
 }
 
+// Where `next` goes when laid open against `placed` (already at transform t)
+// along the seam(s) `cs` between them: aligned along the whole seam, and
+// mirrored if that is how it lies (sewn pieces lie right sides together) —
+// of the four rotate/mirror options, the one that puts every seam element next
+// to its partner without overlapping. `gap` then pushes it that far away from
+// the seam (pieces shown "sewn but separated"). Null if they share no edges.
+export function alignToNeighbour(
+  t: Affine, placed: PatternPiece, next: PatternPiece, cs: SeamConnection[], byId: Map<string, CanvasElement>, gap = 0,
+): Affine | null {
+  const mine = cs.map(c => byId.get(c.from.pieceId === placed.id ? c.from.edgeId : c.to.edgeId)).filter(isEdge)
+  const theirs = cs.map(c => byId.get(c.from.pieceId === placed.id ? c.to.edgeId : c.from.edgeId)).filter(isEdge)
+  if (!mine.length || !theirs.length) return null
+  const [a0, a1] = seamSpan(mine)
+  const [b0, b1] = seamSpan(theirs)
+  const A = apply(t, a0), B = apply(t, a1)
+  const placedC = apply(t, pieceCentroid(placed, byId))
+  const mid = (e: Edge) => ({ x: (e.start.x + e.end.x) / 2, y: (e.start.y + e.end.y) / 2 })
+  let best = IDENTITY, bestScore = Infinity
+  for (const mirror of [false, true]) {
+    const M: Affine = mirror ? { a: -1, b: 0, c: 0, d: 1, tx: 0, ty: 0 } : IDENTITY
+    const m0 = apply(M, b0), m1 = apply(M, b1)
+    for (const [P, Q] of [[A, B], [B, A]]) {
+      const cand = compose(alignment(m0, m1, P, Q), M)
+      const overlap = Math.sign(side(A, B, placedC)) === Math.sign(side(A, B, apply(cand, pieceCentroid(next, byId))))
+      let score = (overlap ? 1e6 : 0) + (mirror ? 1e-3 : 0) // on a tie, don't mirror
+      mine.forEach((e, k) => {
+        if (!theirs[k]) return
+        const p = apply(t, mid(e)), q = apply(cand, mid(theirs[k]))
+        score += Math.hypot(p.x - q.x, p.y - q.y)
+      })
+      if (score < bestScore) { bestScore = score; best = cand }
+    }
+  }
+  if (gap > 0) {
+    // Away from the seam line, on the side the new piece lies.
+    const len = Math.hypot(B.x - A.x, B.y - A.y) || 1
+    let nx = -(B.y - A.y) / len, ny = (B.x - A.x) / len
+    const c = apply(best, pieceCentroid(next, byId))
+    if ((c.x - A.x) * nx + (c.y - A.y) * ny < 0) { nx = -nx; ny = -ny }
+    best = { ...best, tx: best.tx + nx * gap, ty: best.ty + ny * gap }
+  }
+  return best
+}
+
 // Pieces laid flat edge to edge along their seams (breadth first from the
 // first piece), each joined to its neighbour along the whole seam between
 // them; unconnected pieces stack to the right. World cm.
@@ -198,33 +242,8 @@ export function flatLayLayout(pieces: PatternPiece[], byId: Map<string, CanvasEl
       const otherId = p === id ? q : p
       const next = byPiece.get(otherId)
       if (out.has(otherId) || !next) continue
-      const mine = cs.map(c => byId.get(c.from.pieceId === id ? c.from.edgeId : c.to.edgeId)).filter(isEdge)
-      const theirs = cs.map(c => byId.get(c.from.pieceId === id ? c.to.edgeId : c.from.edgeId)).filter(isEdge)
-      if (!mine.length || !theirs.length) continue
-      const [a0, a1] = seamSpan(mine)
-      const [b0, b1] = seamSpan(theirs)
-      const A = apply(t, a0), B = apply(t, a1)
-      const placedC = apply(t, pieceCentroid(byPiece.get(id)!, byId))
-      // Sewn pieces lie right sides together, so laid open one is usually a
-      // mirror image: try both orientations each way round, and keep the one
-      // that lands every seam element on its partner without overlapping.
-      const mid = (e: Edge) => ({ x: (e.start.x + e.end.x) / 2, y: (e.start.y + e.end.y) / 2 })
-      let best = IDENTITY, bestScore = Infinity
-      for (const mirror of [false, true]) {
-        const M: Affine = mirror ? { a: -1, b: 0, c: 0, d: 1, tx: 0, ty: 0 } : IDENTITY
-        const m0 = apply(M, b0), m1 = apply(M, b1)
-        for (const [P, Q] of [[A, B], [B, A]]) {
-          const cand = compose(alignment(m0, m1, P, Q), M)
-          const overlap = Math.sign(side(A, B, placedC)) === Math.sign(side(A, B, apply(cand, pieceCentroid(next, byId))))
-          let score = (overlap ? 1e6 : 0) + (mirror ? 1e-3 : 0) // on a tie, don't mirror
-          mine.forEach((e, k) => {
-            if (!theirs[k]) return
-            const p = apply(t, mid(e)), q = apply(cand, mid(theirs[k]))
-            score += Math.hypot(p.x - q.x, p.y - q.y)
-          })
-          if (score < bestScore) { bestScore = score; best = cand }
-        }
-      }
+      const best = alignToNeighbour(t, byPiece.get(id)!, next, cs, byId)
+      if (!best) continue
       out.set(otherId, best)
       queue.push(otherId)
     }
