@@ -154,15 +154,28 @@ export function proceduralBodyQuery(body: ResolvedBody): BodyQuery {
     return section
   }
 
+  // Leg and arm sections are asked for once per mesh vertex; like the torso's,
+  // they are cached at 0.25 cm (their hulls are the costly part).
+  const legCache = new Map<number, Section | null>()
   const legSection = (y: number): Section | null => {
-    const o = chainOutline(legR, y)
-    if (!o) return null
-    return { center: [o.center[0], o.center[2]], hull: convexHull(worldXZ(o)) }
+    const key = Math.round(y * 4)
+    const hit = legCache.get(key)
+    if (hit !== undefined) return hit
+    const o = chainOutline(legR, key / 4)
+    const section = o ? { center: [o.center[0], o.center[2]] as Pt, hull: convexHull(worldXZ(o)) } : null
+    legCache.set(key, section)
+    return section
   }
 
+  const armCache = new Map<number, Section | null>()
   const armSection = (t: number): Section | null => {
-    const o = chainOutline(arm, t)
-    return o ? { center: [0, 0], hull: convexHull(o.pts) } : null
+    const key = Math.round(t * 4)
+    const hit = armCache.get(key)
+    if (hit !== undefined) return hit
+    const o = chainOutline(arm, key / 4)
+    const section = o ? { center: [0, 0] as Pt, hull: convexHull(o.pts) } : null
+    armCache.set(key, section)
+    return section
   }
 
   // The neck just above where the shoulders slope away from it.
