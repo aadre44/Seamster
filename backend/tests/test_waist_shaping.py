@@ -129,3 +129,12 @@ def test_shirt_collar_matches_the_neckline_it_is_sewn_to():
         neck = 2 * (_labelled_length(block["front_bodice"], "neckline") + _labelled_length(block["back_bodice"], "neckline"))
         collar_len = max(p.x for p in block["collar"].outline)
         assert math.isclose(collar_len, neck + 2 * m.seam_allowance_cm, abs_tol=0.05)
+
+
+def test_button_front_marks_its_centre_front_line():
+    """Where the buttons sit and the fronts meet: _PLACKET_WIDTH in from the edge."""
+    from app.patterns.shirts import _PLACKET_WIDTH, build_shirt_block
+    front = build_shirt_block(_m(length_cm=70.0), has_placket=True)["front_bodice"]
+    (mark,) = [m for m in front.marks if m.label == "center_front_line"]
+    assert all(math.isclose(p.x, _PLACKET_WIDTH) for p in mark.points)
+    assert not [m for m in build_shirt_block(_m(length_cm=70.0))["front_bodice"].marks if m.label == "center_front_line"]

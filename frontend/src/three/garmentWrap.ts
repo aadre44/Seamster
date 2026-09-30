@@ -6,7 +6,7 @@ import type { Region } from './pieceClassifier'
 import { allPoints, clipShape, cutDarts, edgesWith, extractOutline, rangeCuts, seamParts, splitAtRanges, transformShape, triangulateShape, xRange, xsAtY, yRange, ysAtX } from './pieceGeometry'
 import type { DartLegs, OutlineEdge, PieceMesh, PieceShape } from './pieceGeometry'
 import type { Vec3 } from './types'
-import { placeTrims } from './trimPlacement'
+import { barycentric, placeTrims } from './trimPlacement'
 import type { TrimInput } from './trimPlacement'
 
 // Static fit preview: every flat pattern piece is wrapped onto the body.
@@ -55,6 +55,7 @@ export interface Pin {
   w: [number, number, number]
   stiffness: number // 1 = stitched down; less = lies on the host
   offset: number // cm along the host's outward normal
+  mutual?: boolean // both sides move to meet (buttons joining two fronts); else only the pinned particle
 }
 
 export interface PlacedPiece {
@@ -74,6 +75,10 @@ export interface PlacedPiece {
   // Pattern (canvas) coordinates → the mesh's local coordinates.
   toLocal: (p: Pt) => Pt
   pins?: Pin[][] // per copy
+  // A button front's two copies overlap at the centre: the top one (buttonhole
+  // side) is buttoned along its CF line onto the under one, its extension lying
+  // over it. Mesh vertex lists (same for both copies).
+  buttonFront?: { top: number; under: number; line: number[]; strip: number[] }
   stitchedEdges?: number[] // edges of a placed piece sewn down to its host
 }
 
@@ -171,6 +176,9 @@ interface Profile {
   darts: Dart[]
   crotchExt: number // legs: how far the crotch curve reaches past the centre line
   partner: Profile | null
+  // A button front: x0 is the marked centre-front line, not the front edge; the
+  // button extension beyond it crosses the centre onto the other side.
+  buttonFront: boolean
 }
 
 // A dart: two legs meeting at the apex. Sewing it folds away the fabric
@@ -260,7 +268,12 @@ function makeProfile(piece: PatternPiece, shape: PieceShape, region: Region, bac
   const s = transformShape(shape, toLocal)
   const c = edgesWith(s, CENTER)
   const sd = edgesWith(s, SIDE)
-  const x0 = c.length ? meanOf(c, 0) : xRange(s.edges)[0]
+  // A button front marks its centre-front line inside the front edge: that line
+  // (where the fronts meet, buttoned) goes on the body's centre.
+  const cfLine = elements.find(e => e.type === 'line' && e.pieceId === piece.id && e.seamLabel === 'center_front_line')
+  const x0 = cfLine && cfLine.type === 'line'
+    ? (toLocal([cfLine.start.x, cfLine.start.y])[0] + toLocal([cfLine.end.x, cfLine.end.y])[0]) / 2
+    : c.length ? meanOf(c, 0) : xRange(s.edges)[0]
   const shoulder = edgesWith(s, ['shoulder'])
   let anchorRow = yRange(s.edges)[0]
   let hps: Pt | null = null
@@ -282,6 +295,7 @@ function makeProfile(piece: PatternPiece, shape: PieceShape, region: Region, bac
     anchorRow, waistRow, hps, darts: findDarts(piece, elements, toLocal),
     crotchExt: region === 'leg' ? Math.max(0, x0 - xRange(s.edges)[0]) : 0,
     partner: null,
+    buttonFront: !!cfLine,
   }
 }
 
@@ -553,6 +567,30 @@ export function conformSeamCounts(
   return counts
 }
 
+// The top front (the buttonhole side: from a button row's holes, else the
+// wearer's left, as in menswear) is buttoned along its CF line onto the under
+// front; its extension lies over the under front.
+function buttonFrontOf(p: Profile, specs: CopySpec[], mesh: PieceMesh, elements: CanvasElement[]): Pick<PlacedPiece, 'buttonFront' | 'pins'> {
+  const holes = elements.find(e => (e.type === 'line' || e.type === 'curve') && e.pieceId === p.piece.id && e.seamLabel === 'buttonhole' && e.side)
+  const topSide = (holes as { side?: 'left' | 'right' } | undefined)?.side ?? 'left'
+  // The un-mirrored copy is on the wearer's left.
+  const top = specs.findIndex(s => s.mirrorWorld === (topSide === 'right'))
+  const under = 1 - top
+  const line: number[] = [], strip: number[] = []
+  mesh.pts.forEach(([X], i) => {
+    if (Math.abs(X - p.x0) < 0.9) line.push(i)
+    else if (X < p.x0 - 0.4) strip.push(i)
+  })
+  // The under copy is the mirror image: the point on it at the same place on the
+  // body is the top point mirrored across the CF line.
+  const pins: Pin[][] = specs.map(() => [])
+  pins[top] = line.map(v => {
+    const [X, Y] = mesh.pts[v]
+    return { vertex: v, host: -1, hostCopy: under, ...barycentric({ mesh } as PlacedPiece, [2 * p.x0 - X, Y]), stiffness: 0.6, offset: 0, mutual: true }
+  })
+  return { buttonFront: { top, under, line, strip }, pins }
+}
+
 export function placeGarment(
   pieces: PatternPiece[],
   elements: CanvasElement[],
@@ -647,6 +685,7 @@ export function placeGarment(
         return map(p, X, Y, specs[copy]).p
       },
       toLocal: p.toLocal,
+      ...(p.buttonFront && specs.length === 2 ? buttonFrontOf(p, specs, mesh, elements) : {}),
     }
   })
   const trimmed = placeTrims(trims, placed, {

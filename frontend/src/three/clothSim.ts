@@ -74,6 +74,7 @@ export class Cloth {
   private readonly pw: Float32Array
   private readonly po: Float32Array
   private readonly pk: Float32Array
+  private readonly pm: Uint8Array // mutual pins
   private readonly pinFlip: Float32Array
   // Collision margin of each particle (thinner for inside pieces).
   private readonly thick: Float32Array
@@ -264,7 +265,9 @@ export class Cloth {
     placed.forEach((p, pi) => {
       p.edges.forEach((e, ei) => {
         const sleeveSeam = p.region === 'sleeve' && (e.isFold || e.label === 'sleeve_seam')
+        // (Not a button front's front edges: they overlap and are buttoned instead.)
         const centre = p.region !== 'sleeve' && (e.isFold || ['center_front', 'center_back', 'crotch'].includes(e.label))
+          && !(p.buttonFront && e.label === 'center_front')
         if (!sleeveSeam && !centre) return
         p.copySpecs.forEach((sA, ia) => p.copySpecs.forEach((sB, ib) => {
           if (ib <= ia) return
@@ -355,12 +358,13 @@ export class Cloth {
     const pw: number[] = []
     const po: number[] = []
     const pk: number[] = []
+    const pm: number[] = []
     const flips: number[] = []
     const g = new Float32Array(3)
     placed.forEach((p, pi) => p.pins?.forEach((copyPins, ci) => {
       const own = this.ranges.find(r => r.piece === pi && r.copy === ci)
       for (const pin of copyPins) {
-        const host = this.ranges.find(r => r.piece === pin.host && r.copy === pin.hostCopy)
+        const host = this.ranges.find(r => r.piece === (pin.host < 0 ? pi : pin.host) && r.copy === pin.hostCopy) // −1: this piece
         if (!own || !host) continue
         const tri = pin.tri.map(v => this.alias[host.start + v])
         // Orient the triangle normal away from the body once, here.
@@ -376,6 +380,7 @@ export class Cloth {
         pw.push(...pin.w)
         po.push(n ? pin.offset * flip : 0)
         pk.push(pin.stiffness)
+        pm.push(pin.mutual ? 1 : 0)
         flips.push(flip)
       }
     }))
@@ -384,6 +389,7 @@ export class Cloth {
     this.pw = new Float32Array(pw)
     this.po = new Float32Array(po)
     this.pk = new Float32Array(pk)
+    this.pm = Uint8Array.from(pm)
     this.pinFlip = new Float32Array(flips)
     this.thick = new Float32Array(n).fill(CLOTH_THICKNESS)
     for (const r of this.ranges) {
@@ -410,6 +416,7 @@ export class Cloth {
     const shellRoots = new Set<number>()
     const tris: number[] = []
     const signs: number[] = []
+    const triRange: number[] = [] // which copy each triangle belongs to
     const g = new Float32Array(3)
     this.ranges.forEach(r => {
       if (placed[r.piece].region === 'trim') return
@@ -423,6 +430,7 @@ export class Cloth {
         this.body.normal(cx, cy, cz, g)
         tris.push(a, b, c)
         signs.push(nrm[0] * g[0] + nrm[1] * g[1] + nrm[2] * g[2] >= 0 ? 1 : -1)
+        triRange.push(this.ranges.indexOf(r))
       }
     })
     this.tri = Int32Array.from(tris)
@@ -460,6 +468,29 @@ export class Cloth {
         }
         ps.push(root)
         sides.push(side)
+        start.push(cand.length)
+      }
+    })
+    // A button front's top copy: its extension lies over the under copy.
+    placed.forEach((p, pi) => {
+      if (!p.buttonFront) return
+      const top = this.ranges.find(r => r.piece === pi && r.copy === p.buttonFront!.top)
+      const under = this.ranges.find(r => r.piece === pi && r.copy === p.buttonFront!.under)
+      if (!top || !under) return
+      const underIdx = this.ranges.indexOf(under)
+      for (const v of p.buttonFront.strip) {
+        const root = alias[top.start + v]
+        if (seen.has(root)) continue
+        seen.add(root)
+        const px = x[root * 3], py = x[root * 3 + 1], pz = x[root * 3 + 2]
+        for (let t = 0; t < signs.length; t++) {
+          if (triRange[t] !== underIdx) continue
+          const a = tris[t * 3], b = tris[t * 3 + 1], c = tris[t * 3 + 2]
+          const d = Math.hypot((x[a * 3] + x[b * 3] + x[c * 3]) / 3 - px, (x[a * 3 + 1] + x[b * 3 + 1] + x[c * 3 + 1]) / 3 - py, (x[a * 3 + 2] + x[b * 3 + 2] + x[c * 3 + 2]) / 3 - pz)
+          if (d < CANDIDATE_RADIUS * 2) cand.push(t)
+        }
+        ps.push(root)
+        sides.push(1)
         start.push(cand.length)
       }
     })
@@ -557,14 +588,20 @@ export class Cloth {
     for (let k = 0; k < 3; k++) out[k] += n[k] * po[c]
   }
 
-  // The pinned piece follows its host; the host doesn't feel it (pockets are light).
+  // The pinned piece follows its host; the host doesn't feel it (pockets are
+  // light) — except mutual pins (buttons), where both sides move to meet.
   private solvePins(): void {
-    const { x, pv, pk } = this
+    const { x, pv, pk, pm, ph, pw } = this
     const t = new Float32Array(3)
     for (let c = 0; c < pk.length; c++) {
       this.pinTarget(c, t)
       const i = pv[c] * 3
-      for (let k = 0; k < 3; k++) x[i + k] += (t[k] - x[i + k]) * pk[c]
+      const share = pm[c] ? 0.5 : 1
+      for (let k = 0; k < 3; k++) {
+        const err = (t[k] - x[i + k]) * pk[c]
+        x[i + k] += err * share
+        if (pm[c]) for (let j = 0; j < 3; j++) x[ph[c * 3 + j] * 3 + k] -= err * 0.5 * pw[c * 3 + j]
+      }
     }
   }
 
@@ -590,11 +627,11 @@ export class Cloth {
   }
 
   // Distance of each pinned particle with stiffness ≥ min from where its pin wants it (cm).
-  pinGaps(min = 1): number[] {
+  pinGaps(min = 1, mutualOnly = false): number[] {
     const out: number[] = []
     const t = new Float32Array(3)
     for (let c = 0; c < this.pk.length; c++) {
-      if (this.pk[c] < min) continue
+      if (this.pk[c] < min || (mutualOnly && !this.pm[c])) continue
       this.pinTarget(c, t)
       const i = this.pv[c] * 3
       out.push(Math.hypot(t[0] - this.x[i], t[1] - this.x[i + 1], t[2] - this.x[i + 2]))

@@ -34,7 +34,7 @@ from __future__ import annotations
 from app.models.measurements import Measurements
 from app.patterns.geometry import CurveSegment, Point
 from app.patterns.finishings import path_length
-from app.patterns.skirts import PieceSpec
+from app.patterns.skirts import MarkSpec, PieceSpec
 
 EASE_CHEST = 6.0      # standard chest/bust ease added to the full chest circumference
 EASE_HIP = 4.0        # hip ease for shirts long enough to cover the hips
@@ -674,6 +674,12 @@ def build_shirt_block(
         notes=f"main front panel; {_front_fold_note}; sew to Back Bodice at shoulder seams then side seams",
         edge_labels={**{i: "neckline" for i in range(_n_neck)}, _n_neck: "shoulder", _n_neck + 1: "armhole", **{i: "side_seam" for i in range(_n_neck + 2, _fn - 2)}, _fn - 2: "hem", _fn - 1: "center_front"},
     )
+
+    # A button front: the centre-front line (where the buttons sit and where the
+    # two fronts meet when buttoned) is marked _PLACKET_WIDTH in from the front edge.
+    if has_placket:
+        front_spec.marks.append(MarkSpec(points=[Point(_PLACKET_WIDTH, front_neck_depth), Point(_PLACKET_WIDTH, L)],
+                                         label="center_front_line", dashed=True))
 
     # The halter / shoulderless branches built a one-piece "Front"; the standard branch
     # above recomputed a throwaway front_spec for those inputs — discard it here.

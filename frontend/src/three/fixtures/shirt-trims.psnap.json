@@ -2,7 +2,7 @@
   "version": 1,
   "elements": [
     {
-      "id": "bb096467-160f-4442-a740-0c9c87df163e",
+      "id": "bd31d721-3044-418c-a97b-be36ebd282a7",
       "type": "curve",
       "start": {
         "x": 2.0,
@@ -20,11 +20,11 @@
         "x": 15.2,
         "y": 2.0
       },
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "neckline"
     },
     {
-      "id": "68d4d886-1a7e-4581-b9d0-a603f28b7ba5",
+      "id": "6a79e443-5c88-4b5e-82cb-eadaddd427b2",
       "type": "line",
       "start": {
         "x": 15.2,
@@ -35,11 +35,11 @@
         "y": 2.5
       },
       "isFold": false,
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "shoulder"
     },
     {
-      "id": "2dc4513c-2c4b-4384-aebc-29abe9024b28",
+      "id": "7c887aa7-8498-456c-9cbd-942612b36ded",
       "type": "curve",
       "start": {
         "x": 24.5,
@@ -57,11 +57,11 @@
         "x": 29.0,
         "y": 28.5
       },
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "armhole"
     },
     {
-      "id": "386ed581-5bfd-4e70-bda9-d637b9befa3c",
+      "id": "54877396-a5ea-4e28-9402-509b806d2a24",
       "type": "line",
       "start": {
         "x": 29.0,
@@ -72,11 +72,11 @@
         "y": 46.5
       },
       "isFold": false,
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "side_seam"
     },
     {
-      "id": "1cd05018-70a4-4fb2-868a-9d4f8f7ab129",
+      "id": "3b535a2e-06dc-4a27-bc4f-760b020754ff",
       "type": "line",
       "start": {
         "x": 27.0,
@@ -87,11 +87,11 @@
         "y": 72.0
       },
       "isFold": false,
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "side_seam"
     },
     {
-      "id": "dbc3d9da-fc6c-4e64-8ea5-bb39f1683f55",
+      "id": "f1762229-18b7-484d-bb57-f20bcf1f6452",
       "type": "line",
       "start": {
         "x": 30.5,
@@ -102,11 +102,11 @@
         "y": 72.0
       },
       "isFold": false,
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "hem"
     },
     {
-      "id": "4ce1d287-f2b6-4b22-8444-d77b1e36d84b",
+      "id": "186862f1-5c2c-4c76-a7a8-1a0c8c144731",
       "type": "line",
       "start": {
         "x": 2.0,
@@ -117,11 +117,26 @@
         "y": 13.2
       },
       "isFold": false,
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "seamLabel": "center_front"
     },
     {
-      "id": "3e591ea6-c835-41b5-81cc-8c02046adbc8",
+      "id": "f2ea76bc-672d-40f3-a9ed-cec263e40d90",
+      "type": "line",
+      "start": {
+        "x": 5.0,
+        "y": 13.2
+      },
+      "end": {
+        "x": 5.0,
+        "y": 72.0
+      },
+      "isFold": true,
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+      "seamLabel": "center_front_line"
+    },
+    {
+      "id": "76f768d0-42a2-4221-9d9c-5e371c3de001",
       "type": "grain-line",
       "start": {
         "x": 17.0,
@@ -131,10 +146,10 @@
         "x": 17.0,
         "y": 61.5
       },
-      "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f"
+      "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953"
     },
     {
-      "id": "c6536a1e-3ccc-478a-9f62-9aff40c12aeb",
+      "id": "485747ec-f0da-4d53-8181-5b378ca052cd",
       "type": "line",
       "start": {
         "x": 35.5,
@@ -145,11 +160,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "neckline"
     },
     {
-      "id": "5fd2b202-4ca6-4bab-8667-ea5e882536af",
+      "id": "9fa01a7d-0ce4-460a-b68f-b9dde833b655",
       "type": "line",
       "start": {
         "x": 45.7,
@@ -160,11 +175,11 @@
         "y": 2.5
       },
       "isFold": false,
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "shoulder"
     },
     {
-      "id": "f6543b56-16df-4a85-be2d-3415b315ade3",
+      "id": "300cf121-577b-4b2d-b539-6a32a8f05223",
       "type": "curve",
       "start": {
         "x": 55.0,
@@ -182,11 +197,11 @@
         "x": 59.5,
         "y": 28.5
       },
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "armhole"
     },
     {
-      "id": "a8e3263a-0f5f-41ee-bbe4-d08d98bdbd51",
+      "id": "2055d6e7-02ac-4000-b531-7dc0d30717b9",
       "type": "line",
       "start": {
         "x": 59.5,
@@ -197,11 +212,11 @@
         "y": 46.5
       },
       "isFold": false,
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "side_seam"
     },
     {
-      "id": "c689288a-7ddc-455a-b195-a338f9e1f04a",
+      "id": "635e5c05-aeea-4a24-8425-e511d55afea3",
       "type": "line",
       "start": {
         "x": 57.5,
@@ -212,11 +227,11 @@
         "y": 72.0
       },
       "isFold": false,
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "side_seam"
     },
     {
-      "id": "791a3199-dc4a-4e05-8e45-c609986e9fe2",
+      "id": "43a07655-ed62-4124-90b5-46f1f0840eb6",
       "type": "line",
       "start": {
         "x": 61.0,
@@ -227,11 +242,11 @@
         "y": 72.0
       },
       "isFold": false,
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "hem"
     },
     {
-      "id": "1f51618e-9abb-4037-980a-1303c820d336",
+      "id": "3edc119b-f3a7-4827-a776-49ed288d52b9",
       "type": "line",
       "start": {
         "x": 35.5,
@@ -242,11 +257,11 @@
         "y": 2.0
       },
       "isFold": true,
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "seamLabel": "center_back"
     },
     {
-      "id": "c042607a-2cfd-43b9-9d72-96b20edae9fa",
+      "id": "52f3dbc3-e096-4430-a699-d4e7f52d8c49",
       "type": "grain-line",
       "start": {
         "x": 47.5,
@@ -256,10 +271,10 @@
         "x": 47.5,
         "y": 61.5
       },
-      "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e"
+      "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578"
     },
     {
-      "id": "dace4116-b8ac-46fe-9647-3bff1aa3f634",
+      "id": "d8398b7a-1eb1-4c0f-a6e9-50c16cff7fd5",
       "type": "curve",
       "start": {
         "x": 66.0,
@@ -277,11 +292,11 @@
         "x": 89.0,
         "y": 13.5
       },
-      "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
+      "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
       "seamLabel": "armhole"
     },
     {
-      "id": "458d8e17-4ce4-4763-bc97-7dc882ac5395",
+      "id": "0e114129-5c6e-4b10-94f4-5b409185039c",
       "type": "line",
       "start": {
         "x": 89.0,
@@ -292,11 +307,11 @@
         "y": 71.5
       },
       "isFold": false,
-      "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
+      "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
       "seamLabel": "sleeve_seam"
     },
     {
-      "id": "ac6a21fd-22ff-4a7e-9876-6866becb2124",
+      "id": "11afa3a4-806c-42cf-8bbe-9cd9afe1931e",
       "type": "line",
       "start": {
         "x": 87.0,
@@ -307,11 +322,11 @@
         "y": 71.5
       },
       "isFold": false,
-      "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
+      "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
       "seamLabel": "wrist"
     },
     {
-      "id": "d2931e2f-2f9d-406c-aeeb-7bc5f8e94f3c",
+      "id": "ccc633fb-144a-4467-a2f4-c23b260f3738",
       "type": "line",
       "start": {
         "x": 66.0,
@@ -322,11 +337,11 @@
         "y": 2.0
       },
       "isFold": true,
-      "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
+      "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
       "seamLabel": "center_sleeve"
     },
     {
-      "id": "7924daf3-0457-4d8c-8b10-61c2be06e4cc",
+      "id": "91a5007b-ea52-48bc-8908-6c410e63d6bd",
       "type": "grain-line",
       "start": {
         "x": 77.5,
@@ -336,10 +351,10 @@
         "x": 77.5,
         "y": 61.075
       },
-      "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205"
+      "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3"
     },
     {
-      "id": "89c2f2d1-df3a-4a0f-9738-a4ac6bb27f59",
+      "id": "56de5879-715f-4089-afd6-9bbf91b29542",
       "type": "line",
       "start": {
         "x": 94.0,
@@ -350,11 +365,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500",
+      "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d",
       "seamLabel": "wrist"
     },
     {
-      "id": "ed379273-93c7-4d9a-8c6e-4256cf633d3f",
+      "id": "ffe8dab3-8664-4d6f-9716-376d23d2f047",
       "type": "line",
       "start": {
         "x": 136.0,
@@ -365,11 +380,11 @@
         "y": 8.0
       },
       "isFold": false,
-      "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500",
+      "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d",
       "seamLabel": ""
     },
     {
-      "id": "495781a5-d570-4fb2-bcbc-47c82250843c",
+      "id": "62f4615d-5e38-4e24-8783-a62c722b7ff8",
       "type": "line",
       "start": {
         "x": 136.0,
@@ -380,11 +395,11 @@
         "y": 8.0
       },
       "isFold": false,
-      "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500",
+      "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d",
       "seamLabel": ""
     },
     {
-      "id": "28f31220-db33-480d-a2a9-4e03a28fd108",
+      "id": "3ac09f03-a3f4-4f1f-8554-3700ae50b6e9",
       "type": "line",
       "start": {
         "x": 94.0,
@@ -395,11 +410,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500",
+      "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d",
       "seamLabel": ""
     },
     {
-      "id": "4e862edb-b4c0-46d0-b049-bbd8434177a0",
+      "id": "4a41d59a-3e04-4129-b368-2d5210018191",
       "type": "grain-line",
       "start": {
         "x": 98.2,
@@ -409,10 +424,10 @@
         "x": 131.8,
         "y": 5.0
       },
-      "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500"
+      "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d"
     },
     {
-      "id": "a721d696-5057-418b-84bf-35de94cee1da",
+      "id": "beda8b32-2a22-4f5d-8e7f-c3749b9668df",
       "type": "line",
       "start": {
         "x": 141.0,
@@ -423,11 +438,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
+      "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
       "seamLabel": "neckline"
     },
     {
-      "id": "6337a2d9-c29a-45d7-845d-843cdbde2056",
+      "id": "d7eb9c06-a3f0-4178-8078-73faa2ed2de9",
       "type": "line",
       "start": {
         "x": 203.3349,
@@ -438,11 +453,11 @@
         "y": 6.0
       },
       "isFold": false,
-      "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
+      "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
       "seamLabel": ""
     },
     {
-      "id": "34a008f7-dcd3-427d-a409-d2ad4a3d0908",
+      "id": "510b53f9-1118-4e25-b58d-c57e43ea31db",
       "type": "line",
       "start": {
         "x": 203.3349,
@@ -453,11 +468,11 @@
         "y": 6.0
       },
       "isFold": false,
-      "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
+      "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
       "seamLabel": ""
     },
     {
-      "id": "b6e11147-e716-4e98-a59c-93f2726a4815",
+      "id": "b9dc3418-68b4-42f6-a05b-6f9aaad75678",
       "type": "line",
       "start": {
         "x": 141.0,
@@ -468,11 +483,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
+      "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
       "seamLabel": ""
     },
     {
-      "id": "b971a5c7-b875-4357-8ce7-29f35eb5e688",
+      "id": "3be7c1a7-8ad6-4cfa-abba-180abc6a9790",
       "type": "grain-line",
       "start": {
         "x": 147.2335,
@@ -482,10 +497,10 @@
         "x": 197.1014,
         "y": 4.0
       },
-      "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05"
+      "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08"
     },
     {
-      "id": "28ded3a6-4d8f-4c20-9903-481433a60555",
+      "id": "19f1ec95-9bc8-4f3e-860a-d000524df481",
       "type": "line",
       "start": {
         "x": 208.3349,
@@ -496,11 +511,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "0070fa6f-676a-4823-9ab0-de109a160f8a",
+      "pieceId": "3f1061ae-c115-4070-837b-72f4d20e62b5",
       "seamLabel": ""
     },
     {
-      "id": "3009f395-4f20-48b8-b52a-ce055c736a64",
+      "id": "05414a62-c9fa-4f19-9c03-a1b1b50f07dc",
       "type": "line",
       "start": {
         "x": 220.2949,
@@ -511,11 +526,11 @@
         "y": 16.26
       },
       "isFold": false,
-      "pieceId": "0070fa6f-676a-4823-9ab0-de109a160f8a",
+      "pieceId": "3f1061ae-c115-4070-837b-72f4d20e62b5",
       "seamLabel": ""
     },
     {
-      "id": "57448e95-c624-459c-ad78-4bbb60e9267b",
+      "id": "f3ef5a6b-b2b9-4409-91b4-882053dc3bf9",
       "type": "line",
       "start": {
         "x": 220.2949,
@@ -526,11 +541,11 @@
         "y": 16.26
       },
       "isFold": false,
-      "pieceId": "0070fa6f-676a-4823-9ab0-de109a160f8a",
+      "pieceId": "3f1061ae-c115-4070-837b-72f4d20e62b5",
       "seamLabel": ""
     },
     {
-      "id": "e5a9f6dd-e96e-4667-bfa5-8f3895ab17bc",
+      "id": "e43c67f9-33e2-422f-a526-2340d3be45a9",
       "type": "line",
       "start": {
         "x": 208.3349,
@@ -541,11 +556,11 @@
         "y": 2.0
       },
       "isFold": false,
-      "pieceId": "0070fa6f-676a-4823-9ab0-de109a160f8a",
+      "pieceId": "3f1061ae-c115-4070-837b-72f4d20e62b5",
       "seamLabel": ""
     },
     {
-      "id": "bbebdf0b-12b9-401a-986b-60b2c0b18dc9",
+      "id": "610cebbc-c046-405f-a862-d74174a02dfb",
       "type": "grain-line",
       "start": {
         "x": 214.3149,
@@ -555,21 +570,21 @@
         "x": 214.3149,
         "y": 14.121
       },
-      "pieceId": "0070fa6f-676a-4823-9ab0-de109a160f8a"
+      "pieceId": "3f1061ae-c115-4070-837b-72f4d20e62b5"
     }
   ],
   "pieces": [
     {
-      "id": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "id": "be51779a-98dc-40da-a80d-d043c67f2953",
       "name": "Front Bodice",
       "elementIds": [
-        "bb096467-160f-4442-a740-0c9c87df163e",
-        "68d4d886-1a7e-4581-b9d0-a603f28b7ba5",
-        "2dc4513c-2c4b-4384-aebc-29abe9024b28",
-        "386ed581-5bfd-4e70-bda9-d637b9befa3c",
-        "1cd05018-70a4-4fb2-868a-9d4f8f7ab129",
-        "dbc3d9da-fc6c-4e64-8ea5-bb39f1683f55",
-        "4ce1d287-f2b6-4b22-8444-d77b1e36d84b"
+        "bd31d721-3044-418c-a97b-be36ebd282a7",
+        "6a79e443-5c88-4b5e-82cb-eadaddd427b2",
+        "7c887aa7-8498-456c-9cbd-942612b36ded",
+        "54877396-a5ea-4e28-9402-509b806d2a24",
+        "3b535a2e-06dc-4a27-bc4f-760b020754ff",
+        "f1762229-18b7-484d-bb57-f20bcf1f6452",
+        "186862f1-5c2c-4c76-a7a8-1a0c8c144731"
       ],
       "cutQty": 2,
       "onFold": false,
@@ -579,16 +594,16 @@
       "source": "engine"
     },
     {
-      "id": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
+      "id": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
       "name": "Back Bodice",
       "elementIds": [
-        "c6536a1e-3ccc-478a-9f62-9aff40c12aeb",
-        "5fd2b202-4ca6-4bab-8667-ea5e882536af",
-        "f6543b56-16df-4a85-be2d-3415b315ade3",
-        "a8e3263a-0f5f-41ee-bbe4-d08d98bdbd51",
-        "c689288a-7ddc-455a-b195-a338f9e1f04a",
-        "791a3199-dc4a-4e05-8e45-c609986e9fe2",
-        "1f51618e-9abb-4037-980a-1303c820d336"
+        "485747ec-f0da-4d53-8181-5b378ca052cd",
+        "9fa01a7d-0ce4-460a-b68f-b9dde833b655",
+        "300cf121-577b-4b2d-b539-6a32a8f05223",
+        "2055d6e7-02ac-4000-b531-7dc0d30717b9",
+        "635e5c05-aeea-4a24-8425-e511d55afea3",
+        "43a07655-ed62-4124-90b5-46f1f0840eb6",
+        "3edc119b-f3a7-4827-a776-49ed288d52b9"
       ],
       "cutQty": 2,
       "onFold": true,
@@ -598,13 +613,13 @@
       "source": "engine"
     },
     {
-      "id": "86add8c9-5aed-4b5e-b45a-671ddf664205",
+      "id": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
       "name": "Sleeve",
       "elementIds": [
-        "dace4116-b8ac-46fe-9647-3bff1aa3f634",
-        "458d8e17-4ce4-4763-bc97-7dc882ac5395",
-        "ac6a21fd-22ff-4a7e-9876-6866becb2124",
-        "d2931e2f-2f9d-406c-aeeb-7bc5f8e94f3c"
+        "d8398b7a-1eb1-4c0f-a6e9-50c16cff7fd5",
+        "0e114129-5c6e-4b10-94f4-5b409185039c",
+        "11afa3a4-806c-42cf-8bbe-9cd9afe1931e",
+        "ccc633fb-144a-4467-a2f4-c23b260f3738"
       ],
       "cutQty": 2,
       "onFold": true,
@@ -614,13 +629,13 @@
       "source": "engine"
     },
     {
-      "id": "627722a9-3a64-4416-9d3c-3ad534b2f500",
+      "id": "58be9f79-ff08-4549-8eac-68b00f056e4d",
       "name": "Cuff",
       "elementIds": [
-        "89c2f2d1-df3a-4a0f-9738-a4ac6bb27f59",
-        "ed379273-93c7-4d9a-8c6e-4256cf633d3f",
-        "495781a5-d570-4fb2-bcbc-47c82250843c",
-        "28f31220-db33-480d-a2a9-4e03a28fd108"
+        "56de5879-715f-4089-afd6-9bbf91b29542",
+        "ffe8dab3-8664-4d6f-9716-376d23d2f047",
+        "62f4615d-5e38-4e24-8783-a62c722b7ff8",
+        "3ac09f03-a3f4-4f1f-8554-3700ae50b6e9"
       ],
       "cutQty": 2,
       "onFold": false,
@@ -631,13 +646,13 @@
       "layer": "outer"
     },
     {
-      "id": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
+      "id": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
       "name": "Collar",
       "elementIds": [
-        "a721d696-5057-418b-84bf-35de94cee1da",
-        "6337a2d9-c29a-45d7-845d-843cdbde2056",
-        "34a008f7-dcd3-427d-a409-d2ad4a3d0908",
-        "b6e11147-e716-4e98-a59c-93f2726a4815"
+        "beda8b32-2a22-4f5d-8e7f-c3749b9668df",
+        "d7eb9c06-a3f0-4178-8078-73faa2ed2de9",
+        "510b53f9-1118-4e25-b58d-c57e43ea31db",
+        "b9dc3418-68b4-42f6-a05b-6f9aaad75678"
       ],
       "cutQty": 2,
       "onFold": false,
@@ -648,13 +663,13 @@
       "layer": "outer"
     },
     {
-      "id": "0070fa6f-676a-4823-9ab0-de109a160f8a",
+      "id": "3f1061ae-c115-4070-837b-72f4d20e62b5",
       "name": "Chest Patch Pocket",
       "elementIds": [
-        "28ded3a6-4d8f-4c20-9903-481433a60555",
-        "3009f395-4f20-48b8-b52a-ce055c736a64",
-        "57448e95-c624-459c-ad78-4bbb60e9267b",
-        "e5a9f6dd-e96e-4667-bfa5-8f3895ab17bc"
+        "19f1ec95-9bc8-4f3e-860a-d000524df481",
+        "05414a62-c9fa-4f19-9c03-a1b1b50f07dc",
+        "f3ef5a6b-b2b9-4409-91b4-882053dc3bf9",
+        "e43c67f9-33e2-422f-a526-2340d3be45a9"
       ],
       "cutQty": 1,
       "onFold": false,
@@ -677,76 +692,76 @@
     {
       "label": "shoulder",
       "from": {
-        "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
-        "edgeId": "68d4d886-1a7e-4581-b9d0-a603f28b7ba5"
+        "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+        "edgeId": "6a79e443-5c88-4b5e-82cb-eadaddd427b2"
       },
       "to": {
-        "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
-        "edgeId": "5fd2b202-4ca6-4bab-8667-ea5e882536af"
+        "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
+        "edgeId": "9fa01a7d-0ce4-460a-b68f-b9dde833b655"
       },
       "source": "inferred"
     },
     {
       "label": "side_seam",
       "from": {
-        "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
-        "edgeId": "386ed581-5bfd-4e70-bda9-d637b9befa3c"
+        "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+        "edgeId": "54877396-a5ea-4e28-9402-509b806d2a24"
       },
       "to": {
-        "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
-        "edgeId": "a8e3263a-0f5f-41ee-bbe4-d08d98bdbd51"
+        "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
+        "edgeId": "2055d6e7-02ac-4000-b531-7dc0d30717b9"
       },
       "source": "inferred"
     },
     {
       "label": "side_seam",
       "from": {
-        "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
-        "edgeId": "1cd05018-70a4-4fb2-868a-9d4f8f7ab129"
+        "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+        "edgeId": "3b535a2e-06dc-4a27-bc4f-760b020754ff"
       },
       "to": {
-        "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
-        "edgeId": "c689288a-7ddc-455a-b195-a338f9e1f04a"
+        "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
+        "edgeId": "635e5c05-aeea-4a24-8425-e511d55afea3"
       },
       "source": "inferred"
     },
     {
       "label": "armhole",
       "from": {
-        "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
-        "edgeId": "2dc4513c-2c4b-4384-aebc-29abe9024b28"
+        "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+        "edgeId": "7c887aa7-8498-456c-9cbd-942612b36ded"
       },
       "to": {
-        "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
-        "edgeId": "dace4116-b8ac-46fe-9647-3bff1aa3f634"
+        "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
+        "edgeId": "d8398b7a-1eb1-4c0f-a6e9-50c16cff7fd5"
       },
       "source": "inferred"
     },
     {
       "label": "armhole",
       "from": {
-        "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
-        "edgeId": "f6543b56-16df-4a85-be2d-3415b315ade3"
+        "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
+        "edgeId": "300cf121-577b-4b2d-b539-6a32a8f05223"
       },
       "to": {
-        "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
-        "edgeId": "dace4116-b8ac-46fe-9647-3bff1aa3f634"
+        "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
+        "edgeId": "d8398b7a-1eb1-4c0f-a6e9-50c16cff7fd5"
       },
       "source": "inferred"
     },
     {
       "label": "wrist",
       "from": {
-        "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500",
-        "edgeId": "89c2f2d1-df3a-4a0f-9738-a4ac6bb27f59",
+        "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d",
+        "edgeId": "56de5879-715f-4089-afd6-9bbf91b29542",
         "range": [
           0.0,
           0.5
         ]
       },
       "to": {
-        "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
-        "edgeId": "ac6a21fd-22ff-4a7e-9876-6866becb2124",
+        "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
+        "edgeId": "11afa3a4-806c-42cf-8bbe-9cd9afe1931e",
         "half": "front"
       },
       "reversed": false,
@@ -755,16 +770,16 @@
     {
       "label": "wrist",
       "from": {
-        "pieceId": "627722a9-3a64-4416-9d3c-3ad534b2f500",
-        "edgeId": "89c2f2d1-df3a-4a0f-9738-a4ac6bb27f59",
+        "pieceId": "58be9f79-ff08-4549-8eac-68b00f056e4d",
+        "edgeId": "56de5879-715f-4089-afd6-9bbf91b29542",
         "range": [
           0.5,
           1.0
         ]
       },
       "to": {
-        "pieceId": "86add8c9-5aed-4b5e-b45a-671ddf664205",
-        "edgeId": "ac6a21fd-22ff-4a7e-9876-6866becb2124",
+        "pieceId": "5987e7c8-d7ad-4eb1-8da8-02e6121c09c3",
+        "edgeId": "11afa3a4-806c-42cf-8bbe-9cd9afe1931e",
         "half": "back"
       },
       "reversed": true,
@@ -773,16 +788,16 @@
     {
       "label": "neckline",
       "from": {
-        "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
-        "edgeId": "a721d696-5057-418b-84bf-35de94cee1da",
+        "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
+        "edgeId": "beda8b32-2a22-4f5d-8e7f-c3749b9668df",
         "range": [
-          0.0,
-          0.3281
+          0.0241,
+          0.3364
         ]
       },
       "to": {
-        "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
-        "edgeId": "bb096467-160f-4442-a740-0c9c87df163e",
+        "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+        "edgeId": "bd31d721-3044-418c-a97b-be36ebd282a7",
         "side": "right"
       },
       "reversed": false,
@@ -791,16 +806,16 @@
     {
       "label": "neckline",
       "from": {
-        "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
-        "edgeId": "a721d696-5057-418b-84bf-35de94cee1da",
+        "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
+        "edgeId": "beda8b32-2a22-4f5d-8e7f-c3749b9668df",
         "range": [
-          0.3281,
+          0.3364,
           0.5
         ]
       },
       "to": {
-        "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
-        "edgeId": "c6536a1e-3ccc-478a-9f62-9aff40c12aeb",
+        "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
+        "edgeId": "485747ec-f0da-4d53-8181-5b378ca052cd",
         "side": "right"
       },
       "reversed": true,
@@ -809,16 +824,16 @@
     {
       "label": "neckline",
       "from": {
-        "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
-        "edgeId": "a721d696-5057-418b-84bf-35de94cee1da",
+        "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
+        "edgeId": "beda8b32-2a22-4f5d-8e7f-c3749b9668df",
         "range": [
           0.5,
-          0.6719
+          0.6636
         ]
       },
       "to": {
-        "pieceId": "7a8d7ac4-ab5f-4673-be68-e035be9fb90e",
-        "edgeId": "c6536a1e-3ccc-478a-9f62-9aff40c12aeb",
+        "pieceId": "fa67f1b8-b6c7-4cd8-a328-f8dd2ed8c578",
+        "edgeId": "485747ec-f0da-4d53-8181-5b378ca052cd",
         "side": "left"
       },
       "reversed": false,
@@ -827,16 +842,16 @@
     {
       "label": "neckline",
       "from": {
-        "pieceId": "dd0d98b3-fb76-4cb9-990e-1c0dc8be6d05",
-        "edgeId": "a721d696-5057-418b-84bf-35de94cee1da",
+        "pieceId": "14f8efcf-89ef-4402-bc76-04f4f46c7c08",
+        "edgeId": "beda8b32-2a22-4f5d-8e7f-c3749b9668df",
         "range": [
-          0.6719,
-          1.0
+          0.6636,
+          0.9759
         ]
       },
       "to": {
-        "pieceId": "892a1472-69a8-4c6a-b35a-085d736a860f",
-        "edgeId": "bb096467-160f-4442-a740-0c9c87df163e",
+        "pieceId": "be51779a-98dc-40da-a80d-d043c67f2953",
+        "edgeId": "bd31d721-3044-418c-a97b-be36ebd282a7",
         "side": "left"
       },
       "reversed": true,
@@ -845,18 +860,18 @@
   ],
   "placements": [
     {
-      "id": "bef1a6ee-4115-491c-ae7e-b0bde32416d4",
-      "pieceId": "0070fa6f-676a-4823-9ab0-de109a160f8a",
-      "hostId": "892a1472-69a8-4c6a-b35a-085d736a860f",
+      "id": "9271f944-32c5-4a99-bffc-af810d36de35",
+      "pieceId": "3f1061ae-c115-4070-837b-72f4d20e62b5",
+      "hostId": "be51779a-98dc-40da-a80d-d043c67f2953",
       "transform": {
         "dx": -198.989,
         "dy": 22.5,
         "rotation": 0
       },
       "stitched": [
-        "3009f395-4f20-48b8-b52a-ce055c736a64",
-        "57448e95-c624-459c-ad78-4bbb60e9267b",
-        "e5a9f6dd-e96e-4667-bfa5-8f3895ab17bc"
+        "05414a62-c9fa-4f19-9c03-a1b1b50f07dc",
+        "f3ef5a6b-b2b9-4409-91b4-882053dc3bf9",
+        "e43c67f9-33e2-422f-a526-2340d3be45a9"
       ],
       "source": "inferred",
       "side": "left"

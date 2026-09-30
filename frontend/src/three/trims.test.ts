@@ -87,6 +87,25 @@ describe('trims on the body', () => {
   })
 })
 
+describe('a button front', () => {
+  const front = shirt.placed.find(p => p.buttonFront)
+
+  it('laps the fronts: the buttonhole side over the button side, CF on CF', () => {
+    expect(front?.name).toBe('Front Bodice')
+    const { top, under, line, strip } = front!.buttonFront!
+    expect([top, under].sort()).toEqual([0, 1])
+    expect(line.length).toBeGreaterThan(5)
+    expect(strip.length).toBeGreaterThan(5)
+    expect(front!.pins![top]!.every(p => p.mutual && p.hostCopy === under)).toBe(true)
+  })
+
+  it('buttons the centre-front lines together on the body', () => {
+    const gaps = shirt.cloth.pinGaps(0.5, true)
+    expect(gaps.length).toBe(front!.buttonFront!.line.length)
+    expect(Math.max(...gaps)).toBeLessThan(0.6)
+  })
+})
+
 describe('one-sided and unlinked placements', () => {
   const psnap = structuredClone(trousersFixture) as unknown as Psnap
   const pocket = psnap.placements[0]

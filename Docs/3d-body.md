@@ -295,6 +295,20 @@ after the shell, in passes (a trim may hang from another trim). See
   no velocity (otherwise the trim jitters). Garment-against-garment and
   trim-against-trim contact are not handled. `layerViolations()` reports
   particles on the wrong side (tests: none on the trousers and shirt fixtures).
+- **Button fronts** (`garmentWrap.buttonFrontOf`): a front with a
+  `center_front_line` marking (the backend draws it on button-placket fronts,
+  3 cm in from the edge) is a button front. Its CF edges are not welded to each
+  other. Instead the two fronts lap: the buttonhole side (a `buttonhole` marking's
+  `side`, default the wearer's left) lies on top, and every vertex within 0.9 cm of
+  its CF line is pinned to the point on the under front at the same place on the
+  body, which is the mirror of the top point across the CF line (barycentric
+  in the under copy's triangles). These pins are mutual: the pinned particle and
+  the host triangle each move half the error, so the under front is held too and
+  doesn't drift away. The top front's extension (the strip beyond the CF line)
+  uses the layer pass against the under copy only, so it lies over, not
+  through, the under front. Closed CF lines end within about 0.5 cm of each other.
+  (A velocity-free variant of the mutual pins, which also moved the previous
+  positions, blew the shirt up; the pins stay position-only.)
 - **Layers.** Inside pieces collide at 0.1 cm from the skin (outer fabric 0.35),
   so they can lie between the body and the outer fabric; they render darker and
   stay opaque in **X-ray**, which makes the outer fabric 28 % opaque.
