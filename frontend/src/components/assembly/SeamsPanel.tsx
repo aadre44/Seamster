@@ -4,6 +4,7 @@ import { useEditor } from '../../context/EditorContext'
 import type { CanvasElement, PatternPiece, Placement, SeamConnection, SeamEnd } from '../../types'
 import { pieceEdges } from './geometry'
 import { flySeams, guessFly, isFlyHost } from './autoFly'
+import { distances, moveTo } from './placementAids'
 import type { FlyPlan } from './autoFly'
 import { edgeName, hasSides, labelColour, seamFit, sewnLength } from './seams'
 import type { Fit } from './seams'
@@ -239,6 +240,46 @@ function FlyForm({ plan, pieces, byId, onChange, onDone }: {
   )
 }
 
+// Exact position: centre from the centre line, top below the waist; and, for a
+// one-sided placement with a twin on the other side, align it with the twin.
+function PositionFields({ placement, piece, host, byId, onChange }: {
+  placement: Placement
+  piece: PatternPiece
+  host: PatternPiece
+  byId: Map<string, CanvasElement>
+  onChange: (p: Placement, tag?: string) => void
+}) {
+  const { state } = useEditor()
+  const d = distances(placement, piece, host, byId)
+  const twin = state.placements.find(o => o.id !== placement.id && o.pieceId === placement.pieceId && o.hostId === placement.hostId)
+  const field = (label: string, value: number | null, set: (v: number) => void) => value !== null && (
+    <label className="flex items-center justify-between text-[11px] text-gray-600">
+      {label}
+      <span className="flex items-center gap-1">
+        <input aria-label={label} type="number" step={0.5} value={value}
+          onChange={e => Number.isFinite(parseFloat(e.target.value)) && set(parseFloat(e.target.value))}
+          className="w-16 border border-gray-300 rounded px-1 py-0.5 text-[11px]" />cm
+      </span>
+    </label>
+  )
+  return (
+    <div className="space-y-1">
+      {field('Centre from centre line', d.fromCentre, v => onChange(moveTo(placement, piece, host, byId, { fromCentre: v, belowTop: d.belowTop ?? undefined }), `pos:${placement.id}`))}
+      {field('Top below the waist', d.belowTop, v => onChange(moveTo(placement, piece, host, byId, { belowTop: v }), `pos:${placement.id}`))}
+      {d.toSide !== null && (
+        <div className="text-[11px] text-gray-500">{d.toSide < 0 ? 'Crosses the side seam onto the next panel.' : `${d.toSide} cm from the side seam.`}</div>
+      )}
+      {twin && placement.side && (
+        <button onClick={() => onChange({ ...placement, transform: { ...twin.transform } })}
+          title="Same position and angle as on the other side, mirrored"
+          className="w-full text-[11px] px-2 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">
+          Align with other side
+        </button>
+      )}
+    </div>
+  )
+}
+
 function PlacementEditor({ placement, piece, host, byId, onDone, onFly }: {
   placement: Placement
   piece: PatternPiece | undefined
@@ -267,7 +308,8 @@ function PlacementEditor({ placement, piece, host, byId, onDone, onFly }: {
           This is a fly piece: a fly is sewn to the centre front, not placed on it. <b>Attach it automatically…</b>
         </button>
       )}
-      <div className="text-[11px] text-gray-500">Drag it to move; drag the round handle to turn it.</div>
+      <div className="text-[11px] text-gray-500">Drag it to move (it snaps to the side seam and the other side; hold Alt to place freely); drag the round handle to turn it.</div>
+      {piece && host && <PositionFields placement={placement} piece={piece} host={host} byId={byId} onChange={(p, tag) => update(p, tag)} />}
       <label className="flex items-center justify-between text-[11px] text-gray-600">
         Rotation
         <span className="flex items-center gap-1">

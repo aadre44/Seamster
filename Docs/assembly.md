@@ -81,6 +81,16 @@ leg…), unrolled around the body as if cut down the centre back:
   other side** (`MIRROR_PLACEMENT`) turns a one-sided placement back into a
   pair, replacing its twin. A piece may therefore have several placements; in
   3D they become one placed piece with a copy each (`trimPlacement.mergePlaced`).
+- **Placing precisely** (`components/assembly/placementAids.ts`, host pattern
+  coordinates, so it is the same on every copy): while a placed piece is
+  dragged, a readout gives its centre's distance from the centre line, its top
+  below the waist (measured above the pocket — the waist may slope) and its
+  nearest edge to the side seam ("across the side seam" when it straddles it);
+  it snaps (within 0.8 cm; Alt = free) its centre onto the side seam, midway
+  between centre line and side seam, or level with its twin on the other side,
+  with dashed guides. The placement editor has exact **Centre from centre
+  line** / **Top below the waist** fields (changing one keeps the other) and
+  **Align with other side** for an unlinked twin.
 - **Across a seam.** A placement may hang over the edge of its host onto the
   neighbouring panel (a cargo pocket on the side seam): it is anchored to the
   host under its centre, and in 3D the part past a sewn edge continues onto the

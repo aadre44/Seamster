@@ -11,6 +11,8 @@ import type { CopyRef, Side } from './assembly/garmentLayout'
 import { FOLD_COLOUR, labelColour, prettyLabel } from './assembly/seams'
 import SeamsPanel from './assembly/SeamsPanel'
 import { pieceCenter, placementMatrix } from '../utils/placement'
+import { distances, placedBox, snapPlacement } from './assembly/placementAids'
+import type { Guide } from './assembly/placementAids'
 
 // Assembly: how the pieces go together.
 //
@@ -72,6 +74,8 @@ export default function AssemblyView() {
   const [hovered, setHovered] = useState<number | null>(null)
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  // While a placed piece is dragged: snap guides and its distances (host coords).
+  const [guides, setGuides] = useState<{ host: string; list: Guide[]; placement: string } | null>(null)
   const gestures = useRef(0)
 
   const selectSeam = (i: number | null) => { setSelected(i); if (i !== null) setSelPlacement(null) }
@@ -257,7 +261,13 @@ export default function AssemblyView() {
     if (!pl || !t) return
     const q = apply(invert(t), p)
     if (drag.kind === 'move') {
-      const transform = { ...pl.transform, dx: drag.dx + q.x - drag.start.x, dy: drag.dy + q.y - drag.start.y }
+      const raw = { ...pl, transform: { ...pl.transform, dx: drag.dx + q.x - drag.start.x, dy: drag.dy + q.y - drag.start.y } }
+      const piece = pieceById.get(pl.pieceId), host = pieceById.get(pl.hostId)
+      // Snap onto the side seam, midway to it, or level with the twin; show the guides.
+      const twins = placements.filter(o => o.id !== pl.id && o.pieceId === pl.pieceId && o.hostId === pl.hostId)
+      const snap = piece && host && !e.altKey ? snapPlacement(raw, piece, host, byId, twins) : null
+      setGuides(snap ? { host: drag.host, list: snap.guides, placement: pl.id } : { host: drag.host, list: [], placement: pl.id })
+      const transform = snap ? { ...raw.transform, dx: snap.dx, dy: snap.dy } : raw.transform
       dispatch({ type: 'UPDATE_PLACEMENT', placement: { ...pl, transform, source: 'user' }, tag: `move:${drag.gesture}` })
     } else {
       const a = deg(Math.atan2(q.y - drag.center.y, q.x - drag.center.x))
@@ -291,6 +301,7 @@ export default function AssemblyView() {
       }
     }
     setDrag(null)
+    setGuides(null)
   }
 
   const sel = selected !== null ? connections[selected] : undefined
@@ -407,6 +418,42 @@ export default function AssemblyView() {
 
   const selPair = selected !== null ? seamPairs[selected]?.[0] : undefined
 
+  // Snap guides and the dragged piece's distances to the centre, waist and side seam.
+  const guideOverlay = (() => {
+    if (!guides) return null
+    const t = screen.get(guides.host)
+    const pl = placements.find(p => p.id === guides.placement)
+    const piece = pl && pieceById.get(pl.pieceId), host = pl && pieceById.get(pl.hostId)
+    if (!t || !pl || !piece || !host) return null
+    const d = distances(pl, piece, host, byId)
+    const b = placedBox(pl, piece, byId)
+    const at = apply(t, { x: b.cx, y: b.maxY })
+    const parts = [
+      d.fromCentre !== null && `${d.fromCentre} cm from centre`,
+      d.belowTop !== null && `${d.belowTop} cm below the top`,
+      d.toSide !== null && (d.toSide < 0 ? 'across the side seam' : `${d.toSide} cm to the side seam`),
+    ].filter(Boolean) as string[]
+    return (
+      <g style={{ pointerEvents: 'none' }} data-testid="placement-guides">
+        {guides.list.map((g, i) => {
+          const a = apply(t, g.a), c = apply(t, g.b)
+          return (
+            <g key={i}>
+              <line x1={a.x} y1={a.y} x2={c.x} y2={c.y} stroke="#0d9488" strokeWidth={1.2} strokeDasharray="5 3" />
+              <text x={c.x + 4} y={c.y} fontSize={9} fill="#0f766e">{g.label}</text>
+            </g>
+          )
+        })}
+        {parts.length > 0 && (
+          <g>
+            <rect x={at.x - 90} y={at.y + 6} width={180} height={14 * parts.length + 6} rx={4} fill="white" fillOpacity={0.9} stroke="#99f6e4" />
+            {parts.map((s, i) => <text key={i} x={at.x} y={at.y + 18 + 14 * i} textAnchor="middle" fontSize={10} fill="#134e4a">{s}</text>)}
+          </g>
+        )}
+      </g>
+    )
+  })()
+
   return (
     <div className="flex-1 flex overflow-hidden bg-gray-50 relative">
       <svg
@@ -415,7 +462,7 @@ export default function AssemblyView() {
         style={{ background: '#f9fafb', touchAction: 'none' }}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerLeave={() => setDrag(null)}
+        onPointerLeave={() => { setDrag(null); setGuides(null) }}
         onClick={e => { if (e.target === e.currentTarget) { setPending(null); setSelected(null); setSelPlacement(null) } }}
         data-testid="assembly-svg"
       >
@@ -479,6 +526,7 @@ export default function AssemblyView() {
         })}
         {rotateHandle}
         {ghost}
+        {guideOverlay}
       </svg>
 
       <div className="absolute top-2 left-2 flex gap-2">
