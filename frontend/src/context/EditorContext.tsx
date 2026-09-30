@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode } from 'react'
 import type { CanvasElement, EditorSnapshot, EditorState, GarmentFeatures, Measurements, PatternPiece, Placement, SeamConnection, SewingInstructions, ToolType, UnitSystem } from '../types'
 import { mirrorPiece } from '../utils/pieceTransforms'
-import type { BodyField, BodyShapePreset } from '../three/types'
+import type { BodyField, BodySex, BodyShapePreset } from '../three/types'
 import { DEFAULT_BODY_PROFILE } from '../three/bodyRegions'
 
 type Action =
@@ -38,6 +38,7 @@ type Action =
   | { type: 'DELETE_PLACEMENT'; id: string }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
   | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
+  | { type: 'SET_BODY_SEX'; sex: BodySex }
   | { type: 'RESET_BODY_PROFILE' }
   | { type: 'PUSH_UNDO' }
   | { type: 'UNDO' }
@@ -315,6 +316,9 @@ function reducer(state: EditorState, action: Action): EditorState {
         ...state,
         bodyProfile: { ...state.bodyProfile, overrides: { ...state.bodyProfile.overrides, [action.field]: action.value } },
       }
+
+    case 'SET_BODY_SEX':
+      return { ...state, bodyProfile: { ...state.bodyProfile, sex: action.sex } }
 
     case 'SET_BODY_SHAPE':
       return { ...state, bodyProfile: { ...state.bodyProfile, shape: action.shape } }

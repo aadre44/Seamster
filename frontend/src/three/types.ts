@@ -2,6 +2,10 @@ export type Vec3 = [number, number, number]
 
 export type BodyShapePreset = 'hourglass' | 'rectangle' | 'pear' | 'apple'
 
+// Female: bust cup, defined waist, fuller hips. Male: flat chest with
+// pectorals, broader shoulders, straighter waist and hips, lower waist line.
+export type BodySex = 'female' | 'male'
+
 export type BodyField =
   | 'height' | 'bust' | 'underbust' | 'waist' | 'waistToHip' | 'hip'
   | 'neck' | 'shoulder' | 'armLength' | 'upperArm' | 'wrist'
@@ -12,9 +16,10 @@ export type BodyField =
 export interface BodyProfile {
   overrides: Partial<Record<BodyField, number>>
   shape: BodyShapePreset
+  sex?: BodySex // default female
 }
 
-export type ResolvedBody = Record<BodyField, number> & { shape: BodyShapePreset }
+export type ResolvedBody = Record<BodyField, number> & { shape: BodyShapePreset; sex: BodySex }
 
 // A soft radial bump on a cross-section (breast, shoulder blade, buttock, belly).
 // `angle` is measured from +u towards +w (front); `width` is the dome's

@@ -1,21 +1,27 @@
 import { useMemo, useState } from 'react'
 import { useEditor } from '../context/EditorContext'
 import { BODY_FIELDS, resolveBody } from '../three/bodyRegions'
-import type { BodyField, BodyShapePreset } from '../three/types'
+import type { BodyField, BodySex, BodyShapePreset } from '../three/types'
 import { convertBounds, fromDisplay, toDisplay, unitLabel } from '../utils/units'
 
-const GROUPS: { title: string; keys: BodyField[] }[] = [
+const groups = (sex: BodySex): { title: string; keys: BodyField[] }[] => [
   { title: 'Frame', keys: ['height', 'shoulder', 'neck'] },
-  { title: 'Torso', keys: ['bust', 'underbust', 'waist', 'waistToHip', 'hip'] },
+  // A man's chest has no underbust measurement.
+  { title: 'Torso', keys: sex === 'male' ? ['bust', 'waist', 'waistToHip', 'hip'] : ['bust', 'underbust', 'waist', 'waistToHip', 'hip'] },
   { title: 'Arms', keys: ['armLength', 'upperArm', 'wrist'] },
   { title: 'Legs', keys: ['inseam', 'thigh', 'knee', 'calf', 'ankle'] },
 ]
 
-const SHAPES: { key: BodyShapePreset; label: string }[] = [
-  { key: 'hourglass', label: 'Hourglass' },
-  { key: 'rectangle', label: 'Rectangle' },
-  { key: 'pear', label: 'Pear' },
-  { key: 'apple', label: 'Apple' },
+const SHAPES: { key: BodyShapePreset; female: string; male: string }[] = [
+  { key: 'hourglass', female: 'Hourglass', male: 'Athletic' },
+  { key: 'rectangle', female: 'Rectangle', male: 'Rectangle' },
+  { key: 'pear', female: 'Pear', male: 'Triangle' },
+  { key: 'apple', female: 'Apple', male: 'Oval' },
+]
+
+const SEXES: { key: BodySex; label: string }[] = [
+  { key: 'female', label: 'Female' },
+  { key: 'male', label: 'Male' },
 ]
 
 const META = new Map(BODY_FIELDS.map(f => [f.key, f]))
@@ -26,6 +32,8 @@ export default function BodyCustomizationPanel() {
   const unit = state.unitSystem
   const ul = unitLabel(unit)
   const { overrides, shape } = state.bodyProfile
+  const sex = state.bodyProfile.sex ?? 'female'
+  const label = (key: BodyField) => (key === 'bust' && sex === 'male' ? 'Chest' : META.get(key)!.label)
   const body = useMemo(
     () => resolveBody(state.bodyProfile, state.measurements),
     [state.bodyProfile, state.measurements],
@@ -50,6 +58,25 @@ export default function BodyCustomizationPanel() {
       {!collapsed && (
         <div className="px-3 pb-3 space-y-3">
           <div>
+            <div className="text-[10px] text-gray-500 mb-1">Body</div>
+            <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label="Body">
+              {SEXES.map(s => (
+                <button
+                  key={s.key}
+                  role="radio"
+                  aria-checked={sex === s.key}
+                  onClick={() => dispatch({ type: 'SET_BODY_SEX', sex: s.key })}
+                  className={`px-2 py-0.5 text-[10px] rounded ${
+                    sex === s.key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <div className="text-[10px] text-gray-500 mb-1">Shape</div>
             <div className="grid grid-cols-2 gap-1">
               {SHAPES.map(s => (
@@ -60,13 +87,13 @@ export default function BodyCustomizationPanel() {
                     shape === s.key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {s.label}
+                  {sex === 'male' ? s.male : s.female}
                 </button>
               ))}
             </div>
           </div>
 
-          {GROUPS.map(group => (
+          {groups(sex).map(group => (
             <div key={group.title} className="space-y-1.5">
               <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide">{group.title}</div>
               {group.keys.map(key => {
@@ -77,14 +104,14 @@ export default function BodyCustomizationPanel() {
                   <div key={key}>
                     <div className="flex items-baseline justify-between text-[10px] text-gray-500">
                       <span>
-                        {meta.label}
+                        {label(key)}
                         {src && <span className="ml-1 text-[9px] text-indigo-400">{src}</span>}
                       </span>
                       <span className="font-mono text-gray-700">{toDisplay(body[key], unit)} {ul}</span>
                     </div>
                     <input
                       type="range"
-                      aria-label={meta.label}
+                      aria-label={label(key)}
                       min={min}
                       max={max}
                       step={unit === 'imperial' ? 0.25 : 0.5}

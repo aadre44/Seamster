@@ -1,4 +1,4 @@
-import type { BodyField, BodyProfile, BodyShapePreset, Lobe, LoftRing, ResolvedBody, Vec3 } from './types'
+import type { BodyField, BodyProfile, BodySex, BodyShapePreset, Lobe, LoftRing, ResolvedBody, Vec3 } from './types'
 import { ringHalfWidth, scaleRing, tapeLength } from './rings'
 
 export interface BodyFieldMeta {
@@ -7,6 +7,7 @@ export interface BodyFieldMeta {
   minCm: number
   maxCm: number
   defaultCm: number
+  maleDefaultCm: number // a typical adult man (chest 100, waist 86)
   // Key in EditorState.measurements that already holds this body measurement.
   // Garment-only measurements (e.g. sleeveLength) are deliberately not mapped:
   // a short-sleeve length is not an arm length.
@@ -14,22 +15,22 @@ export interface BodyFieldMeta {
 }
 
 export const BODY_FIELDS: BodyFieldMeta[] = [
-  { key: 'height',     label: 'Height',         minCm: 140, maxCm: 210, defaultCm: 168 },
-  { key: 'bust',       label: 'Bust',           minCm: 60,  maxCm: 160, defaultCm: 92,  measurementKey: 'bust' },
-  { key: 'underbust',  label: 'Underbust',      minCm: 55,  maxCm: 140, defaultCm: 76 },
-  { key: 'waist',      label: 'Waist',          minCm: 45,  maxCm: 150, defaultCm: 74,  measurementKey: 'waist' },
-  { key: 'waistToHip', label: 'Waist to Hip',   minCm: 10,  maxCm: 35,  defaultCm: 20,  measurementKey: 'waistToHip' },
-  { key: 'hip',        label: 'Hip',            minCm: 60,  maxCm: 170, defaultCm: 98,  measurementKey: 'hip' },
-  { key: 'neck',       label: 'Neck',           minCm: 28,  maxCm: 50,  defaultCm: 36 },
-  { key: 'shoulder',   label: 'Shoulder Width', minCm: 30,  maxCm: 55,  defaultCm: 39,  measurementKey: 'shoulder' },
-  { key: 'armLength',  label: 'Arm Length',     minCm: 45,  maxCm: 75,  defaultCm: 58 },
-  { key: 'upperArm',   label: 'Upper Arm',      minCm: 20,  maxCm: 50,  defaultCm: 29 },
-  { key: 'wrist',      label: 'Wrist',          minCm: 12,  maxCm: 22,  defaultCm: 16 },
-  { key: 'inseam',     label: 'Inseam',         minCm: 60,  maxCm: 95,  defaultCm: 77,  measurementKey: 'inseam' },
-  { key: 'thigh',      label: 'Thigh',          minCm: 40,  maxCm: 85,  defaultCm: 56 },
-  { key: 'knee',       label: 'Knee',           minCm: 28,  maxCm: 50,  defaultCm: 37 },
-  { key: 'calf',       label: 'Calf',           minCm: 25,  maxCm: 50,  defaultCm: 36 },
-  { key: 'ankle',      label: 'Ankle',          minCm: 18,  maxCm: 32,  defaultCm: 23 },
+  { key: 'height',     label: 'Height',         minCm: 140, maxCm: 210, defaultCm: 168, maleDefaultCm: 178 },
+  { key: 'bust',       label: 'Bust',           minCm: 60,  maxCm: 160, defaultCm: 92, maleDefaultCm: 100, measurementKey: 'bust' },
+  { key: 'underbust',  label: 'Underbust',      minCm: 55,  maxCm: 140, defaultCm: 76, maleDefaultCm: 94 },
+  { key: 'waist',      label: 'Waist',          minCm: 45,  maxCm: 150, defaultCm: 74, maleDefaultCm: 86, measurementKey: 'waist' },
+  { key: 'waistToHip', label: 'Waist to Hip',   minCm: 10,  maxCm: 35,  defaultCm: 20, maleDefaultCm: 20, measurementKey: 'waistToHip' },
+  { key: 'hip',        label: 'Hip',            minCm: 60,  maxCm: 170, defaultCm: 98, maleDefaultCm: 100, measurementKey: 'hip' },
+  { key: 'neck',       label: 'Neck',           minCm: 28,  maxCm: 50,  defaultCm: 36, maleDefaultCm: 39 },
+  { key: 'shoulder',   label: 'Shoulder Width', minCm: 30,  maxCm: 55,  defaultCm: 39, maleDefaultCm: 46, measurementKey: 'shoulder' },
+  { key: 'armLength',  label: 'Arm Length',     minCm: 45,  maxCm: 75,  defaultCm: 58, maleDefaultCm: 63 },
+  { key: 'upperArm',   label: 'Upper Arm',      minCm: 20,  maxCm: 50,  defaultCm: 29, maleDefaultCm: 32 },
+  { key: 'wrist',      label: 'Wrist',          minCm: 12,  maxCm: 22,  defaultCm: 16, maleDefaultCm: 17.5 },
+  { key: 'inseam',     label: 'Inseam',         minCm: 60,  maxCm: 95,  defaultCm: 77, maleDefaultCm: 81, measurementKey: 'inseam' },
+  { key: 'thigh',      label: 'Thigh',          minCm: 40,  maxCm: 85,  defaultCm: 56, maleDefaultCm: 57 },
+  { key: 'knee',       label: 'Knee',           minCm: 28,  maxCm: 50,  defaultCm: 37, maleDefaultCm: 39 },
+  { key: 'calf',       label: 'Calf',           minCm: 25,  maxCm: 50,  defaultCm: 36, maleDefaultCm: 38 },
+  { key: 'ankle',      label: 'Ankle',          minCm: 18,  maxCm: 32,  defaultCm: 23, maleDefaultCm: 24 },
 ]
 
 export const DEFAULT_BODY_PROFILE: BodyProfile = { overrides: {}, shape: 'hourglass' }
@@ -37,11 +38,13 @@ export const DEFAULT_BODY_PROFILE: BodyProfile = { overrides: {}, shape: 'hourgl
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 export function resolveBody(profile: BodyProfile, measurements: Record<string, number>): ResolvedBody {
-  const out = { shape: profile.shape } as ResolvedBody
+  const sex: BodySex = profile.sex ?? 'female'
+  const out = { shape: profile.shape, sex } as ResolvedBody
   for (const f of BODY_FIELDS) {
     const fromMeasurements = f.measurementKey ? measurements[f.measurementKey] : undefined
-    const raw = profile.overrides[f.key] ?? fromMeasurements ?? f.defaultCm
-    out[f.key] = clamp(Number.isFinite(raw) ? raw : f.defaultCm, f.minCm, f.maxCm)
+    const fallback = sex === 'male' ? f.maleDefaultCm : f.defaultCm
+    const raw = profile.overrides[f.key] ?? fromMeasurements ?? fallback
+    out[f.key] = clamp(Number.isFinite(raw) ? raw : fallback, f.minCm, f.maxCm)
   }
   out.underbust = Math.min(out.underbust, out.bust)
   return out
@@ -121,6 +124,17 @@ export const SHAPE_PRESETS: Record<BodyShapePreset, ShapeParams> = {
   apple:     { waist: { f: 0.92, back: 0.72 }, hip: { f: 0.66, back: 0.58 }, belly: 0.20, glute: 0.06, waistZ: 2.0, hipZ: -0.3 },
 }
 
+// Men: a deeper, straighter waist, narrower flatter seat. The same four keys,
+// shown as Athletic (V), Rectangle, Triangle and Oval.
+export const MALE_SHAPE_PRESETS: Record<BodyShapePreset, ShapeParams> = {
+  hourglass: { waist: { f: 0.70, back: 0.70 }, hip: { f: 0.60, back: 0.56 }, belly: 0.02, glute: 0.07, waistZ: 0.3, hipZ: -0.6 },
+  rectangle: { waist: { f: 0.76, back: 0.74 }, hip: { f: 0.64, back: 0.60 }, belly: 0.04, glute: 0.05, waistZ: 0.5, hipZ: -0.3 },
+  pear:      { waist: { f: 0.72, back: 0.72 }, hip: { f: 0.60, back: 0.56 }, belly: 0.05, glute: 0.08, waistZ: 0.3, hipZ: -0.6 },
+  apple:     { waist: { f: 0.95, back: 0.74 }, hip: { f: 0.68, back: 0.60 }, belly: 0.22, glute: 0.04, waistZ: 2.5, hipZ: -0.2 },
+}
+
+const presetFor = (b: ResolvedBody): ShapeParams => (b.sex === 'male' ? MALE_SHAPE_PRESETS : SHAPE_PRESETS)[b.shape]
+
 // ── Levels ───────────────────────────────────────────────────────────────────
 
 // Vertical landmarks as fractions of height (adult proportions), except crotch
@@ -134,7 +148,8 @@ export interface Levels {
 export function bodyLevels(b: ResolvedBody): Levels {
   const H = b.height
   const crotch = clamp(b.inseam, 0.40 * H, 0.52 * H)
-  const waist = 0.62 * H
+  // A man's natural waist sits a little lower on the torso.
+  const waist = (b.sex === 'male' ? 0.605 : 0.62) * H
   const hip = clamp(waist - b.waistToHip, crotch + 5, waist - 8)
   return {
     neckUpper: 0.9 * H,
@@ -187,7 +202,7 @@ export function torsoRings(b: ResolvedBody): LoftRing[] {
   const cached = torsoCache.get(b)
   if (cached) return cached
   const L = bodyLevels(b)
-  const P = SHAPE_PRESETS[b.shape]
+  const P = presetFor(b)
 
   // The neck leans forward from its base behind the collarbones, and continues
   // up inside the head so the nape blends into the skull instead of ending in a rim.
@@ -210,8 +225,13 @@ export function torsoRings(b: ResolvedBody): LoftRing[] {
     u: X,
     w: Z,
   }
+  const male = b.sex === 'male'
   const chestWall = torsoShape(0.62, 0.78, 2.4, { blade: 0.03 })
-  const bust = bustRing([0, L.bust, 0.5], b.underbust * 1.06, b.bust, chestWall)
+  // A man's chest is the measured girth over broad, flat pectorals: no cup.
+  const maleChest = torsoShape(0.58, 0.74, 2.6, { breast: 0.035, blade: 0.05 })
+  const bust = male
+    ? shapedRing('bust', [0, L.bust, 0.5], b.bust, maleChest)
+    : bustRing([0, L.bust, 0.5], b.underbust * 1.06, b.bust, chestWall)
   // Breast profile from the side: a gentle upper slope, the apex at bust level,
   // and a fuller lower curve tucking into the fold at the underbust.
   const breastAmp = bust.lobes![0].amp
@@ -219,8 +239,12 @@ export function torsoRings(b: ResolvedBody): LoftRing[] {
     ...r,
     lobes: r.lobes!.map((l, k) => (TORSO_SLOTS[k].key === 'breast' ? { ...l, amp: breastAmp * fraction } : l)),
   })
-  const upperBust = withBreast(shapedRing('upperBust', [0, L.upperBust, 0.2], b.underbust * 1.07, chestWall), 0.55)
-  const lowerBust = withBreast(shapedRing('lowerBust', [0, L.lowerBust, 0.4], b.underbust * 1.05, chestWall), 0.8)
+  const upperBust = male
+    ? shapedRing('upperBust', [0, L.upperBust, 0.3], b.bust * 0.995, maleChest)
+    : withBreast(shapedRing('upperBust', [0, L.upperBust, 0.2], b.underbust * 1.07, chestWall), 0.55)
+  const lowerBust = male
+    ? shapedRing('lowerBust', [0, L.lowerBust, 0.4], b.bust * 0.975, torsoShape(0.6, 0.76, 2.5, { breast: 0.015, blade: 0.03 }))
+    : withBreast(shapedRing('lowerBust', [0, L.lowerBust, 0.4], b.underbust * 1.05, chestWall), 0.8)
 
   const hipShape = torsoShape(P.hip.f, P.hip.back, 2.3, { glute: P.glute })
   const seat = shapedRing('seat', [0, L.crotch + 3, P.hipZ * 0.8], b.hip * 0.95,
@@ -236,12 +260,15 @@ export function torsoRings(b: ResolvedBody): LoftRing[] {
     neckBase,
     trapezius,
     shoulder,
-    shapedRing('armpit', [0, L.armpit, -0.5], Math.min(b.bust, b.underbust * 1.1 + 0.15 * (b.bust - b.underbust)),
-      torsoShape(0.66, 0.78, 2.4, { blade: 0.05 })),
+    shapedRing('armpit', [0, L.armpit, -0.5],
+      male ? b.bust * 0.98 : Math.min(b.bust, b.underbust * 1.1 + 0.15 * (b.bust - b.underbust)),
+      torsoShape(male ? 0.62 : 0.66, 0.78, 2.4, { blade: 0.05 })),
     upperBust,
     bust,
     lowerBust,
-    shapedRing('underbust', [0, L.underbust, 0.3], b.underbust, torsoShape(0.66, 0.80, 2.4)),
+    // For a man, the ribcage below the pectorals tapers toward the waist.
+    shapedRing('underbust', [0, L.underbust, 0.3], male ? 0.7 * b.bust + 0.3 * b.waist : b.underbust,
+      torsoShape(0.66, 0.80, 2.4)),
     shapedRing('waist', [0, L.waist, P.waistZ], b.waist, torsoShape(P.waist.f, P.waist.back, 2.3)),
     shapedRing('abdomen', [0, L.abdomen, (P.waistZ + P.hipZ) / 2], b.waist + 0.6 * (b.hip - b.waist),
       torsoShape((P.waist.f + P.hip.f) / 2, (P.waist.back + P.hip.back) / 2, 2.3, { belly: P.belly, glute: P.glute * 0.4 })),
@@ -261,7 +288,7 @@ const legShape = (ratio: number, amps: Partial<Record<LegLobe, number>> = {}): S
 
 export function legRings(b: ResolvedBody, side: 1 | -1): LoftRing[] {
   const L = bodyLevels(b)
-  const P = SHAPE_PRESETS[b.shape]
+  const P = presetFor(b)
   const hip = torsoRings(b).find(r => r.name === 'hip')!
   const hipHalf = ringHalfWidth(hip)
   const thighA = ellipseAxes(b.thigh, 0.9).a
@@ -374,7 +401,8 @@ export function headEllipsoids(b: ResolvedBody): { cranium: Ellipsoid; jaw: Elli
   const rz = 0.056 * H
   return {
     cranium: { center: [0, H - ry, 0.8], radii: [0.043 * H, ry, rz] },
-    jaw: { center: [0, H - ry * 1.5, 0.8 + rz * 0.22], radii: [0.032 * H, ry * 0.55, rz * 0.68] },
+    // A man's jaw is broader and squarer.
+    jaw: { center: [0, H - ry * 1.5, 0.8 + rz * 0.22], radii: [(b.sex === 'male' ? 0.036 : 0.032) * H, ry * 0.55, rz * (b.sex === 'male' ? 0.72 : 0.68)] },
   }
 }
 

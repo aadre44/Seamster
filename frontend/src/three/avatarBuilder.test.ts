@@ -287,3 +287,47 @@ describe('blended surface', () => {
     expect(buildMs).toBeLessThan(4000)
   })
 })
+
+describe('male body', () => {
+  const male = (overrides: Partial<Record<BodyField, number>> = {}, shape: BodyShapePreset = 'rectangle') =>
+    resolveBody({ overrides, shape, sex: 'male' }, {})
+
+  it('uses a man’s defaults unless measured', () => {
+    const b = male()
+    expect(b.sex).toBe('male')
+    expect([b.height, b.bust, b.waist, b.shoulder]).toEqual([178, 100, 86, 46])
+    // editor measurements still win (the body follows the pattern's size)
+    expect(resolveBody({ overrides: {}, shape: 'rectangle', sex: 'male' }, { bust: 108 }).bust).toBe(108)
+    expect(resolveBody(DEFAULT_BODY_PROFILE, {}).sex).toBe('female')
+  })
+
+  it('has a flat chest taped to the chest measurement, not a bust cup', () => {
+    const b = male({ bust: 104 })
+    const chest = landmark(torsoRings(b), 'bust')
+    expect(Math.abs(tapeLength(chest) - 104) / 104).toBeLessThan(0.005)
+    const breastAmp = (r: LoftRing) => Math.max(...r.lobes!.filter(l => l.angle > 0 && Math.abs(l.angle - Math.PI / 2) > 0.3).map(l => l.amp))
+    const woman = resolveBody({ overrides: { bust: 104, underbust: 80 }, shape: 'rectangle' }, {})
+    expect(breastAmp(chest)).toBeLessThan(breastAmp(landmark(torsoRings(woman), 'bust')) / 3)
+  })
+
+  it('keeps the waist and hip measurements and sits the waist lower', () => {
+    for (const shape of ['hourglass', 'rectangle', 'pear', 'apple'] as const) {
+      const torso = torsoRings(male({ waist: 90, hip: 102 }, shape))
+      expect(tapeLength(landmark(torso, 'waist'))).toBeCloseTo(90, 0)
+      expect(tapeLength(landmark(torso, 'hip'))).toBeCloseTo(102, 0)
+    }
+    const b = male()
+    expect(bodyLevels(b).waist / b.height).toBeLessThan(bodyLevels(body()).waist / body().height)
+  })
+
+  it('builds a closed surface that reaches its height', () => {
+    const b = male()
+    const avatar = buildAvatar(b)
+    const pos = avatar.parts[0].positions
+    let top = -Infinity
+    for (let i = 1; i < pos.length; i += 3) top = Math.max(top, pos[i])
+    expect(Math.abs(top - 178)).toBeLessThan(1.5)
+    const { sdf } = buildBodySdf(b)
+    expect(Math.abs(surfaceTape(sdf, landmark(torsoRings(b), 'waist')) - 86) / 86).toBeLessThan(0.02)
+  })
+})
