@@ -19,6 +19,7 @@ type Action =
   | { type: 'DESELECT_ALL' }
   | { type: 'SET_MEASUREMENT'; name: string; value: number }
   | { type: 'ADD_PIECE'; piece: PatternPiece }
+  | { type: 'INSERT_PRESET'; elements: CanvasElement[]; piece?: PatternPiece }
   | { type: 'UPDATE_PIECE'; piece: PatternPiece }
   | { type: 'DELETE_PIECE'; id: string }
   | { type: 'SELECT_PIECE'; id: string }
@@ -161,6 +162,17 @@ function reducer(state: EditorState, action: Action): EditorState {
       )
       return { ...state, ...pushUndo(state), pieces: [...state.pieces, action.piece], elements: updatedElements }
     }
+
+    case 'INSERT_PRESET':
+      // A library piece (outline + grain line) or a marking, in one undo step.
+      return {
+        ...state,
+        ...pushUndo(state),
+        elements: [...state.elements, ...action.elements],
+        pieces: action.piece ? [...state.pieces, action.piece] : state.pieces,
+        selectedPieceId: action.piece?.id ?? state.selectedPieceId,
+        selectedIds: action.piece ? [] : action.elements.map(e => e.id),
+      }
 
     case 'UPDATE_PIECE':
       return {

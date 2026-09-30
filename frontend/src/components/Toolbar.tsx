@@ -1,6 +1,8 @@
 import { useEditor } from '../context/EditorContext'
 import type { ToolType } from '../types'
+import { useState } from 'react'
 import HelpPanel from './HelpPanel'
+import PieceLibrary from './PieceLibrary'
 
 const TOOLS: { id: ToolType; label: string; shortcut: string; icon: string }[] = [
   { id: 'select',         label: 'Select',         shortcut: 'S', icon: '↖' },
@@ -15,9 +17,10 @@ const TOOLS: { id: ToolType; label: string; shortcut: string; icon: string }[] =
 
 export default function Toolbar() {
   const { state, dispatch } = useEditor()
+  const [library, setLibrary] = useState(false)
 
   return (
-    <aside className="flex flex-col items-center gap-1 w-12 bg-gray-100 border-r border-gray-200 py-2 shrink-0">
+    <aside className="relative flex flex-col items-center gap-1 w-12 bg-gray-100 border-r border-gray-200 py-2 shrink-0">
       {TOOLS.map(t => (
         <button
           key={t.id}
@@ -34,6 +37,19 @@ export default function Toolbar() {
           <span className="text-[9px] mt-0.5 opacity-70">{t.shortcut}</span>
         </button>
       ))}
+
+      <div className="w-7 border-t border-gray-300 my-1" />
+      <button
+        title="Piece library: pockets, collars, cuffs, buttons…"
+        aria-pressed={library}
+        onClick={() => setLibrary(v => !v)}
+        className={`w-9 h-9 rounded flex flex-col items-center justify-center text-xs leading-none ${
+          library ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:bg-gray-200'}`}
+      >
+        <span className="text-base">▦</span>
+        <span className="text-[9px] mt-0.5 opacity-70">Lib</span>
+      </button>
+      {library && <PieceLibrary onClose={() => setLibrary(false)} />}
 
       <div className="flex-1" />
 

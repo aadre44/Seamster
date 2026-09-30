@@ -5,6 +5,34 @@ import type { SnapResult, SnapResult as SR } from '../snapping/snapEngine'
 import type { CanvasElement, PatternPiece, Point } from '../types'
 import { transformPieceElements } from '../utils/pieceTransforms'
 import { downloadPsnap, loadPsnapAction, toPsnap } from '../utils/psnap'
+import { findPreset } from '../library/presets'
+import { presetContext } from '../library/context'
+import { PRESET_MIME } from './PieceLibrary'
+
+// The piece whose outline contains p (for markings dropped onto a piece).
+function pieceAt(pieces: PatternPiece[], elements: CanvasElement[], p: Point): string | undefined {
+  const byId = new Map(elements.map(e => [e.id, e]))
+  for (const piece of [...pieces].reverse()) {
+    const poly: Point[] = []
+    for (const id of piece.elementIds) {
+      const e = byId.get(id)
+      if (!e || (e.type !== 'line' && e.type !== 'curve')) continue
+      if (e.type === 'line') poly.push(e.start, e.end)
+      else for (let i = 0; i <= 8; i++) {
+        const t = i / 8, u = 1 - t
+        poly.push({ x: u * u * u * e.start.x + 3 * u * u * t * e.cp1.x + 3 * u * t * t * e.cp2.x + t * t * t * e.end.x,
+          y: u * u * u * e.start.y + 3 * u * u * t * e.cp1.y + 3 * u * t * t * e.cp2.y + t * t * t * e.end.y })
+      }
+    }
+    let inside = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j]
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+    }
+    if (inside) return piece.id
+  }
+  return undefined
+}
 
 let _idSeq = 0
 function genId() { return `el-${++_idSeq}-${Date.now()}` }
@@ -389,14 +417,44 @@ export default function Canvas() {
     }
   }, [dispatch])
 
+  // A piece or marking dragged from the library lands centred on the drop point.
+  // A marking (button, buttonhole) dropped on a piece belongs to that piece.
+  const dropPreset = useCallback((presetId: string, clientX: number, clientY: number) => {
+    const preset = findPreset(presetId)
+    if (!preset || !svgRef.current) return
+    const rect = svgRef.current.getBoundingClientRect()
+    const at = screenToCm(clientX - rect.left, clientY - rect.top, pan, scale)
+    const s = stateRef.current
+    const made = preset.make(presetContext(s.pieces, s.elements, s.measurements))
+    const move = (p: Point): Point => ({ x: p.x + at.x, y: p.y + at.y })
+    let pieceId = made.piece?.id
+    if (!made.piece) pieceId = pieceAt(s.pieces, s.elements, at)
+    const elements = made.elements.map(el => {
+      const moved = el.type === 'curve' ? { ...el, start: move(el.start), end: move(el.end), cp1: move(el.cp1), cp2: move(el.cp2) }
+        : el.type === 'line' || el.type === 'grain-line' ? { ...el, start: move(el.start), end: move(el.end) } : el
+      return pieceId ? { ...moved, pieceId } : moved
+    }) as CanvasElement[]
+    let piece = made.piece && { ...made.piece, elementIds: made.piece.elementIds ?? [] } as PatternPiece | undefined
+    if (piece) {
+      // Distinct names ("Patch Pocket 2") so pieces can be told apart.
+      const taken = new Set(s.pieces.map(p => p.name))
+      let name = piece.name
+      for (let k = 2; taken.has(name); k++) name = `${piece.name} ${k}`
+      piece = { ...piece, name }
+    }
+    dispatch({ type: 'INSERT_PRESET', elements, piece })
+  }, [dispatch, pan, scale])
+
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    const presetId = e.dataTransfer.getData(PRESET_MIME)
+    if (presetId) { dropPreset(presetId, e.clientX, e.clientY); return }
     const file = Array.from(e.dataTransfer.files).find(f => f.name.endsWith('.psnap'))
     if (!file) return
     const hasContent = elementsRef.current.length > 0 || piecesRef.current.length > 0
     if (hasContent && !window.confirm('Loading a file will replace the current pattern. Continue?')) return
     file.text().then(loadPattern)
-  }, [loadPattern])
+  }, [loadPattern, dropPreset])
 
   // Dimension label inline editor
   const [editingDim, setEditingDim] = useState<{ id: string; value: string } | null>(null)

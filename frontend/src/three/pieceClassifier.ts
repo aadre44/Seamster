@@ -16,6 +16,8 @@ export interface Classification {
 // preview; they stay 2D-only for now.
 const TRIM = /\b(facing|facings|binding|pocket|pockets|welt|flap|collar|cuff|cuffs|loop|loops|strap|straps|tie|ties|fly|shield|gusset|placket|belt|bag|lining|interfacing|casing|epaulet|epaulette|hood|yoke|waistband|band|ruffle|frill|bow|tab)\b/
 
+export const isTrimName = (name: string) => TRIM.test(name.toLowerCase())
+
 export function classifyPiece(name: string, labels: Set<string>): Classification {
   const n = name.toLowerCase()
   const back = labels.has('center_back') || (!labels.has('center_front') && /\bback\b/.test(n))

@@ -116,18 +116,22 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
       // Topstitching (fly J): consecutive pinned points as segments.
       const stitchPts: { tri: number[]; w: number[] }[] = []
       const stitchPairs: number[] = []
+      const buttonPairs: number[] = []
       for (const mk of piece.marks.filter(mk => mk.copy === ci)) {
+        const pairs = mk.kind === 'button' ? buttonPairs : stitchPairs
         const n = mk.w.length / 3
         const first = stitchPts.length
         for (let k = 0; k < n; k++) stitchPts.push({ tri: mk.tri.slice(k * 3, k * 3 + 3), w: mk.w.slice(k * 3, k * 3 + 3) })
-        for (let k = 0; k < n - 1; k++) stitchPairs.push(first + k, first + k + 1)
+        for (let k = 0; k < n - 1; k++) pairs.push(first + k, first + k + 1)
       }
       const topstitch = new THREE.BufferGeometry()
       topstitch.setAttribute('position', new THREE.BufferAttribute(new Float32Array(stitchPairs.length * 3), 3))
-      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, inside: piece.layer === 'inside', geometry: g, seam, pairs, topstitch, stitchPts, stitchPairs }
+      const buttons = new THREE.BufferGeometry()
+      buttons.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buttonPairs.length * 3), 3))
+      return { key: `${piece.id}:${ci}`, piece: i, copy: ci, inside: piece.layer === 'inside', geometry: g, seam, pairs, topstitch, stitchPts, stitchPairs, buttons, buttonPairs }
     })
   }), [result.placementId, fitMap, colorByPiece])
-  useEffect(() => () => meshes.forEach(m => { m.geometry.dispose(); m.seam.dispose(); m.topstitch.dispose() }), [meshes])
+  useEffect(() => () => meshes.forEach(m => { m.geometry.dispose(); m.seam.dispose(); m.topstitch.dispose(); m.buttons.dispose() }), [meshes])
 
   useEffect(() => {
     for (const m of meshes) {
@@ -152,14 +156,17 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
       })
       line.needsUpdate = true
       m.seam.computeBoundingSphere()
-      if (m.stitchPairs.length) {
+      if (m.stitchPts.length) {
         const at = m.stitchPts.map(({ tri, w }) => [0, 1, 2].map(d =>
           tri.reduce((sum, v, k) => sum + w[k] * (src[v * 3 + d] + normals[v * 3 + d] * SEAM_LIFT * 1.5), 0)))
-        const ts = m.topstitch.getAttribute('position') as THREE.BufferAttribute
-        const arr = ts.array as Float32Array
-        m.stitchPairs.forEach((pi, k) => arr.set(at[pi], k * 3))
-        ts.needsUpdate = true
-        m.topstitch.computeBoundingSphere()
+        for (const [geo, pairs] of [[m.topstitch, m.stitchPairs], [m.buttons, m.buttonPairs]] as const) {
+          if (!pairs.length) continue
+          const attr = geo.getAttribute('position') as THREE.BufferAttribute
+          const arr = attr.array as Float32Array
+          pairs.forEach((pi, k) => arr.set(at[pi], k * 3))
+          attr.needsUpdate = true
+          geo.computeBoundingSphere()
+        }
       }
     }
     invalidate()
@@ -170,6 +177,8 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
   // Topstitching thread, as on jeans.
   const threadMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#c9a24a' }), [])
   useEffect(() => () => threadMaterial.dispose(), [threadMaterial])
+  const buttonMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: '#3b2f2a' }), [])
+  useEffect(() => () => buttonMaterial.dispose(), [buttonMaterial])
 
   const material = useMemo(
     () => new THREE.MeshStandardMaterial({
@@ -198,6 +207,7 @@ function GarmentMeshes({ result, fitMap, colorByPiece, xray }: { result: Garment
             renderOrder={xray && !m.inside ? 1 : 0} />
           {m.pairs.length > 0 && <lineSegments geometry={m.seam} material={seamMaterial} />}
           {m.stitchPairs.length > 0 && <lineSegments geometry={m.topstitch} material={threadMaterial} />}
+          {m.buttonPairs.length > 0 && <lineSegments geometry={m.buttons} material={buttonMaterial} />}
         </group>
       ))}
     </>

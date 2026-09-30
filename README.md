@@ -91,6 +91,18 @@ Snap priority: endpoint > midpoint > grid > angle.
 
 ---
 
+## Piece library
+
+The **▦ Lib** button in the left toolbar (Pattern tab) opens a drawer of ready-made pieces to drag onto the canvas:
+
+- **Pockets** — chest (11 × 13), patch (rounded / angled / U-shaped), jeans back pocket (pointed), cargo, in-seam pocket bag.
+- **Collars** — stand, shirt (point), mandarin, Peter Pan (cut on the fold); sized to your pattern's neckline when it has one.
+- **Cuffs & bands** — shirt cuff and sleeve band (sized to the wrist), waistband (sized to the waist).
+- **Plackets & flaps** — button placket, pocket flap, welt, belt loop, tie / sash.
+- **Buttons** — 11 / 15 / 20 mm buttons and horizontal / vertical buttonholes. These are markings: dropped on a piece they belong to it, and they show on the 3D body.
+
+Library pieces use the same names and edge labels as generated trims, so **Re-infer** in Assembly attaches them (collars to the neckline, cuffs to the wrist, pockets placed on their piece) and they appear on the 3D body. Presets live in `frontend/src/library/presets.ts`.
+
 ## Assembly View
 
 The header tabs **Pattern | Assembly | 3D Body** switch the main view; the Pattern tab always takes you back to the editor. **Assembly** shows how the pieces connect (it is disabled until the canvas has pattern pieces).
@@ -347,6 +359,7 @@ Seamster/
 │       │   ├── assembly/geometry.ts    Layouts (shelf grid, laid-flat seam alignment), edge sampling for seam ranges
 │       │   ├── assembly/seams.ts       Seam names, sewn lengths, match / ease / mismatch
 │       │   ├── assembly/SeamsPanel.tsx Seams list + seam editor (range, side, direction, delete)
+│       │   ├── PieceLibrary.tsx        Library drawer (drag presets onto the canvas)
 │       │   ├── BodyModelView.tsx       3D body view (lazy-loaded) — react-three-fiber canvas, orbit controls, on-demand rendering
 │       │   └── BodyCustomizationPanel.tsx  Body sliders + shape preset + reset (sidebar, 3D view only)
 │       ├── three/
@@ -360,6 +373,9 @@ Seamster/
 │       ├── export/
 │       │   ├── svgExport.ts            Client-side SVG export
 │       │   └── pdfExport.ts            Backend-assisted tiled PDF (A4)
+│       ├── library/
+│       │   ├── presets.ts              Piece library presets (pockets, collars, cuffs, bands, flaps, buttons, buttonholes)
+│       │   └── context.ts              Pattern neckline / waist / wrist the presets size themselves to
 │       ├── utils/
 │       │   ├── formulaEval.ts          Sandboxed expression parser (no eval) for parametric dims
 │       │   ├── pieceTransforms.ts      Flip H/V, rotate, mirror-copy geometry

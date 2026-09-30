@@ -25,7 +25,8 @@ export interface GarmentCopyData { positions: Float32Array; indices: Uint32Array
 // drawn as stitch lines so you can see they stay joined.
 // A stitching line drawn on a piece (the fly topstitch): points pinned to the
 // piece's mesh as barycentric weights of triangles, so it follows the drape.
-export interface GarmentMark { copy: number; tri: number[]; w: number[] } // 3 entries per point
+export type MarkKind = 'topstitch' | 'buttonhole' | 'button'
+export interface GarmentMark { kind: MarkKind; copy: number; tri: number[]; w: number[] } // 3 entries per point
 export interface GarmentPieceData {
   id: string
   name: string
@@ -35,29 +36,34 @@ export interface GarmentPieceData {
   marks: GarmentMark[]
 }
 
-// Topstitching that shows on the outside: the fly "J" on the front, on the
-// side the fly facing is sewn to.
-function topstitchMarks(p: PlacedPiece, job: GarmentJob): GarmentMark[] {
+// Markings that show on the outside, pinned to the piece's mesh: the fly "J"
+// topstitch (on the side the fly facing is sewn to), buttons and buttonholes
+// (on every copy of their piece).
+const MARK_KINDS: Record<string, MarkKind> = { fly_topstitch: 'topstitch', topstitch: 'topstitch', buttonhole: 'buttonhole', button: 'button' }
+
+function outsideMarks(p: PlacedPiece, job: GarmentJob): GarmentMark[] {
   const marks = job.elements.filter(e => (e.type === 'line' || e.type === 'curve') && e.pieceId === p.id
-    && (e as { seamLabel?: string }).seamLabel === 'fly_topstitch')
+    && MARK_KINDS[(e as { seamLabel?: string }).seamLabel ?? ''] && !p.edges.some(o => o.base === e.id))
   if (!marks.length) return []
   const names = new Map(job.pieces.map(q => [q.id, q.name]))
   const facingSeam = job.connections.find(c => c.label === 'fly' && c.to.pieceId === p.id && !/shield/i.test(names.get(c.from.pieceId) ?? ''))
-  if (!facingSeam) return []
-  const side = facingSeam.to.side ?? 'left'
-  const copy = p.copySpecs.findIndex((_, i) => copySide(p, i) === side)
-  if (copy < 0) return []
-  return marks.map(e => {
+  const flyCopy = facingSeam ? p.copySpecs.findIndex((_, i) => copySide(p, i) === (facingSeam.to.side ?? 'left')) : -1
+  const out: GarmentMark[] = []
+  for (const e of marks) {
+    const label = (e as { seamLabel?: string }).seamLabel!
+    const copies = label === 'fly_topstitch' ? (flyCopy >= 0 ? [flyCopy] : []) : p.copySpecs.map((_, i) => i)
     const at = elementSampler(e)!
+    const n = e.type === 'line' ? 1 : 12
     const tri: number[] = []
     const w: number[] = []
-    for (let k = 0; k <= 24; k++) {
-      const b = barycentric(p, p.toLocal(at(k / 24)))
+    for (let k = 0; k <= n; k++) {
+      const b = barycentric(p, p.toLocal(at(k / n)))
       tri.push(...b.tri)
       w.push(...b.w)
     }
-    return { copy, tri, w }
-  })
+    for (const copy of copies) out.push({ kind: MARK_KINDS[label], copy, tri, w })
+  }
+  return out
 }
 
 // A piece edge is drawn as a seam when it is sewn: to another piece (a
@@ -121,7 +127,7 @@ self.onmessage = async (e: MessageEvent<GarmentJob>) => {
       layer: p.layer,
       copies: p.copies.map(c => ({ ...c, positions: c.positions.slice() })),
       seams: seamEdges(p, job.connections),
-      marks: topstitchMarks(p, job),
+      marks: outsideMarks(p, job),
     }))
     post({ kind: 'placed', id: job.id, pieces, skipped, done: !job.drape || placed.length === 0 },
       pieces.flatMap(p => p.copies.flatMap(c => [c.positions.buffer, c.indices.buffer, c.ease.buffer])))
