@@ -64,6 +64,11 @@ describe('trims on the body', () => {
         expect(r.cloth.stitchGaps()).toHaveLength(0)
       })
 
+      it('keeps every trim on its side of the garment (pockets over, facings and bags under)', () => {
+        expect(r.cloth.layerParticles).toBeGreaterThan(100)
+        expect(r.cloth.layerViolations()).toBeLessThanOrEqual(Math.floor(r.cloth.layerParticles * 0.01))
+      })
+
       it('keeps stitched pocket edges on the garment', () => {
         expect(Math.max(...r.cloth.pinGaps(1))).toBeLessThan(0.5)
       })

@@ -22,6 +22,11 @@ export const CLOTH_THICKNESS = 0.35 // cm kept between fabric and skin
 // Inside pieces (facings, fly, pocket bags) lie between the skin and the outer
 // fabric, so they may come closer to the body.
 export const INSIDE_THICKNESS = 0.1
+// Cloth against cloth (a trim over or under the garment): kept this far apart,
+// looked for this far from the fabric.
+const LAYER_GAP = 0.25
+const LAYER_REACH = 1.5
+const CANDIDATE_RADIUS = 2.5
 const GRAVITY = 981 // cm/s²
 const STRETCH = 1.0
 const COMPRESS = 0.4
@@ -384,7 +389,152 @@ export class Cloth {
     for (const r of this.ranges) {
       if (placed[r.piece].layer === 'inside') this.thick.fill(INSIDE_THICKNESS, r.start, r.start + r.count)
     }
+    this.buildLayers(placed)
   }
+
+  // ── Layers: trims don't pass through the garment ──────────────────────────
+  // A trim lies over (outer: pocket, flap, band) or under (inside: facing, fly,
+  // pocket bag) the garment fabric next to it. Each trim particle keeps to its
+  // side of the garment triangles near it, at least LAYER_GAP away. Trims stay
+  // close to where they were placed, so each particle's candidate triangles
+  // are found once, here.
+  private layerP = new Int32Array(0)
+  private layerSide = new Int8Array(0)
+  private layerStart = new Int32Array(1) // candidates of layer particle i: layerTri[layerStart[i] .. layerStart[i+1])
+  private layerTri = new Int32Array(0) // triangle index
+  private tri = new Int32Array(0) // host triangles, 3 particles each
+  private triSign = new Int8Array(0) // flips the winding normal to point away from the body
+
+  private buildLayers(placed: PlacedPiece[]): void {
+    const { x, alias } = this
+    const shellRoots = new Set<number>()
+    const tris: number[] = []
+    const signs: number[] = []
+    const g = new Float32Array(3)
+    this.ranges.forEach(r => {
+      if (placed[r.piece].region === 'trim') return
+      for (let i = r.start; i < r.start + r.count; i++) shellRoots.add(alias[i])
+      const idx = placed[r.piece].copies[r.copy].indices
+      for (let t = 0; t < idx.length; t += 3) {
+        const a = alias[r.start + idx[t]], b = alias[r.start + idx[t + 1]], c = alias[r.start + idx[t + 2]]
+        const nrm = this.triNormal(a, b, c)
+        if (!nrm) continue
+        const cx = (x[a * 3] + x[b * 3] + x[c * 3]) / 3, cy = (x[a * 3 + 1] + x[b * 3 + 1] + x[c * 3 + 1]) / 3, cz = (x[a * 3 + 2] + x[b * 3 + 2] + x[c * 3 + 2]) / 3
+        this.body.normal(cx, cy, cz, g)
+        tris.push(a, b, c)
+        signs.push(nrm[0] * g[0] + nrm[1] * g[1] + nrm[2] * g[2] >= 0 ? 1 : -1)
+      }
+    })
+    this.tri = Int32Array.from(tris)
+    this.triSign = Int8Array.from(signs)
+    // Hash triangle centroids (cells of CELL cm) to find each trim particle's neighbours.
+    const CELL = 4
+    const key = (a: number, b: number, c: number) => `${Math.floor(a / CELL)},${Math.floor(b / CELL)},${Math.floor(c / CELL)}`
+    const cells = new Map<string, number[]>()
+    for (let t = 0; t < signs.length; t++) {
+      const [a, b, c] = [tris[t * 3], tris[t * 3 + 1], tris[t * 3 + 2]]
+      const k = key((x[a * 3] + x[b * 3] + x[c * 3]) / 3, (x[a * 3 + 1] + x[b * 3 + 1] + x[c * 3 + 1]) / 3, (x[a * 3 + 2] + x[b * 3 + 2] + x[c * 3 + 2]) / 3)
+      const list = cells.get(k) ?? []
+      list.push(t)
+      cells.set(k, list)
+    }
+    const ps: number[] = [], sides: number[] = [], start: number[] = [0], cand: number[] = []
+    const seen = new Set<number>()
+    this.ranges.forEach(r => {
+      const p = placed[r.piece]
+      if (p.region !== 'trim') return
+      const side = p.layer === 'inside' ? -1 : 1
+      for (let i = r.start; i < r.start + r.count; i++) {
+        const root = alias[i]
+        if (shellRoots.has(root) || seen.has(root)) continue // sewn to the garment: it is the garment there
+        seen.add(root)
+        const px = x[root * 3], py = x[root * 3 + 1], pz = x[root * 3 + 2]
+        const [cx, cy, cz] = [px, py, pz].map(v => Math.floor(v / CELL))
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+          for (const t of cells.get(`${cx + dx},${cy + dy},${cz + dz}`) ?? []) {
+            if (tris[t * 3] === root || tris[t * 3 + 1] === root || tris[t * 3 + 2] === root) continue
+            const a = tris[t * 3], b = tris[t * 3 + 1], c = tris[t * 3 + 2]
+            const d = Math.hypot((x[a * 3] + x[b * 3] + x[c * 3]) / 3 - px, (x[a * 3 + 1] + x[b * 3 + 1] + x[c * 3 + 1]) / 3 - py, (x[a * 3 + 2] + x[b * 3 + 2] + x[c * 3 + 2]) / 3 - pz)
+            if (d < CANDIDATE_RADIUS) cand.push(t)
+          }
+        }
+        ps.push(root)
+        sides.push(side)
+        start.push(cand.length)
+      }
+    })
+    this.layerP = Int32Array.from(ps)
+    this.layerSide = Int8Array.from(sides)
+    this.layerStart = Int32Array.from(start)
+    this.layerTri = Int32Array.from(cand)
+  }
+
+  // Signed distance of particle p from triangle t (along its outward normal),
+  // with the barycentric weights of p's foot on the triangle's plane; null if
+  // the foot is outside the triangle or p is out of reach.
+  private footOn(p: number, t: number, out: Float32Array): number | null {
+    const { x, tri, triSign } = this
+    const a = tri[t * 3], b = tri[t * 3 + 1], c = tri[t * 3 + 2]
+    const ax = x[a * 3], ay = x[a * 3 + 1], az = x[a * 3 + 2]
+    const e1x = x[b * 3] - ax, e1y = x[b * 3 + 1] - ay, e1z = x[b * 3 + 2] - az
+    const e2x = x[c * 3] - ax, e2y = x[c * 3 + 1] - ay, e2z = x[c * 3 + 2] - az
+    let nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x
+    const l = Math.hypot(nx, ny, nz)
+    if (l < 1e-9) return null
+    const s = triSign[t] / l
+    nx *= s; ny *= s; nz *= s
+    const qx = x[p * 3] - ax, qy = x[p * 3 + 1] - ay, qz = x[p * 3 + 2] - az
+    const d = qx * nx + qy * ny + qz * nz
+    if (Math.abs(d) > LAYER_REACH) return null
+    // Barycentric of the foot.
+    const d00 = e1x * e1x + e1y * e1y + e1z * e1z, d01 = e1x * e2x + e1y * e2y + e1z * e2z, d11 = e2x * e2x + e2y * e2y + e2z * e2z
+    const d20 = qx * e1x + qy * e1y + qz * e1z, d21 = qx * e2x + qy * e2y + qz * e2z
+    const den = d00 * d11 - d01 * d01
+    if (Math.abs(den) < 1e-12) return null
+    const v = (d11 * d20 - d01 * d21) / den, w = (d00 * d21 - d01 * d20) / den, u = 1 - v - w
+    if (u < -0.05 || v < -0.05 || w < -0.05) return null
+    out[0] = nx; out[1] = ny; out[2] = nz; out[3] = u; out[4] = v; out[5] = w
+    return d
+  }
+
+  // Pushes each trim particle back to its side of the garment triangles it is
+  // over (the garment is heavier and sewn in place: only the trim moves).
+  private solveLayers(): void {
+    const { x, layerP, layerSide, layerStart, layerTri } = this
+    const f = new Float32Array(6)
+    for (let i = 0; i < layerP.length; i++) {
+      const p = layerP[i], side = layerSide[i]
+      for (let k = layerStart[i]; k < layerStart[i + 1]; k++) {
+        const t = layerTri[k]
+        const d = this.footOn(p, t, f)
+        if (d === null) continue
+        const err = side > 0 ? LAYER_GAP - d : -LAYER_GAP - d
+        if ((side > 0 && err <= 0) || (side < 0 && err >= 0)) continue
+        // Moved, not launched: the previous position moves too, so the push
+        // adds no velocity (it would make the trim jitter against the garment).
+        for (let c = 0; c < 3; c++) {
+          x[p * 3 + c] += f[c] * err
+          this.prev[p * 3 + c] += f[c] * err
+        }
+        break
+      }
+    }
+  }
+
+  // Trim particles on the wrong side of garment fabric they are over (for tests).
+  layerViolations(): number {
+    const f = new Float32Array(6)
+    let bad = 0
+    for (let i = 0; i < this.layerP.length; i++) {
+      for (let k = this.layerStart[i]; k < this.layerStart[i + 1]; k++) {
+        const d = this.footOn(this.layerP[i], this.layerTri[k], f)
+        if (d !== null && d * this.layerSide[i] < 0) { bad++; break }
+      }
+    }
+    return bad
+  }
+
+  get layerParticles(): number { return this.layerP.length }
 
   // Unit normal of triangle (a, b, c) by winding; null if degenerate.
   private triNormal(a: number, b: number, c: number): [number, number, number] | null {
@@ -478,6 +628,7 @@ export class Cloth {
       // Two passes: where contacts meet (foot and floor) one push can undo another.
       this.collide()
       this.collide()
+      if (s % 4 === 3) this.solveLayers()
       this.syncWelds()
       for (let k = 0; k < n * 3; k++) v[k] = (x[k] - prev[k]) / h
     }

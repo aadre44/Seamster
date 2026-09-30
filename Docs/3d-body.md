@@ -284,6 +284,17 @@ after the shell, in passes (a trim may hang from another trim). See
   offset along the triangle normal (oriented away from the body at setup). The
   pinned particle follows; the host does not feel it. `pinGaps()` /
   `pinSides()` report them for tests.
+- **Cloth against cloth** (`clothSim.buildLayers` / `solveLayers`): every trim
+  particle not sewn to the garment keeps to its side of the garment triangles
+  it lies over — outer trims (pockets, flaps, bands, collars) at least 0.25 cm
+  above, inside ones (facings, fly, pocket bags) at least 0.25 cm below (by the
+  triangle's outward normal, oriented once against the body). Candidate
+  triangles (centroid within 2.5 cm) are found once at setup, since trims stay
+  close to where they were placed; the pass runs every 4th substep, moves only
+  the trim particle, and moves its previous position with it so the push adds
+  no velocity (otherwise the trim jitters). Garment-against-garment and
+  trim-against-trim contact are not handled. `layerViolations()` reports
+  particles on the wrong side (tests: none on the trousers and shirt fixtures).
 - **Layers.** Inside pieces collide at 0.1 cm from the skin (outer fabric 0.35),
   so they can lie between the body and the outer fabric; they render darker and
   stay opaque in **X-ray**, which makes the outer fabric 28 % opaque.
