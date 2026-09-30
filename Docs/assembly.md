@@ -108,6 +108,11 @@ leg…), unrolled around the body as if cut down the centre back:
   pair (🔗), one side when `side` is set; a piece dropped on a copy of a cut-2 /
   on-fold host is placed on that side only.
 
+**3D beside** (Assembly toolbar) splits the view: Assembly on the left, the
+live 3D body on the right (`App.tsx`), with the body panel in the sidebar. The
+3D view follows the editor state, so moving a pocket or editing a seam
+re-drapes beside it.
+
 ## Editing seams (`components/AssemblyView.tsx`, `components/assembly/`)
 
 - **Add**: click an edge, then the edge on another piece it is sewn to. The new

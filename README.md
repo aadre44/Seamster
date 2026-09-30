@@ -136,6 +136,8 @@ Connections are computed automatically by the backend when generating a pattern 
 
 **Fly:** **Fly…** in the Seams panel attaches the fly facing and fly shield to the centre front automatically (facing on the wearer's left or right), the way a fly is constructed; the fly's J topstitching then shows on the 3D body. A fly piece dragged onto the front by hand offers the same fix.
 
+**3D beside** shows the live 3D body next to Assembly, re-draping as you move pockets or edit seams.
+
 **Buttons:** **Buttons…** in Assembly adds a row of buttons down one front with the matching buttonholes on the other (count, size, spacing, which side). While dragging a placed pocket Assembly shows its distance from the centre, below the waist and to the side seam, and snaps it onto the side seam or level with the other side; a pocket may straddle a seam, and on the body it continues onto the neighbouring panel. **Unlink sides** makes a mirrored pair independent for asymmetric designs.
 
 **Placing pockets:** drag a piece (e.g. a patch pocket) onto the piece it goes on. Placed, it can be dragged to move, turned with its round handle, set to one side of the body or both, inside or outside, and its edges clicked to switch between stitched and open (the mouth is left open by default). Placements are saved in the `.psnap`. Details: [Docs/assembly.md](Docs/assembly.md).

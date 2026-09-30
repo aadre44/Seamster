@@ -146,6 +146,7 @@ function Editor() {
   const [showAI, setShowAI] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
   const [mainView, setMainView] = useState<MainView>('canvas')
+  const [split, setSplit] = useState(false) // Assembly with the 3D body beside it
   // Set after a photo-based AI generate; keeps the photo + measurements so the
   // "Refine from Photo" button stays available until the next generate.
   const [refineCtx, setRefineCtx] = useState<RefineContext | null>(null)
@@ -223,11 +224,23 @@ function Editor() {
           }>
             <BodyModelView />
           </Suspense>
-        ) : view === 'assembly' ? <AssemblyView /> : <Canvas />}
+        ) : view === 'assembly' ? (
+          <div className="flex-1 flex min-w-0 overflow-hidden">
+            <AssemblyView split={split} onSplit={setSplit} />
+            {split && (
+              // The live 3D body beside Assembly: placements re-drape as they move.
+              <div className="flex w-[42%] min-w-[320px] border-l border-gray-200" data-testid="assembly-3d">
+                <Suspense fallback={<div className="flex-1 flex items-center justify-center text-sm text-gray-400">Loading 3D view…</div>}>
+                  <BodyModelView />
+                </Suspense>
+              </div>
+            )}
+          </div>
+        ) : <Canvas />}
 
         {/* Right sidebar */}
         <aside className="w-52 shrink-0 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
-          {view === 'body' && <BodyCustomizationPanel />}
+          {(view === 'body' || (view === 'assembly' && split)) && <BodyCustomizationPanel />}
           <div className="px-3 py-2 text-xs font-semibold text-gray-700 border-b border-gray-100">
             Properties
           </div>

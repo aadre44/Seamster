@@ -61,7 +61,7 @@ function endItems(items: Item[], end: SeamEnd, other: Item[]): Item[] {
     && (!i.copy?.half || (end.half ? i.copy.half === end.half : i.copy.half === (other[0] && /back/i.test(other[0].piece.name) ? 'back' : 'front'))))
 }
 
-export default function AssemblyView() {
+export default function AssemblyView({ split = false, onSplit }: { split?: boolean; onSplit?: (v: boolean) => void } = {}) {
   const { state, dispatch } = useEditor()
   const { pieces, elements, connections, placements } = state
   const svgRef = useRef<SVGSVGElement>(null)
@@ -545,6 +545,13 @@ export default function AssemblyView() {
             </button>
           ))}
         </div>
+        {onSplit && (
+          <button onClick={() => onSplit(!split)} aria-pressed={split}
+            title="Show the 3D body beside Assembly; it re-drapes as you edit"
+            className={`rounded border shadow-sm text-xs px-2 py-1 ${split ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+            🧍 3D beside
+          </button>
+        )}
         {mode === 'garment' && (
           <div className="flex rounded border border-gray-300 bg-white shadow-sm text-xs overflow-hidden" title="Which side of the garment is in the middle">
             {(['front', 'back'] as const).map(c => (
