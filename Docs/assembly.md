@@ -81,6 +81,10 @@ leg…), unrolled around the body as if cut down the centre back:
   other side** (`MIRROR_PLACEMENT`) turns a one-sided placement back into a
   pair, replacing its twin. A piece may therefore have several placements; in
   3D they become one placed piece with a copy each (`trimPlacement.mergePlaced`).
+- **Across a seam.** A placement may hang over the edge of its host onto the
+  neighbouring panel (a cargo pocket on the side seam): it is anchored to the
+  host under its centre, and in 3D the part past a sewn edge continues onto the
+  panel sewn there (see 3d-body.md, "Across seams").
 - Placements are drawn on every host copy they apply to — both sides for a
   pair (🔗), one side when `side` is set; a piece dropped on a copy of a cut-2 /
   on-fold host is placed on that side only.

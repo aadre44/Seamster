@@ -269,6 +269,17 @@ after the shell, in passes (a trim may hang from another trim). See
   (`host.mapPoint`), one layer out (in for inside pieces), one copy per host copy
   (or the placement's side). Every vertex is pinned to its host point:
   stiffness 1 on stitched edges, 0.25 elsewhere, so it lies on the garment.
+  Several placements of one piece (an unlinked L / R pair) become one placed
+  piece with a copy each (`mergePlaced`).
+- **Across seams** (`spotFor`): a placed point outside its host (a cargo pocket
+  straddling the side seam) is carried over the nearest host edge that is sewn
+  to another panel: projected onto that edge (fraction f, distance d past it),
+  f is mapped along the seam to the partner edge (its range; direction from
+  where the two edges' ends are on the body, or the seam's `reversed`), and the
+  point goes d in from there on the partner — the same side's copy — and is
+  pinned to that panel. The pocket continues round the seam as if it weren't
+  there, independent of how the flat layout is drawn. Points past an unsewn
+  edge stay on the host (extrapolated).
 - **Pins** (`clothSim`): particle → barycentric point of a host triangle +
   offset along the triangle normal (oriented away from the body at setup). The
   pinned particle follows; the host does not feel it. `pinGaps()` /

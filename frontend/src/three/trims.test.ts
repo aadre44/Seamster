@@ -106,3 +106,44 @@ describe('one-sided and unlinked placements', () => {
     expect(meanY(p.copies[0]) - meanY(p.copies[1])).toBeGreaterThan(5) // the left one moved 8 cm down
   })
 })
+
+describe('a pocket straddling a seam', () => {
+  const psnap = structuredClone(trousersFixture) as unknown as Psnap
+  const byId = new Map(psnap.elements.map(e => [e.id, e]))
+  const front = psnap.pieces.find(p => p.name === 'Front Leg')!
+  const pocketPiece = psnap.pieces.find(p => p.name === 'Back Pocket')!
+  // Centre the pocket on the longest front side-seam element (mid-thigh), right leg only.
+  const seam = front.elementIds.map(i => byId.get(i)!).filter(e => e.type === 'line' && e.seamLabel === 'side_seam')
+    .reduce((a, e) => (e.type === 'line' && a.type === 'line' && Math.hypot(e.end.x - e.start.x, e.end.y - e.start.y) > Math.hypot(a.end.x - a.start.x, a.end.y - a.start.y) ? e : a))
+  if (seam.type !== 'line') throw new Error('expected a straight side seam')
+  const mid = { x: (seam.start.x + seam.end.x) / 2, y: (seam.start.y + seam.end.y) / 2 }
+  const pts = pocketPiece.elementIds.map(i => byId.get(i)!).flatMap(e => ('start' in e ? [e.start, e.end] : []))
+  const c = { x: (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2, y: (Math.min(...pts.map(p => p.y)) + Math.max(...pts.map(p => p.y))) / 2 }
+  const across: Placement = {
+    id: 'cargo', pieceId: pocketPiece.id, hostId: front.id, side: 'right',
+    transform: { dx: mid.x - c.x, dy: mid.y - c.y, rotation: 0 }, stitched: psnap.placements[0].stitched, source: 'user',
+  }
+  const { placed } = placeGarment(psnap.pieces, psnap.elements, query, psnap.connections, [across])
+  const cloth = new Cloth(placed, psnap.connections, grid)
+  for (let s = 0; s < DRAPE.steps; s++) cloth.step(DRAPE.dt, DRAPE.substeps)
+  const pocket = placed.find(p => p.name === 'Back Pocket')!
+
+  it('is pinned to both panels it covers, on that side only', () => {
+    const hosts = new Set(pocket.pins![0].map(p => placed[p.host].name))
+    expect([...hosts].sort()).toEqual(['Back Leg', 'Front Leg'])
+    for (const pin of pocket.pins![0]) {
+      const host = placed[pin.host]
+      const xs = host.copies[pin.hostCopy].positions.filter((_, i) => i % 3 === 0)
+      expect(xs.reduce((a, b) => a + b, 0)).toBeLessThan(0) // the wearer's right is −x
+    }
+  })
+
+  it('wraps round the side of the leg and stays on the garment', () => {
+    const pos = cloth.positionsOf(cloth.ranges.find(r => placed[r.piece] === pocket)!)
+    const xs = pos.filter((_, i) => i % 3 === 0), zs = pos.filter((_, i) => i % 3 === 2)
+    // from the front of the thigh round to the back of it
+    expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(5)
+    expect(Math.max(...xs)).toBeLessThan(0)
+    expect(Math.max(...cloth.pinGaps(1))).toBeLessThan(0.5)
+  })
+})

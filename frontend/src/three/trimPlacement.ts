@@ -156,6 +156,78 @@ function mergePlaced(list: PlacedPiece[]): PlacedPiece {
   }
 }
 
+// A point on an element (fraction of its length, element direction), its
+// distance from q, and the element's inward normal there (into `loop`).
+function projectOnElement(el: CanvasElement, q: Pt): { f: number; d: number } {
+  const at = elementSampler(el)!
+  const N = 48
+  let best = { f: 0, d: Infinity }
+  let prev = at(0)
+  for (let k = 1; k <= N; k++) {
+    const cur = at(k / N)
+    const dx = cur[0] - prev[0], dy = cur[1] - prev[1]
+    const l2 = dx * dx + dy * dy
+    const u = l2 > 0 ? Math.max(0, Math.min(1, ((q[0] - prev[0]) * dx + (q[1] - prev[1]) * dy) / l2)) : 0
+    const d = Math.hypot(prev[0] + dx * u - q[0], prev[1] + dy * u - q[1])
+    if (d < best.d) best = { f: (k - 1 + u) / N, d }
+    prev = cur
+  }
+  return best
+}
+
+function inwardAt(el: CanvasElement, f: number, loop: Pt[] | undefined): Pt {
+  const at = elementSampler(el)!
+  const a = at(Math.max(0, f - 0.01)), b = at(Math.min(1, f + 0.01))
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
+  let n: Pt = [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]
+  const p = at(f)
+  if (loop && !insideLoop(loop, p[0] + n[0] * 0.5, p[1] + n[1] * 0.5)) n = [-n[0], -n[1]]
+  return n
+}
+
+// Where a placed piece's point q (in the host's pattern coordinates) lies on
+// the garment. Inside the host: on the host. Past one of the host's sewn edges
+// (a cargo pocket straddling the side seam): across that seam, as far in from
+// the matching point of the other piece's seam as it is past this one — so the
+// pocket continues onto the neighbouring panel exactly as if the seam weren't
+// there. Otherwise the host's own surface, extrapolated.
+interface Spot { host: number; copy: number; q: Pt }
+
+function spotFor(q: Pt, hostIndex: number, hc: number, all: PlacedPiece[], ctx: TrimContext): Spot {
+  const host = all[hostIndex]
+  const loop = ctx.outlines.get(host.id)
+  if (!loop || insideLoop(loop, q[0], q[1])) return { host: hostIndex, copy: hc, q }
+  let best: { spot: Spot; d: number } | null = null
+  for (const c of ctx.connections) {
+    for (const [mine, theirs] of [[c.from, c.to], [c.to, c.from]] as const) {
+      if (mine.pieceId !== host.id || theirs.pieceId === host.id) continue
+      const bi = all.findIndex(p => p.id === theirs.pieceId)
+      const ea = ctx.byId.get(mine.edgeId), eb = ctx.byId.get(theirs.edgeId)
+      if (bi < 0 || !ea || !eb || all[bi].region === 'trim') continue
+      const { f, d } = projectOnElement(ea, q)
+      const [lo, hi] = mine.range ?? [0, 1]
+      if (f < Math.min(lo, hi) - 0.02 || f > Math.max(lo, hi) + 0.02) continue
+      if (best && d >= best.d) continue
+      const other = all[bi]
+      // The other piece's copy on the same side (a sleeve: the matching half).
+      const side = copySide(host, hc)
+      const bc = other.copySpecs.findIndex((s, i) => copySide(other, i) === side && (other.region !== 'sleeve' || s.frontHalf === !host.back))
+      if (bc < 0) continue
+      // Which way the two seam edges run, from where they are on the body.
+      const sa = elementSampler(ea)!, sb = elementSampler(eb)!
+      const A0 = host.mapPoint(...sa(0), hc), B0 = other.mapPoint(...sb(0), bc), B1 = other.mapPoint(...sb(1), bc)
+      const reversed = c.reversed ?? Math.hypot(...sub(A0, B1)) < Math.hypot(...sub(A0, B0))
+      const u = Math.max(0, Math.min(1, (f - lo) / ((hi - lo) || 1e-9)))
+      const [blo, bhi] = theirs.range ?? [0, 1]
+      const g = reversed ? bhi - u * (bhi - blo) : blo + u * (bhi - blo)
+      const P = sb(g)
+      const n = inwardAt(eb, g, ctx.outlines.get(other.id))
+      best = { spot: { host: bi, copy: bc, q: [P[0] + n[0] * d, P[1] + n[1] * d] }, d }
+    }
+  }
+  return best && best.d < 40 ? best.spot : { host: hostIndex, copy: hc, q }
+}
+
 function placeOnHost(t: TrimInput, pl: Placement, all: PlacedPiece[], hostIndex: number, ctx: TrimContext): PlacedPiece {
   const host = all[hostIndex]
   const M = placementMatrix(pl, pieceCenter(t.piece, ctx.byId))
@@ -169,20 +241,20 @@ function placeOnHost(t: TrimInput, pl: Placement, all: PlacedPiece[], hostIndex:
   const stitchedEdges = t.shape.edges.map((e, i) => (pl.stitched.includes(e.base) ? i : -1)).filter(i => i >= 0)
   const stitchedVerts = new Set(stitchedEdges.flatMap(i => mesh.edgeVerts[i]))
   const onHost = mesh.pts.map(([x, y]) => applyMatrix(M, x, y) as Pt)
-  const bary = onHost.map(q => barycentric(host, host.toLocal(q)))
 
-  const at = (q: Pt, hc: number): Vec3 => {
-    const x0 = host.mapPoint(q[0], q[1], hc)
+  const at = (s: Spot): Vec3 => {
+    const x0 = all[s.host].mapPoint(s.q[0], s.q[1], s.copy)
     return add(x0, outward(ctx.body, x0), sign * LAYER)
   }
   const copies: PlacedCopy[] = []
   const pins: Pin[][] = []
   for (const hc of hostCopies) {
+    const spots = onHost.map(q => spotFor(q, hostIndex, hc, all, ctx))
     const positions = new Float32Array(mesh.pts.length * 3)
-    onHost.forEach((q, i) => positions.set(at(q, hc), i * 3))
+    spots.forEach((s, i) => positions.set(at(s), i * 3))
     copies.push({ positions, indices: wound(mesh.tris, positions, ctx.body), ease: new Float32Array(mesh.pts.length).fill(1) })
-    pins.push(mesh.pts.map((_, i) => ({
-      vertex: i, host: hostIndex, hostCopy: hc, ...bary[i],
+    pins.push(spots.map((s, i) => ({
+      vertex: i, host: s.host, hostCopy: s.copy, ...barycentric(all[s.host], all[s.host].toLocal(s.q)),
       stiffness: stitchedVerts.has(i) ? PIN_STITCHED : PIN_LIES, offset: sign * LAYER,
     })))
   }
@@ -190,7 +262,7 @@ function placeOnHost(t: TrimInput, pl: Placement, all: PlacedPiece[], hostIndex:
     id: t.piece.id, name: t.piece.name, region: 'trim', back: false, onFold: t.piece.onFold, layer,
     copies, copySpecs: hostCopies.map(hc => host.copySpecs[hc]), mesh,
     edges: t.shape.edges.map(({ id, label, isFold, base, span, flipped }) => ({ id, label, isFold, base, span, flipped })),
-    mapPoint: (x, y, copy) => at(applyMatrix(M, x, y) as Pt, hostCopies[copy] ?? 0),
+    mapPoint: (x, y, copy) => at(spotFor(applyMatrix(M, x, y) as Pt, hostIndex, hostCopies[copy] ?? 0, all, ctx)),
     toLocal: p => p,
     pins,
     stitchedEdges,
