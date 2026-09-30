@@ -268,3 +268,21 @@ describe('placement editing', () => {
     expect(s1.placements.map(p => p.hostId)).toEqual(['H2'])
   })
 })
+
+describe('symmetric and one-sided placements', () => {
+  const pair = { id: 'p1', pieceId: 'P', hostId: 'H', transform: { dx: 1, dy: 2, rotation: 0 }, stitched: ['e'], source: 'inferred' as const }
+
+  it('unlinks a pair into a left and a right placement, and mirrors one back into a pair', () => {
+    const s1 = reducer({ ...initialState, placements: [pair] }, { type: 'UNLINK_PLACEMENT', id: 'p1', newId: 'p2' })
+    expect(s1.placements.map(p => [p.id, p.side])).toEqual([['p1', 'right'], ['p2', 'left']])
+    // move the left one on its own
+    const moved = { ...s1.placements[1], transform: { dx: 9, dy: 9, rotation: 10 } }
+    const s2 = reducer(s1, { type: 'UPDATE_PLACEMENT', placement: moved })
+    expect(s2.placements[0].transform.dx).toBe(1)
+    const s3 = reducer(s2, { type: 'MIRROR_PLACEMENT', id: 'p1' })
+    expect(s3.placements).toHaveLength(1)
+    expect(s3.placements[0].side).toBeUndefined()
+    expect(s3.placements[0].transform.dx).toBe(1)
+    expect(reducer(s3, { type: 'UNDO' }).placements).toHaveLength(2)
+  })
+})

@@ -200,7 +200,7 @@ export default function AssemblyView() {
   }
 
   const clickEdge = (item: Item, el: Edge, placedKey?: string) => {
-    const pl = placements.find(p => p.pieceId === item.piece.id)
+    const pl = placedKey ? placedItems.find(p => p.key === placedKey)?.pl : undefined
     if (pl && placedKey) {
       // A placed piece's edges are stitched down or left open.
       if (selPlacement?.id !== pl.id) { selectPlacement(pl.id, placedKey.split('@')[1]); return }

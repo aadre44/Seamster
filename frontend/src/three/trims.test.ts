@@ -81,3 +81,28 @@ describe('trims on the body', () => {
     for (const g of rangesOf(shirt, 'Chest Patch Pocket')) expect(median(shirt.cloth.pinSides(g))).toBeGreaterThan(0)
   })
 })
+
+describe('one-sided and unlinked placements', () => {
+  const psnap = structuredClone(trousersFixture) as unknown as Psnap
+  const pocket = psnap.placements[0]
+
+  it('puts a one-sided pocket on that side only', () => {
+    for (const side of ['left', 'right'] as const) {
+      const { placed } = placeGarment(psnap.pieces, psnap.elements, query, psnap.connections, [{ ...pocket, side }])
+      const p = placed.find(x => x.name === 'Back Pocket')!
+      expect(p.copies).toHaveLength(1)
+      const xs = p.copies[0].positions.filter((_, i) => i % 3 === 0)
+      expect(Math.sign(xs.reduce((a, b) => a + b, 0))).toBe(side === 'left' ? 1 : -1) // the wearer's left is +x
+    }
+  })
+
+  it('places an unlinked pair independently', () => {
+    const right = { ...pocket, side: 'right' as const }
+    const left = { ...pocket, id: 'other', side: 'left' as const, transform: { ...pocket.transform, dy: pocket.transform.dy + 8 } }
+    const { placed } = placeGarment(psnap.pieces, psnap.elements, query, psnap.connections, [right, left])
+    const p = placed.find(x => x.name === 'Back Pocket')!
+    expect(p.copies).toHaveLength(2)
+    const meanY = (c: { positions: Float32Array }) => c.positions.filter((_, i) => i % 3 === 1).reduce((a, b) => a + b, 0) / (c.positions.length / 3)
+    expect(meanY(p.copies[0]) - meanY(p.copies[1])).toBeGreaterThan(5) // the left one moved 8 cm down
+  })
+})

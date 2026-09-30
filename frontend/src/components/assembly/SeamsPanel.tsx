@@ -173,6 +173,7 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
               <span className="shrink-0 w-2.5 h-2.5 rounded-sm bg-amber-300" />
               <span className="flex-1 min-w-0 text-[11px] text-gray-800 truncate">
                 {pieceOf(pl.pieceId)?.name ?? '?'} <span className="text-gray-400">on</span> {pieceOf(pl.hostId)?.name ?? '?'}
+                {hasSides(pieceOf(pl.hostId)) && <span className="text-gray-400"> · {pl.side ? (pl.side === 'left' ? 'L' : 'R') : '🔗 both'}</span>}
               </span>
               <span className="text-[9px] uppercase tracking-wide text-gray-400">{pl.source === 'user' ? 'yours' : 'auto'}</span>
             </button>
@@ -276,19 +277,20 @@ function PlacementEditor({ placement, piece, host, byId, onDone, onFly }: {
         </span>
       </label>
       {hasSides(host) && (
-        <label className="flex items-center justify-between text-[11px] text-gray-600">
-          Side (wearer's)
-          <select aria-label="Placement side" className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white"
-            value={placement.side ?? 'both'}
-            onChange={e => {
-              const { side: _drop, ...rest } = placement
-              update(e.target.value === 'both' ? rest : { ...rest, side: e.target.value as 'left' | 'right' })
-            }}>
-            <option value="both">Both</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-          </select>
-        </label>
+        placement.side ? (
+          <div className="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+            <span>Only on the wearer's <b>{placement.side}</b></span>
+            <button onClick={() => dispatch({ type: 'MIRROR_PLACEMENT', id: placement.id })}
+              className="px-2 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">Mirror to other side</button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+            <span>🔗 On both sides, mirrored</span>
+            <button onClick={() => dispatch({ type: 'UNLINK_PLACEMENT', id: placement.id, newId: crypto.randomUUID() })}
+              title="Make the left and right placements independent (asymmetric design)"
+              className="px-2 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">Unlink sides</button>
+          </div>
+        )
       )}
       {piece && (
         <label className="flex items-center justify-between text-[11px] text-gray-600">

@@ -114,9 +114,11 @@ export function placeTrims(trims: TrimInput[], shell: PlacedPiece[], ctx: TrimCo
   for (let progress = true; progress && pending.length;) {
     progress = false
     for (const t of [...pending]) {
-      const pl = ctx.placements.find(p => p.pieceId === t.piece.id && indexOf(p.hostId) >= 0)
+      // A piece may be placed more than once (a left and a right pocket after
+      // unlinking a pair): one placed piece carrying the copies of all of them.
+      const pls = ctx.placements.filter(p => p.pieceId === t.piece.id && indexOf(p.hostId) >= 0)
       let piece: PlacedPiece | null = null
-      if (pl) piece = placeOnHost(t, pl, all, indexOf(pl.hostId), ctx)
+      if (pls.length) piece = mergePlaced(pls.map(pl => placeOnHost(t, pl, all, indexOf(pl.hostId), ctx)))
       else {
         const attach: Attach[] = []
         for (const c of ctx.connections) {
@@ -139,6 +141,20 @@ export function placeTrims(trims: TrimInput[], shell: PlacedPiece[], ctx: TrimCo
 }
 
 // ── Placed pieces (pockets) ───────────────────────────────────────────────────
+
+// Several placements of one piece → one placed piece with all their copies.
+function mergePlaced(list: PlacedPiece[]): PlacedPiece {
+  if (list.length === 1) return list[0]
+  const [first] = list
+  const owner = list.flatMap(p => p.copies.map((_, i) => ({ p, i })))
+  return {
+    ...first,
+    copies: list.flatMap(p => p.copies),
+    copySpecs: list.flatMap(p => p.copySpecs),
+    pins: list.flatMap(p => p.pins ?? p.copies.map(() => [])),
+    mapPoint: (x, y, copy) => owner[copy].p.mapPoint(x, y, owner[copy].i),
+  }
+}
 
 function placeOnHost(t: TrimInput, pl: Placement, all: PlacedPiece[], hostIndex: number, ctx: TrimContext): PlacedPiece {
   const host = all[hostIndex]

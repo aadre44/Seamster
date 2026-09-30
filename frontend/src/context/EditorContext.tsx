@@ -38,6 +38,8 @@ type Action =
   | { type: 'REPLACE_ATTACHMENTS'; pieceIds: string[]; connections: SeamConnection[]; layers?: Record<string, 'outer' | 'inside'> }
   | { type: 'UPDATE_PLACEMENT'; placement: Placement; tag?: string }
   | { type: 'DELETE_PLACEMENT'; id: string }
+  | { type: 'UNLINK_PLACEMENT'; id: string; newId: string }
+  | { type: 'MIRROR_PLACEMENT'; id: string }
   | { type: 'SET_BODY_PROFILE_FIELD'; field: BodyField; value: number }
   | { type: 'SET_BODY_SHAPE'; shape: BodyShapePreset }
   | { type: 'SET_BODY_SEX'; sex: BodySex }
@@ -315,6 +317,35 @@ function reducer(state: EditorState, action: Action): EditorState {
         ...pushUndo(state, action.tag ?? null),
         placements: state.placements.map(p => (p.id === action.placement.id ? action.placement : p)),
       }
+
+    case 'UNLINK_PLACEMENT': {
+      // A pair (on both sides) becomes two independent placements, one per side,
+      // so each can be moved on its own (asymmetric designs).
+      const pl = state.placements.find(p => p.id === action.id)
+      if (!pl || pl.side) return state
+      return {
+        ...state,
+        ...pushUndo(state),
+        placements: state.placements.flatMap(p => (p.id === pl.id
+          ? [{ ...p, side: 'right' as const, source: 'user' as const }, { ...p, id: action.newId, side: 'left' as const, source: 'user' as const }]
+          : [p])),
+      }
+    }
+
+    case 'MIRROR_PLACEMENT': {
+      // A one-sided placement becomes a pair again; its twin on the other side
+      // (from an unlink) is replaced by the mirror image.
+      const pl = state.placements.find(p => p.id === action.id)
+      if (!pl || !pl.side) return state
+      const { side: _one, ...pair } = pl
+      return {
+        ...state,
+        ...pushUndo(state),
+        placements: state.placements
+          .filter(p => p.id === pl.id || !(p.pieceId === pl.pieceId && p.hostId === pl.hostId && p.side && p.side !== pl.side))
+          .map(p => (p.id === pl.id ? { ...pair, source: 'user' as const } : p)),
+      }
+    }
 
     case 'DELETE_PLACEMENT':
       return { ...state, ...pushUndo(state), placements: state.placements.filter(p => p.id !== action.id) }

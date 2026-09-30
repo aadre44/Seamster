@@ -74,6 +74,13 @@ leg…), unrolled around the body as if cut down the centre back:
   sleeve half by the other piece's front/back), and are omitted between
   neighbours that visibly touch. Clicking edges on two copies of the same side
   makes a symmetric seam; across sides (L ↔ R) it sets `side` on both ends.
+- **Symmetric and one-sided placements.** A placement with no `side` is a
+  mirrored pair (🔗, e.g. inferred back pockets): drawn on both copies; moving
+  either moves both. **Unlink sides** (`UNLINK_PLACEMENT`) splits it into an R
+  and an L placement that move independently — asymmetric designs; **Mirror to
+  other side** (`MIRROR_PLACEMENT`) turns a one-sided placement back into a
+  pair, replacing its twin. A piece may therefore have several placements; in
+  3D they become one placed piece with a copy each (`trimPlacement.mergePlaced`).
 - Placements are drawn on every host copy they apply to — both sides for a
   pair (🔗), one side when `side` is set; a piece dropped on a copy of a cut-2 /
   on-fold host is placed on that side only.
