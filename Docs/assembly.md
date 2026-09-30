@@ -91,6 +91,15 @@ leg…), unrolled around the body as if cut down the centre back:
   with dashed guides. The placement editor has exact **Centre from centre
   line** / **Top below the waist** fields (changing one keeps the other) and
   **Align with other side** for an unlinked twin.
+- **Buttons per side** (`components/assembly/closures.ts`): markings may carry
+  a `side`, so they sit on one copy of a cut-2 piece. **Buttons…** (Placed
+  pieces header) adds a row: N buttons evenly down a front's front edge (in
+  from it by an inset, from a gap below the top to a gap above the bottom), on
+  the wearer's right (menswear) or left, with vertical / horizontal / no
+  buttonholes on the other front — one undo step. Assembly and the 3D body draw
+  each marking only on its side. (The fronts are joined at their extension
+  edges in 3D, so buttons and holes sit either side of the centre line rather
+  than over each other — the button-front overlap limit in 3d-body.md.)
 - **Across a seam.** A placement may hang over the edge of its host onto the
   neighbouring panel (a cargo pocket on the side seam): it is anchored to the
   host under its centre, and in 3D the part past a sewn edge continues onto the

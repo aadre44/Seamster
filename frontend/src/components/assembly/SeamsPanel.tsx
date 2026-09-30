@@ -5,6 +5,8 @@ import type { CanvasElement, PatternPiece, Placement, SeamConnection, SeamEnd } 
 import { pieceEdges } from './geometry'
 import { flySeams, guessFly, isFlyHost } from './autoFly'
 import { distances, moveTo } from './placementAids'
+import { DEFAULT_ROW, buttonRow, canButton } from './closures'
+import type { ButtonRowOptions } from './closures'
 import type { FlyPlan } from './autoFly'
 import { edgeName, hasSides, labelColour, seamFit, sewnLength } from './seams'
 import type { Fit } from './seams'
@@ -32,6 +34,8 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
   const placed = placements.find(p => p.id === selectedPlacement)
   const [inferring, setInferring] = useState(false)
   const [fly, setFly] = useState<FlyPlan | null>(null)
+  const [buttons, setButtons] = useState(false)
+  const buttonHosts = pieces.filter(p => canButton(p, byId))
   const canFly = pieces.some(p => isFlyHost(p, byId)) && pieces.length > 1
   const [inferError, setInferError] = useState('')
   const pieceOf = (id: string) => pieces.find(p => p.id === id)
@@ -163,7 +167,17 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
         {connections.length === 0 && <li className="px-3 py-2 text-[11px] text-gray-400">No seams yet.</li>}
       </ul>
 
-      <div className="px-3 pt-2 pb-1 border-t border-gray-100 text-xs font-semibold text-gray-700">Placed pieces ({placements.length})</div>
+      <div className="px-3 pt-2 pb-1 border-t border-gray-100 flex items-center justify-between">
+        <span className="text-xs font-semibold text-gray-700">Placed pieces ({placements.length})</span>
+        {buttonHosts.length > 0 && (
+          <button onClick={() => setButtons(b => !b)}
+            title="A row of buttons down a front, with the buttonholes on the other front"
+            className={`text-[11px] px-2 py-0.5 rounded border ${buttons ? 'bg-teal-600 text-white border-teal-600' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}>
+            Buttons…
+          </button>
+        )}
+      </div>
+      {buttons && <ButtonRowForm hosts={buttonHosts} byId={byId} onDone={() => setButtons(false)} />}
       <ul className="pb-2" data-testid="placements">
         {placements.map(pl => (
           <li key={pl.id}>
@@ -234,6 +248,72 @@ function FlyForm({ plan, pieces, byId, onChange, onDone }: {
       {error && <div className="text-[11px] text-red-600">{error}</div>}
       <div className="flex gap-2 pt-0.5">
         <button onClick={attach} className="text-[11px] px-2 py-0.5 rounded bg-teal-600 text-white hover:bg-teal-700">Attach fly</button>
+        <button onClick={onDone} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function ButtonRowForm({ hosts, byId, onDone }: { hosts: PatternPiece[]; byId: Map<string, CanvasElement>; onDone: () => void }) {
+  const { dispatch } = useEditor()
+  const [host, setHost] = useState(hosts[0]?.id ?? '')
+  const [o, setO] = useState<ButtonRowOptions>(DEFAULT_ROW)
+  const num = (label: string, key: 'count' | 'inset' | 'top' | 'bottom', step: number) => (
+    <label className="flex items-center justify-between text-[11px] text-gray-600">
+      {label}
+      <input aria-label={label} type="number" step={step} min={key === 'count' ? 1 : 0} value={o[key]}
+        onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setO({ ...o, [key]: key === 'count' ? Math.max(1, Math.round(v)) : v }) }}
+        className="w-16 border border-gray-300 rounded px-1 py-0.5 text-[11px]" />
+    </label>
+  )
+  const add = () => {
+    const piece = hosts.find(p => p.id === host)
+    if (!piece) return
+    dispatch({ type: 'INSERT_PRESET', elements: buttonRow(piece, byId, o) })
+    onDone()
+  }
+  return (
+    <div className="px-3 py-2 border-b border-gray-200 bg-teal-50/60 space-y-1.5" data-testid="button-row-form">
+      <div className="text-[11px] font-medium text-gray-800">Button row</div>
+      <label className="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+        Front piece
+        <select aria-label="Button piece" value={host} onChange={e => setHost(e.target.value)}
+          className="max-w-[9rem] text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white">
+          {hosts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </label>
+      {num('Buttons', 'count', 1)}
+      <label className="flex items-center justify-between text-[11px] text-gray-600">
+        Size
+        <select aria-label="Button size" value={o.diameter} onChange={e => setO({ ...o, diameter: parseFloat(e.target.value) })}
+          className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white">
+          <option value={1.1}>11 mm (shirt)</option>
+          <option value={1.5}>15 mm</option>
+          <option value={2.0}>20 mm (coat)</option>
+        </select>
+      </label>
+      {num('In from the front edge (cm)', 'inset', 0.25)}
+      {num('First, below the top (cm)', 'top', 0.5)}
+      {num('Last, above the bottom (cm)', 'bottom', 0.5)}
+      <label className="flex items-center justify-between text-[11px] text-gray-600">
+        Buttons on the wearer's
+        <select aria-label="Buttons on" value={o.buttonsOn} onChange={e => setO({ ...o, buttonsOn: e.target.value as 'left' | 'right' })}
+          className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white">
+          <option value="right">Right (menswear)</option>
+          <option value="left">Left (womenswear)</option>
+        </select>
+      </label>
+      <label className="flex items-center justify-between text-[11px] text-gray-600">
+        Buttonholes on the other front
+        <select aria-label="Buttonholes" value={o.holes} onChange={e => setO({ ...o, holes: e.target.value as ButtonRowOptions['holes'] })}
+          className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white">
+          <option value="vertical">Vertical (placket)</option>
+          <option value="horizontal">Horizontal</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+      <div className="flex gap-2 pt-0.5">
+        <button onClick={add} className="text-[11px] px-2 py-0.5 rounded bg-teal-600 text-white hover:bg-teal-700">Add buttons</button>
         <button onClick={onDone} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">Cancel</button>
       </div>
     </div>

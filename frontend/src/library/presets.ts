@@ -144,7 +144,7 @@ function peterPan(L: number): PresetResult {
 
 // ── Markings ─────────────────────────────────────────────────────────────────
 
-function button(d: number): PresetResult {
+export function button(d: number): PresetResult {
   const r = d / 2, k = r * KAPPA
   const q = (a: Point, c1: Point, c2: Point, b: Point): CurveElement => ({ id: uid('el'), type: 'curve', start: a, cp1: c1, cp2: c2, end: b, seamLabel: 'button' })
   return {
@@ -157,7 +157,7 @@ function button(d: number): PresetResult {
   }
 }
 
-function buttonhole(len: number, vertical: boolean): PresetResult {
+export function buttonhole(len: number, vertical: boolean): PresetResult {
   const a = vertical ? P(0, -len / 2) : P(-len / 2, 0)
   const b = vertical ? P(0, len / 2) : P(len / 2, 0)
   return { elements: [{ id: uid('el'), type: 'line', start: a, end: b, isFold: false, seamLabel: 'buttonhole' }] }

@@ -41,7 +41,7 @@ export interface GarmentPieceData {
 // (on every copy of their piece).
 const MARK_KINDS: Record<string, MarkKind> = { fly_topstitch: 'topstitch', topstitch: 'topstitch', buttonhole: 'buttonhole', button: 'button' }
 
-function outsideMarks(p: PlacedPiece, job: GarmentJob): GarmentMark[] {
+export function outsideMarks(p: PlacedPiece, job: Pick<GarmentJob, "elements" | "pieces" | "connections">): GarmentMark[] {
   const marks = job.elements.filter(e => (e.type === 'line' || e.type === 'curve') && e.pieceId === p.id
     && MARK_KINDS[(e as { seamLabel?: string }).seamLabel ?? ''] && !p.edges.some(o => o.base === e.id))
   if (!marks.length) return []
@@ -51,7 +51,11 @@ function outsideMarks(p: PlacedPiece, job: GarmentJob): GarmentMark[] {
   const out: GarmentMark[] = []
   for (const e of marks) {
     const label = (e as { seamLabel?: string }).seamLabel!
-    const copies = label === 'fly_topstitch' ? (flyCopy >= 0 ? [flyCopy] : []) : p.copySpecs.map((_, i) => i)
+    // The fly J on the facing's side; a marking with a side (a button row) on
+    // that copy only; any other on every copy.
+    const side = (e as { side?: 'left' | 'right' }).side
+    const copies = label === 'fly_topstitch' ? (flyCopy >= 0 ? [flyCopy] : [])
+      : p.copySpecs.map((_, i) => i).filter(i => !side || p.copySpecs.length < 2 || copySide(p, i) === side)
     const at = elementSampler(e)!
     const n = e.type === 'line' ? 1 : 12
     const tri: number[] = []

@@ -16,6 +16,8 @@ export interface LineElement {
   isFold: boolean
   pieceId?: string
   seamLabel?: string
+  // A marking (button, buttonhole) on only one copy of a cut-2 / on-fold piece.
+  side?: 'left' | 'right'
 }
 
 export interface CurveElement {
@@ -28,6 +30,7 @@ export interface CurveElement {
   formula?: string
   pieceId?: string
   seamLabel?: string
+  side?: 'left' | 'right'
 }
 
 export interface GrainLineElement {

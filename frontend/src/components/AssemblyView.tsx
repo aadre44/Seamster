@@ -340,6 +340,13 @@ export default function AssemblyView() {
           const a = apply(t, el.start), b = apply(t, el.end)
           return <line key={el.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#9ca3af" strokeWidth={0.8} strokeDasharray="3 3" style={{ pointerEvents: 'none' }} />
         })}
+        {/* Buttons and buttonholes: on this copy if they are on its side. */}
+        {!placed && elements.filter((el): el is Edge => isEdge(el) && el.pieceId === piece.id
+          && (el.seamLabel === 'button' || el.seamLabel === 'buttonhole')
+          && (!el.side || !item.copy?.side || el.side === item.copy.side)).map(el => (
+          <path key={el.id} d={edgePath(el, t)} fill="none" stroke={el.seamLabel === 'button' ? '#3b2f2a' : '#b45309'}
+            strokeWidth={el.seamLabel === 'button' ? 1.2 : 1.6} style={{ pointerEvents: 'none' }} />
+        ))}
         {pieceEdges(piece, byId).map(el => {
           const fold = el.type === 'line' && el.isFold
           const isPending = pending?.item === item.key && pending.end.edgeId === el.id
