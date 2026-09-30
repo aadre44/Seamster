@@ -54,7 +54,13 @@ describe('a waistband across several pieces', () => {
     for (let s = 0; s < DRAPE.steps; s++) { cloth.step(DRAPE.dt, DRAPE.substeps); energy.push(cloth.kineticEnergy()) }
     expect(energy.slice(-20).reduce((a, b) => a + b) / 20).toBeLessThan(energy.slice(0, 20).reduce((a, b) => a + b) / 20 / 4)
     expect(cloth.stitchGaps()).toHaveLength(0)
-    const pos = cloth.positionsOf(cloth.ranges.find(r => placed[r.piece] === wb)!)
+    // the overlap is fastened over the band's start, on top of it
+    const wbRange = cloth.ranges.find(r => placed[r.piece] === wb)!
+    expect(wb.pins?.[0]?.length).toBeGreaterThan(10)
+    expect(Math.max(...cloth.pinGaps(0.5, true))).toBeLessThan(0.6)
+    const sides = cloth.pinSides(wbRange).sort((a, b) => a - b)
+    expect(sides[Math.floor(sides.length / 2)]).toBeGreaterThan(0)
+    const pos = cloth.positionsOf(wbRange)
     const ys = pos.filter((_, i) => i % 3 === 1), xs = pos.filter((_, i) => i % 3 === 0), zs = pos.filter((_, i) => i % 3 === 2)
     // round the whole waist (both sides, front and back), at waist height
     expect(Math.min(...xs)).toBeLessThan(-10)

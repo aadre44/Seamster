@@ -364,10 +364,38 @@ function sewOn(t: TrimInput, attach: Attach[], all: PlacedPiece[], ctx: TrimCont
     return { a: best, P, inward: n }
   }
 
+  // A band round the whole body longer than the opening keeps the extra as an
+  // overlap at one end. The ring closes there, so the overlap carries on past
+  // the end over the band's start and is fastened to it (button/hook), instead
+  // of bunching at the end and hanging loose. `lap(g)` is the band fraction the
+  // overlap point lies over (undefined off the overlap).
+  let lap: (g: number) => number | undefined = () => undefined
+  const bandEdgeAt = sewnParts.length ? elementSampler(ctx.byId.get(sewnParts[0].e.base)!) : null
+  if (bandEdgeAt && continues && copies.length === 1 && copies[0].side === 'both' && attachedBases.size === 1) {
+    const rs = attach.map(a => a.trimEnd.range ?? [0, 1])
+    const lo = Math.min(...rs.map(r => Math.min(r[0], r[1]))), hi = Math.max(...rs.map(r => Math.max(r[0], r[1])))
+    const E = 0.02
+    if (lo < E && hi < 1 - E && 1 - hi < hi - lo) lap = g => (g > hi + 1e-3 ? lo + (g - hi) : undefined)
+    else if (hi > 1 - E && lo > E && lo < hi - lo) lap = g => (g < lo - 1e-3 ? hi - (lo - g) : undefined)
+  }
+
   const trimCopies: PlacedCopy[] = []
   const pins: Pin[][] = []
   const position = (i: number, tc: TrimCopy, pinsOut?: Pin[]): Vec3 => {
     const { base, g, d } = where[i]
+    const under = lap(g)
+    if (under !== undefined) {
+      const { a, P, inward } = seamAt(base, under)
+      const host = all[a.host], hc = hostCopyFor(a, tc)
+      const H = host.mapPoint(P[0], P[1], hc)
+      const Hin = host.mapPoint(P[0] + inward[0], P[1] + inward[1], hc)
+      const X = ctx.pushOut(add(H, norm(sub(H, Hin)), d))
+      // Fastened over the band's own start, one layer out.
+      const [ux, uy] = bandEdgeAt!(under), [gx, gy] = bandEdgeAt!(g)
+      const q: Pt = [mesh.pts[i][0] + ux - gx, mesh.pts[i][1] + uy - gy]
+      pinsOut?.push({ vertex: i, host: -1, hostCopy: 0, ...barycentric({ mesh } as PlacedPiece, q), stiffness: 0.6, offset: LAYER, mutual: true })
+      return add(X, outward(ctx.body, X), LAYER)
+    }
     const { a, P, inward } = seamAt(base, g)
     const host = all[a.host]
     const hc = hostCopyFor(a, tc)
@@ -384,7 +412,7 @@ function sewOn(t: TrimInput, attach: Attach[], all: PlacedPiece[], ctx: TrimCont
   for (const tc of copies) {
     const positions = new Float32Array(mesh.pts.length * 3)
     const copyPins: Pin[] = []
-    mesh.pts.forEach((_, i) => positions.set(position(i, tc, continues ? undefined : copyPins), i * 3))
+    mesh.pts.forEach((_, i) => positions.set(position(i, tc, copyPins), i * 3))
     trimCopies.push({ positions, indices: wound(mesh.tris, positions, ctx.body), ease: new Float32Array(mesh.pts.length).fill(1) })
     pins.push(copyPins)
   }
@@ -400,6 +428,6 @@ function sewOn(t: TrimInput, attach: Attach[], all: PlacedPiece[], ctx: TrimCont
       return [pos[best * 3], pos[best * 3 + 1], pos[best * 3 + 2]]
     },
     toLocal: p => p,
-    pins: continues ? undefined : pins,
+    pins: pins.some(p => p.length) ? pins : undefined,
   }
 }

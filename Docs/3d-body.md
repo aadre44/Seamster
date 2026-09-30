@@ -295,6 +295,15 @@ after the shell, in passes (a trim may hang from another trim). See
   no velocity (otherwise the trim jitters). Garment-against-garment and
   trim-against-trim contact are not handled. `layerViolations()` reports
   particles on the wrong side (tests: none on the trousers and shirt fixtures).
+- **Waistband overlap** (`trimPlacement.sewOn`, `lap`): a band sewn round the
+  whole body (one copy, both sides, one sewn edge) that is longer than the
+  opening has its extra length at one end (bands.ts puts it there). The ring
+  closes at that end, so each overlap vertex is placed where the band would be
+  that far *past* the end, i.e. over the band's own start, one layer (0.3 cm)
+  out. It is fastened there with mutual pins (host −1 = this piece, stiffness
+  0.6) to the matching point of the start region. Before, those vertices
+  clamped to the end point and the tab hung loose. Collars, whose extra is
+  split between both ends, are left as they are.
 - **Button fronts** (`garmentWrap.buttonFrontOf`): a front with a
   `center_front_line` marking (the backend draws it on button-placket fronts,
   3 cm in from the edge) is a button front. Its CF edges are not welded to each
