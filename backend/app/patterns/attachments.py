@@ -289,8 +289,21 @@ def _around_rule(trim: _Piece, shell: list[_Piece], label: str, start: str) -> l
     H = sum(s.length for s in half)
     if trim.fold or L < 1.5 * H:
         # One side (a collar cut on the fold, or one of a pair): copies pair by side.
-        return _sew(label, trim, edge, half, trim_forward=_walk_from(trim, edge))
-    return _sew(label, trim, edge, full)
+        return _sew(label, trim, edge, half, trim_forward=_walk_from(trim, edge), trim_span=_true_span(L, H, label))
+    return _sew(label, trim, edge, full, trim_span=_true_span(L, 2 * H, label))
+
+
+def _true_span(trim_len: float, path_len: float, label: str) -> tuple[float, float]:
+    """A band longer than the opening is sewn length for length; a shorter one is
+    eased along it. A waistband keeps its extra length as the overlap at its end;
+    a collar or neck band has a seam allowance at each end, so its extra is
+    shared between the two ends."""
+    if trim_len <= path_len * 1.02:
+        return (0.0, 1.0)
+    used = path_len / trim_len
+    if label == "neckline":
+        return ((1 - used) / 2, (1 + used) / 2)
+    return (0.0, used)
 
 
 def _wrist_rule(trim: _Piece, shell: list[_Piece]) -> list[dict]:

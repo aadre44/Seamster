@@ -3,6 +3,7 @@ import type { CanvasElement, EditorSnapshot, EditorState, GarmentFeatures, Measu
 import { mirrorPiece } from '../utils/pieceTransforms'
 import type { BodyField, BodySex, BodyShapePreset } from '../three/types'
 import { DEFAULT_BODY_PROFILE } from '../three/bodyRegions'
+import { normalizeBands } from '../components/assembly/bands'
 
 type Action =
   | { type: 'SET_ZOOM'; zoom: number }
@@ -260,7 +261,8 @@ function reducer(state: EditorState, action: Action): EditorState {
         elements: action.elements,
         pieces: action.pieces,
         measurements: action.measurements,
-        connections: action.connections ?? [],
+        // Older files may sew one band edge whole to several edges: re-made as a band.
+        connections: normalizeBands(action.connections ?? [], action.pieces, action.elements),
         placements: action.placements ?? [],
         instructions: action.instructions ?? null,
         lastFeatures: action.lastFeatures ?? null,
@@ -272,7 +274,8 @@ function reducer(state: EditorState, action: Action): EditorState {
       const same = (a: SeamConnection['from'], b: SeamConnection['from']) => a.pieceId === b.pieceId && a.edgeId === b.edgeId
       const c = action.connection
       if (state.connections.some(o => (same(o.from, c.from) && same(o.to, c.to)) || (same(o.from, c.to) && same(o.to, c.from)))) return state
-      return { ...state, ...pushUndo(state), connections: [...state.connections, c] }
+      // A band edge sewn to a second edge becomes consecutive stretches round the body.
+      return { ...state, ...pushUndo(state), connections: normalizeBands([...state.connections, c], state.pieces, state.elements) }
     }
 
     case 'UPDATE_CONNECTION':

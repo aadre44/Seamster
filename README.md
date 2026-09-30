@@ -134,6 +134,8 @@ Connections are computed automatically by the backend when generating a pattern 
 
 **Editing seams:** click an edge, then the edge on another piece it is sewn to, to add a seam. Click a seam's arc (or its row in the **Seams** panel) to edit it: drag the round handles to sew only part of an edge, pick the side of the body for cut-2 pieces, set the sewing direction, rename or delete it. Each seam shows whether its two sides match, are eased, or don't fit. Undo/redo work here too. The 3D drape sews exactly these seams, partial ones included.
 
+**Bands:** a waistband, collar or hem band sewn by hand to several edges (front and back waist…) is turned into consecutive stretches round the body automatically; **Band…** sews one round the waist, neckline, hem or wrist in one step and says how its length compares with the opening.
+
 **Fly:** **Fly…** in the Seams panel attaches the fly facing and fly shield to the centre front automatically (facing on the wearer's left or right), the way a fly is constructed; the fly's J topstitching then shows on the 3D body. A fly piece dragged onto the front by hand offers the same fix.
 
 **3D beside** shows the live 3D body next to Assembly, re-draping as you move pockets or edit seams.

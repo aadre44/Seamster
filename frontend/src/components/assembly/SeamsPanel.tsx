@@ -2,10 +2,13 @@ import { useState } from 'react'
 import { inferAttachments } from '../../api'
 import { useEditor } from '../../context/EditorContext'
 import type { CanvasElement, PatternPiece, Placement, SeamConnection, SeamEnd } from '../../types'
-import { pieceEdges } from './geometry'
+import { pieceEdges, sampleEdge } from './geometry'
+import type { Edge } from './geometry'
 import { flySeams, guessFly, isFlyHost } from './autoFly'
 import { distances, moveTo } from './placementAids'
 import { DEFAULT_ROW, buttonRow, canButton } from './closures'
+import { bandEdge, bandSeams } from './bands'
+import { isTrimName } from '../../three/pieceClassifier'
 import type { ButtonRowOptions } from './closures'
 import type { FlyPlan } from './autoFly'
 import { edgeName, hasSides, labelColour, seamFit, sewnLength } from './seams'
@@ -34,6 +37,8 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
   const placed = placements.find(p => p.id === selectedPlacement)
   const [inferring, setInferring] = useState(false)
   const [fly, setFly] = useState<FlyPlan | null>(null)
+  const [band, setBand] = useState(false)
+  const bandPieces = pieces.filter(p => isTrimName(p.name))
   const [buttons, setButtons] = useState(false)
   const buttonHosts = pieces.filter(p => canButton(p, byId))
   const canFly = pieces.some(p => isFlyHost(p, byId)) && pieces.length > 1
@@ -63,11 +68,20 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
       <div className="px-3 py-2 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="text-xs font-semibold text-gray-700">Seams ({connections.length})</div>
+          {bandPieces.length > 0 && (
+            <button
+              onClick={() => setBand(b => !b)}
+              title="Sew a waistband, collar, cuff or hem band round its opening, across all the pieces it touches"
+              className={`ml-auto mr-1 text-[11px] px-2 py-0.5 rounded border ${band ? 'bg-teal-600 text-white border-teal-600' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}
+            >
+              Band…
+            </button>
+          )}
           {canFly && (
             <button
               onClick={() => setFly(f => (f ? null : guessFly(pieces, byId)))}
               title="Sew the fly facing and fly shield to the centre front, the way a fly is constructed"
-              className={`ml-auto mr-1 text-[11px] px-2 py-0.5 rounded border ${fly ? 'bg-teal-600 text-white border-teal-600' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}
+              className={`${bandPieces.length ? '' : 'ml-auto '}mr-1 text-[11px] px-2 py-0.5 rounded border ${fly ? 'bg-teal-600 text-white border-teal-600' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}
             >
               Fly…
             </button>
@@ -89,6 +103,7 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
         </div>
       </div>
 
+      {band && <BandForm bands={bandPieces} pieces={pieces} byId={byId} onDone={() => setBand(false)} />}
       {fly && <FlyForm plan={fly} pieces={pieces} byId={byId} onChange={setFly} onDone={() => setFly(null)} />}
 
       {placed && (
@@ -196,6 +211,75 @@ export default function SeamsPanel({ pieces, byId, selected, onSelect, onHover, 
         ))}
         {placements.length === 0 && <li className="px-3 py-1 text-[11px] text-gray-400">None — drag a pocket onto its piece.</li>}
       </ul>
+    </div>
+  )
+}
+
+type Opening = 'waist' | 'neckline' | 'hem' | 'wrist'
+const OPENINGS: { key: Opening; label: string }[] = [
+  { key: 'waist', label: 'Waist' }, { key: 'neckline', label: 'Neckline' }, { key: 'hem', label: 'Hem' }, { key: 'wrist', label: 'Wrist (cuff)' },
+]
+const openingFor = (name: string): Opening =>
+  /collar|neck|hood/i.test(name) ? 'neckline' : /cuff|wrist|sleeve/i.test(name) ? 'wrist' : /hem|ruffle|frill|flounce/i.test(name) ? 'hem' : 'waist'
+
+function BandForm({ bands, pieces, byId, onDone }: { bands: PatternPiece[]; pieces: PatternPiece[]; byId: Map<string, CanvasElement>; onDone: () => void }) {
+  const { dispatch } = useEditor()
+  const first = bands.find(p => /band|collar|cuff/i.test(p.name)) ?? bands[0]
+  const [bandId, setBandId] = useState(first?.id ?? '')
+  const [opening, setOpening] = useState<Opening>(openingFor(first?.name ?? ''))
+  const [error, setError] = useState('')
+  const trim = bands.find(p => p.id === bandId)
+  const edge = trim && bandEdge(trim, byId)
+  // Every edge of the garment (not trims) along that opening.
+  const hosts = pieces.filter(p => !isTrimName(p.name)).flatMap(p => pieceEdges(p, byId)
+    .filter(e => e.seamLabel === opening || (opening === 'waist' && e.seamLabel === 'waist_seam' && !/bodice/i.test(p.name)))
+    .map(e => ({ pieceId: p.id, edgeId: e.id })))
+  const planned = trim && edge && hosts.length ? bandSeams(trim, edge, hosts, pieces, byId) : null
+  // How the band's length compares with the opening it will be sewn round.
+  const fit = (() => {
+    if (!trim || !edge || !planned?.length) return null
+    const L = sampleEdge(edge).length
+    const sewn = planned.reduce((s, c) => s + (byId.get(c.to.edgeId) ? sampleEdge(byId.get(c.to.edgeId) as Edge).length : 0), 0)
+    const extra = L - sewn
+    if (Math.abs(extra) < 0.5) return { text: `Band ${L.toFixed(1)} cm fits the ${sewn.toFixed(1)} cm opening exactly.`, tone: 'bg-emerald-50 text-emerald-700' }
+    if (extra < 0) return { text: `Band ${L.toFixed(1)} cm is ${(-extra).toFixed(1)} cm shorter than the ${sewn.toFixed(1)} cm opening: it will be eased (stretched) along it.`, tone: 'bg-amber-50 text-amber-700' }
+    const where = opening === 'neckline' ? `split between its two ends (${(extra / 2).toFixed(1)} cm each)` : 'as the overlap at its end'
+    const typical = opening === 'waist' && extra > 6 ? ' A waistband overlap is usually 3–4 cm.' : ''
+    return { text: `Band ${L.toFixed(1)} cm, opening ${sewn.toFixed(1)} cm: ${extra.toFixed(1)} cm left over, ${where}.${typical}`, tone: extra > 6 && opening === 'waist' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700' }
+  })()
+  const attach = () => {
+    if (!trim || !edge) return
+    const seams = planned
+    if (!seams?.length) { setError(`No ${opening} edges to sew it to.`); return }
+    dispatch({ type: 'REPLACE_ATTACHMENTS', pieceIds: [trim.id], connections: seams })
+    onDone()
+  }
+  return (
+    <div className="px-3 py-2 border-b border-gray-200 bg-teal-50/60 space-y-1.5" data-testid="band-form">
+      <div className="text-[11px] font-medium text-gray-800">Sew a band round an opening</div>
+      <div className="text-[11px] text-gray-500 leading-snug">
+        Its longest edge is sewn along every piece at that opening in turn — right front, right back, left back, left front for a band cut once — each stretch as long as the edge it meets; extra length is left as an overlap at the end.
+      </div>
+      <label className="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+        Band
+        <select aria-label="Band piece" value={bandId} onChange={e => { setBandId(e.target.value); setOpening(openingFor(bands.find(p => p.id === e.target.value)?.name ?? '')) }}
+          className="max-w-[9rem] text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white">
+          {bands.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </label>
+      <label className="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+        Sewn to the
+        <select aria-label="Opening" value={opening} onChange={e => setOpening(e.target.value as Opening)}
+          className="text-[11px] border border-gray-300 rounded px-1 py-0.5 bg-white">
+          {OPENINGS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+      </label>
+      {fit && <div className={`text-[11px] rounded px-1.5 py-1 ${fit.tone}`}>{fit.text}</div>}
+      {error && <div className="text-[11px] text-red-600">{error}</div>}
+      <div className="flex gap-2 pt-0.5">
+        <button onClick={attach} className="text-[11px] px-2 py-0.5 rounded bg-teal-600 text-white hover:bg-teal-700">Attach band</button>
+        <button onClick={onDone} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50">Cancel</button>
+      </div>
     </div>
   )
 }

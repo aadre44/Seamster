@@ -96,12 +96,14 @@ def test_collar_goes_all_round_the_neckline_without_overlaps():
     assert [(_host(p, c), c["to"].get("side")) for c in seams] == [
         ("Front Bodice", "right"), ("Back Bodice", "right"), ("Back Bodice", "left"), ("Front Bodice", "left")]
     ranges = _tiles(p, "Collar")
-    assert ranges[0][0] < 1e-3 and ranges[-1][1] > 1 - 1e-3
+    # the collar's seam allowances are left free, one at each end
+    assert math.isclose(ranges[0][0], 1 - ranges[-1][1], abs_tol=1e-3)
+    assert ranges[0][0] < 0.05
     # back and front shares follow the neckline lengths
     els = _elements(p)
     back = _edge_length(els[seams[1]["to"]["edgeId"]])
     front = _edge_length(els[seams[0]["to"]["edgeId"]])
-    share = ranges[0][1] - ranges[0][0]
+    share = (ranges[0][1] - ranges[0][0]) / (ranges[-1][1] - ranges[0][0])
     assert math.isclose(share, front / (2 * (front + back)), abs_tol=0.01)
 
 
@@ -186,3 +188,25 @@ def test_endpoint_rejects_malformed_pieces():
               {"id": "f", "name": "Front Bodice", "elementIds": ["y", "z"]}]
     r = TestClient(app).post("/api/infer-attachments", json={"elements": elements, "pieces": pieces})
     assert r.status_code == 422
+
+
+def test_a_band_longer_than_the_opening_keeps_its_overlap():
+    """A waistband drawn longer than the waist is sewn length for length round
+    it; the extra is left free at the end (the overlap), not squashed in."""
+    from app.patterns.attachments import infer_attachments
+    p = trousers()
+    els = p["elements"]
+    front = next(x for x in p["pieces"] if x["name"] == "Front Leg")
+    back = next(x for x in p["pieces"] if x["name"] == "Back Leg")
+    waist = sum(_edge_length(e) for pc in (front, back) for e in els if e["id"] in pc["elementIds"] and e.get("seamLabel") == "waist")
+    band_len = 2 * waist + 12.0
+    band = {"id": "wb", "name": "Waistband", "elementIds": ["b0", "b1", "b2", "b3"], "cutQty": 1, "onFold": False}
+    corners = [(0, 0), (band_len, 0), (band_len, 8), (0, 8)]
+    band_els = [{"id": f"b{i}", "type": "line", "pieceId": "wb", "isFold": False, "seamLabel": "waist" if i == 0 else "",
+                 "start": {"x": corners[i][0], "y": corners[i][1]}, "end": {"x": corners[(i + 1) % 4][0], "y": corners[(i + 1) % 4][1]}}
+                for i in range(4)]
+    out = infer_attachments(els + band_els, p["pieces"] + [band], [])
+    seams = [c for c in out["connections"] if c["from"]["pieceId"] == "wb"]
+    assert [c["to"].get("side") for c in seams] == ["right", "right", "left", "left"]
+    end = max(c["from"]["range"][1] for c in seams)
+    assert math.isclose(end, 2 * waist / band_len, abs_tol=0.01)  # the last 12 cm are the overlap

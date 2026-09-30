@@ -158,6 +158,33 @@ re-drapes beside it.
 - Reducer actions: `ADD_PLACEMENT`, `UPDATE_PLACEMENT` (optional `tag`: one undo
   step per drag / rotate), `DELETE_PLACEMENT`.
 
+## Bands across several pieces (`components/assembly/bands.ts`)
+
+A waistband, collar, neck or hem band is ONE edge sewn to several edges in
+turn (front waist, back waist, on both sides). Sewing its whole edge to each
+of them — what clicking edge to edge produces — sews every host edge to the
+same stretch of band, and in 3D welds the front and back waists together.
+So a band's seams are consecutive stretches of its edge, in order round the body:
+
+- one piece going all the way round (cut once, longer than 1.5 × the half
+  opening): R front (CF → side) → R back (side → CB) → L back → L front, each
+  end with its `side`; a half (on the fold / cut 2): CF → side → CB (a collar
+  cut on the CB fold starts at the fold); a cuff round an on-fold sleeve: its
+  front half, then its back half;
+- each stretch as long as the edge it meets (`reversed` set from which way
+  each edge runs round the body); a longer band keeps the rest as the overlap
+  at its end (a collar: its seam allowances, half at each end); a shorter one
+  is eased along the opening.
+
+**Automatically:** when a band (a trim) edge is sewn whole to two or more
+garment edges — by clicking in Assembly, or in an older file on opening —
+`normalizeBands` (in `ADD_CONNECTION` and `LOAD_STATE`) re-makes those seams
+as a band, whatever the click order. **Band…** (Seams panel) sews a chosen
+band's longest edge round the waist / neckline / hem / wrist in one step,
+showing first how its length compares with the opening (e.g. "14.7 cm left
+over, as the overlap at its end — a waistband overlap is usually 3–4 cm").
+The backend's `_around_rule` follows the same length rules (`_true_span`).
+
 ## Auto-placing a fly (`components/assembly/autoFly.ts`)
 
 A fly is sewn, not placed: dragging a fly facing onto the front leg makes a
